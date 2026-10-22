@@ -1,0 +1,9 @@
+{
+  "/(app)/caixa/page": "app/(app)/caixa/page.js",
+  "/(app)/cotacoes/page": "app/(app)/cotacoes/page.js",
+  "/(app)/dashboard/page": "app/(app)/dashboard/page.js",
+  "/(app)/doacoes/page": "app/(app)/doacoes/page.js",
+  "/(app)/estoque/page": "app/(app)/estoque/page.js",
+  "/(auth)/auth/page": "app/(auth)/auth/page.js",
+  "/(marketing)/page": "app/(marketing)/page.js"
+}

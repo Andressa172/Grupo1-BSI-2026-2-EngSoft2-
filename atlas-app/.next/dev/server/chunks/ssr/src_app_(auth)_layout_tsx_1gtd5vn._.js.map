@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///Users/andressadiniz/Documents/faculdade/eng2/projeto/atlas-app/src/app/(auth)/layout.tsx"],"sourcesContent":["\ninterface AuthLayoutProps {\n  children: React.ReactNode;\n}\n\nexport default function AuthLayout({\n  children,\n}: AuthLayoutProps) {\n  return (\n    <main className=\"flex min-h-screen items-center justify-center bg-background px-4 py-10\">\n      {children}\n    </main>\n  );\n}"],"names":["AuthLayout","children","className"],"mappings":";;;;;;AAKe,SAASA,WAAW,EACjCC,QAAQ,EACQ;IAChB,qBACE,8OAAC;QAAKC,WAAU;kBACbD;;;;;;AAGP"}}]
+}
