@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
+  Package,
   PackageSearch,
   HandCoins,
   Wallet,
@@ -14,6 +15,7 @@ import { Logo } from '@/components/ui/logo';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/produtos', label: 'Produtos', icon: Package },
   { href: '/estoque', label: 'Estoque', icon: PackageSearch },
   { href: '/doacoes', label: 'Doações', icon: HandCoins },
   { href: '/caixa', label: 'Caixa', icon: Wallet },
@@ -22,6 +24,7 @@ const NAV_ITEMS = [
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
+  '/produtos': 'Produtos',
   '/estoque': 'Estoque',
   '/doacoes': 'Doações',
   '/caixa': 'Caixa',
