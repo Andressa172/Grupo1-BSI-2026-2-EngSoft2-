@@ -98,8 +98,8 @@ interface AtlasContextValue extends AtlasState {
   cadastrarProduto: (produto: Omit<Produto, 'id'>) => void;
 
   // RF_F3 / RF_F11
-  registrarDoacaoProduto: (doadorId: string, itens: { produtoId: string; quantidade: number; dataValidade?: string }[]) => void;
-  registrarDoacaoDinheiro: (doadorId: string, valor: number, formaRecebimento: string) => void;
+  registrarDoacaoProduto: (doadorId: string, itens: { produtoId: string; quantidade: number; dataValidade?: string }[], data?: string) => void;
+  registrarDoacaoDinheiro: (doadorId: string, valor: number, formaRecebimento: string, data?: string) => void;
   cadastrarDoador: (doador: Omit<Doador, 'id'>) => Doador;
 
   // RF_F4 / RF_F5 / RF_F6
@@ -170,7 +170,8 @@ export function AtlasProvider({ children }: { children: React.ReactNode }) {
 
   function registrarDoacaoProduto(
     doadorId: string,
-    itens: { produtoId: string; quantidade: number; dataValidade?: string }[]
+    itens: { produtoId: string; quantidade: number; dataValidade?: string }[],
+    data?: string
   ) {
     const doacaoId = uid('doap');
     setState((prev) => ({
@@ -179,8 +180,8 @@ export function AtlasProvider({ children }: { children: React.ReactNode }) {
         {
           id: doacaoId,
           doadorId,
-          data: new Date().toISOString(),
-          itens: itens.map((i) => ({ produtoId: i.produtoId, quantidade: i.quantidade })),
+          data: data ?? new Date().toISOString(),
+          itens: itens.map((i) => ({ produtoId: i.produtoId, quantidade: i.quantidade, dataValidade: i.dataValidade })),
           registradoPor: 'Funcionário',
         },
         ...prev.doacoesProduto,
@@ -190,7 +191,7 @@ export function AtlasProvider({ children }: { children: React.ReactNode }) {
     itens.forEach((i) => atualizarEstoque(i.produtoId, 'ENTRADA', i.quantidade, `Doação de produto (${doacaoId})`));
   }
 
-  function registrarDoacaoDinheiro(doadorId: string, valor: number, formaRecebimento: string) {
+  function registrarDoacaoDinheiro(doadorId: string, valor: number, formaRecebimento: string, data?: string) {
     const doacaoId = uid('doad');
     setState((prev) => ({
       ...prev,
@@ -200,7 +201,7 @@ export function AtlasProvider({ children }: { children: React.ReactNode }) {
           doadorId,
           valor,
           formaRecebimento,
-          data: new Date().toISOString(),
+          data: data ?? new Date().toISOString(),
           registradoPor: 'Funcionário',
         },
         ...prev.doacoesDinheiro,
