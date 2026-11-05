@@ -18,3 +18,11 @@ export class ErroRegraDeNegocio extends Error {
     this.name = 'ErroRegraDeNegocio';
   }
 }
+
+export class ErroAutenticacao extends Error {
+  constructor(mensagem: string) {
+    super(mensagem);
+    this.name = 'ErroAutenticacao';
+  }
+}
+

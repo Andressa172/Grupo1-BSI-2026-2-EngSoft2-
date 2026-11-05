@@ -17,8 +17,11 @@ CREATE TABLE IF NOT EXISTS usuario (
     login VARCHAR(60) NOT NULL UNIQUE,
     senha_hash VARCHAR(255) NOT NULL,
     perfil VARCHAR(20) NOT NULL CHECK (perfil IN ('GERENTE', 'SECRETARIO', 'FUNCIONARIO')),
+    cpf VARCHAR(14) UNIQUE,
     ativo BOOLEAN NOT NULL DEFAULT TRUE
 );
+
+ALTER TABLE usuario ADD COLUMN IF NOT EXISTS cpf VARCHAR(14) UNIQUE;
 
 -- ---------------------------------------------------------------------------
 -- RF_B1 / Atendido

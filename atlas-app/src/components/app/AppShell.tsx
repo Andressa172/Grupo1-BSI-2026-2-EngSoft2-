@@ -12,14 +12,32 @@ import {
   FileSpreadsheet,
   CalendarHeart,
   UtensilsCrossed,
+  UserCog,
   LogOut,
+  type LucideIcon,
 } from 'lucide-react';
 import { Logo } from '@/components/ui/logo';
+import type { PerfilUsuario } from '@/lib/types';
 
-const NAV_ITEMS = [
+export interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  // Preparado para futura restrição de acesso por cargo/perfil do usuário autenticado
+  perfisPermitidos?: PerfilUsuario[];
+}
+
+export function podeVisualizarItem(item: NavItem, _perfilAtual?: PerfilUsuario): boolean {
+  // Por enquanto todos os usuários autenticados visualizam os itens independentemente do cargo.
+  // Futuramente, basta ativar: return !item.perfisPermitidos || (!!_perfilAtual && item.perfisPermitidos.includes(_perfilAtual));
+  return Boolean(item);
+}
+
+const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/produtos', label: 'Produtos', icon: Package },
   { href: '/doadores', label: 'Doadores', icon: Users },
+  { href: '/funcionarios', label: 'Funcionários', icon: UserCog, perfisPermitidos: ['GERENTE', 'SECRETARIO', 'FUNCIONARIO'] },
   { href: '/estoque', label: 'Estoque', icon: PackageSearch },
   { href: '/doacoes', label: 'Doações', icon: HandCoins },
   { href: '/eventos', label: 'Eventos', icon: CalendarHeart },
@@ -32,6 +50,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/produtos': 'Produtos',
   '/doadores': 'Doadores',
+  '/funcionarios': 'Funcionários',
   '/estoque': 'Estoque',
   '/doacoes': 'Doações',
   '/eventos': 'Eventos',
@@ -43,6 +62,7 @@ const PAGE_TITLES: Record<string, string> = {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const title = PAGE_TITLES[pathname] ?? 'ATLAS';
+  const itensVisiveis = NAV_ITEMS.filter((item) => podeVisualizarItem(item));
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -53,7 +73,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex flex-col gap-1">
-          {NAV_ITEMS.map((item) => {
+          {itensVisiveis.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;
             return (
