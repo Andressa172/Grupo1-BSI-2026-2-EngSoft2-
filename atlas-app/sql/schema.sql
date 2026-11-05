@@ -206,3 +206,14 @@ CREATE TABLE IF NOT EXISTS item_cardapio (
     produto_id INTEGER NOT NULL REFERENCES produto(id),
     quantidade_utilizada INTEGER NOT NULL CHECK (quantidade_utilizada > 0)
 );
+
+CREATE TABLE IF NOT EXISTS organizacao(
+    id INT PRIMARY KEY DEFAULT 1,
+    nome_fantasia VARCHAR(120) NOT NULL,
+    cnpj VARCHAR(18) UNIQUE,
+    endereco VARCHAR(255),
+    telefone VARCHAR(20),
+    email VARCHAR(120),
+    caminho_logo VARCHAR(255),
+    CONSTRAINT chk_somente_um_registro CHECK (id = 1)
+);
