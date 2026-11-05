@@ -5,37 +5,39 @@
  * DELETE /api/produtos/:id -> exclui o produto
  */
 
-import { ProdutoService } from '@/server/ProdutoService';
+import { ProdutoController } from '@/server/ProdutoController';
+import { respostaDeErro } from '@/server/http';
 
 // Nesta versão do Next.js, "params" é uma Promise e precisa de await
 type Contexto = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, { params }: Contexto) {
-  const { id } = await params;
-  const produto = ProdutoService.getInstancia().buscarPorId(id);
-  if (!produto) {
-    return Response.json({ erro: 'Produto não encontrado.' }, { status: 404 });
+  try {
+    const { id } = await params;
+    const produto = await ProdutoController.getInstancia().buscarPorId(Number(id));
+    return Response.json(produto.paraLinhaDeDados());
+  } catch (erro) {
+    return respostaDeErro(erro);
   }
-  return Response.json(produto);
 }
 
 export async function PUT(request: Request, { params }: Contexto) {
-  const { id } = await params;
-  const dados = await request.json();
   try {
-    const produto = ProdutoService.getInstancia().editar(id, dados);
-    return Response.json(produto);
+    const { id } = await params;
+    const dados = await request.json();
+    const produto = await ProdutoController.getInstancia().editar(Number(id), dados);
+    return Response.json(produto.paraLinhaDeDados());
   } catch (erro) {
-    return Response.json({ erro: (erro as Error).message }, { status: 400 });
+    return respostaDeErro(erro);
   }
 }
 
 export async function DELETE(_request: Request, { params }: Contexto) {
-  const { id } = await params;
   try {
-    ProdutoService.getInstancia().excluir(id);
+    const { id } = await params;
+    await ProdutoController.getInstancia().excluir(Number(id));
     return Response.json({ mensagem: 'Produto excluído.' });
   } catch (erro) {
-    return Response.json({ erro: (erro as Error).message }, { status: 404 });
+    return respostaDeErro(erro);
   }
 }

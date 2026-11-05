@@ -9,11 +9,20 @@ import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Modal, Table, THead, EmptyRow } from '@/components/app/ui';
-import type { Produto } from '@/lib/types';
+// formato que a API /api/produtos devolve
+interface Produto {
+  id: number;
+  nome: string;
+  categoria: string;
+  unidadeMedida: string;
+  quantidadeEstoque: number;
+  estoqueMinimo: number;
+  dataValidade: string | null;
+}
 
 const FORM_VAZIO = { nome: '', categoria: 'Alimento', unidadeMedida: '', estoqueMinimo: '0', dataValidade: '' };
 
-function formatarData(data?: string) {
+function formatarData(data: string | null) {
   if (!data) return '—';
   return new Date(data + 'T00:00:00').toLocaleDateString('pt-BR');
 }
@@ -84,7 +93,12 @@ export default function ProdutosPage() {
 
   async function excluir(produto: Produto) {
     if (!confirm(`Deseja excluir o produto "${produto.nome}"?`)) return;
-    await fetch(`/api/produtos/${produto.id}`, { method: 'DELETE' });
+    const resposta = await fetch(`/api/produtos/${produto.id}`, { method: 'DELETE' });
+    if (!resposta.ok) {
+      // ex.: produto que já tem movimentação no estoque não pode ser excluído
+      const corpo = await resposta.json();
+      alert(corpo.erro);
+    }
     carregarProdutos();
   }
 
