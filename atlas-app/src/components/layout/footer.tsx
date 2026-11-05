@@ -13,22 +13,6 @@ import { Logo } from '../ui/logo';
 import { motion } from 'motion/react';
 import SocialIcon from '../ui/socialIcon';
 
-// LeadFlow AI custom SVG mark 
-const LeadFlowMark = ({ className = 'w-6 h-6' }: { className?: string }) => (
-  <svg
-    viewBox="0 0 100 100"
-    fill="currentColor"
-    className={className}
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    {/* Left tall leaf element */}
-    <path d="M58 8C40 8 28 32 18 64C14 77 10 82 8 83C25 83 40 70 50 48C56 35 64 16 58 8Z" />
-    {/* Right leaf element */}
-    <path d="M92 48C74 48 62 62 52 76C46 84 40 86 38 86C55 86 70 79 80 64C86 55 94 50 92 48Z" />
-  </svg>
-);
-
-
 const footerColumns = [
   {
     title: 'Sistema',
@@ -72,7 +56,6 @@ export default function Footer() {
           {/* Left Column */}
           <div className="md:col-span-5 flex flex-col space-y-4">
             <Logo
-              src="/logo.svg"
               alt="Logo ATLAS"
               text="ATLAS"
               href="/"
@@ -112,22 +95,6 @@ export default function Footer() {
                 </ul>
               </div>
             ))}
-          </div>
-        </div>
-
-        {/* Large Gradient Watermark Section matching your logo mark */}
-        <div className="relative my-12 py-8 flex items-center justify-center select-none">
-          <div className="flex items-center gap-5 sm:gap-8 opacity-90 filter blur-[0.2px]">
-            
-            {/* Soft Glowing App Icon Box */}
-            <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-3xl bg-linear-to-tr from-primary via-secondary to-primary/20 flex items-center justify-center p-5 shadow-2xl shadow-primary/20">
-              <LeadFlowMark className="w-full h-full text-background" />
-            </div>
-
-            {/* Faded Gradient Typography */}
-            <span className="text-5xl sm:text-7xl md:text-8xl font-bold bg-linear-to-r from-primary via-secondary to-primary/20 bg-clip-text text-transparent tracking-tight">
-              ATLAS
-            </span>
           </div>
         </div>
 

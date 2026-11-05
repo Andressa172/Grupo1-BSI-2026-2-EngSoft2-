@@ -42,13 +42,10 @@ export default function AuthPage() {
       {/* Top Left Brand Logo */}
       <div className="mx-auto flex items-center justify-center mb-5">
           <Logo
-                  src="/logo.svg"
                   alt="Logo ATLAS"
                   text="ATLAS"
                   href="/"
-                  width={50}
-                  height={50}
-                  textClassName="text-xl font-medium tracking-tight text-foreground"
+                  textClassName="text-2xl font-medium tracking-tight text-foreground"
 
                 />
       </div>
