@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   PackageSearch,
   HandCoins,
+  Users,
   Wallet,
   FileSpreadsheet,
   LogOut,
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/estoque', label: 'Estoque', icon: PackageSearch },
   { href: '/doacoes', label: 'Doações', icon: HandCoins },
+  { href: '/atendidos', label: 'Atendidos', icon: Users },
   { href: '/caixa', label: 'Caixa', icon: Wallet },
   { href: '/cotacoes', label: 'Cotações', icon: FileSpreadsheet },
 ];
@@ -24,6 +26,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/estoque': 'Estoque',
   '/doacoes': 'Doações',
+  '/atendidos': 'Atendidos',
   '/caixa': 'Caixa',
   '/cotacoes': 'Cotações',
 };

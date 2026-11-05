@@ -26,3 +26,8 @@ export function mascaraTelefone(valor: string): string {
 export function dataHojeBR(): string {
   return new Date().toLocaleDateString('pt-BR');
 }
+
+/** Nome de pessoa: remove números e símbolos, mantém letras, espaço, apóstrofo e hífen. */
+export function mascaraNome(valor: string): string {
+  return valor.replace(/[^\p{L}\s'-]/gu, '').replace(/\s{2,}/g, ' ').slice(0, 80);
+}
