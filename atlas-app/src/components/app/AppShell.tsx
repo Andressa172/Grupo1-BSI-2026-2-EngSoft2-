@@ -15,6 +15,7 @@ import {
   UtensilsCrossed,
   UserCog,
   Settings,
+  UserRound,
   LogOut,
   type LucideIcon,
 } from 'lucide-react';
@@ -42,6 +43,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/funcionarios', label: 'Funcionários', icon: UserCog, perfisPermitidos: ['GERENTE', 'SECRETARIO', 'FUNCIONARIO'] },
   { href: '/estoque', label: 'Estoque', icon: PackageSearch },
   { href: '/doacoes', label: 'Doações', icon: HandCoins },
+  { href: '/atendidos', label: 'Atendidos', icon: UserRound },
   { href: '/eventos', label: 'Eventos', icon: CalendarHeart },
   { href: '/cardapios', label: 'Cardápios', icon: UtensilsCrossed },
   { href: '/caixa', label: 'Caixa', icon: Wallet },
@@ -56,6 +58,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/funcionarios': 'Funcionários',
   '/estoque': 'Estoque',
   '/doacoes': 'Doações',
+  '/atendidos': 'Atendidos',
   '/eventos': 'Eventos',
   '/cardapios': 'Cardápios',
   '/caixa': 'Caixa',
