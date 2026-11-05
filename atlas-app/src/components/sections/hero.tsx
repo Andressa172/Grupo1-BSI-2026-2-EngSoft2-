@@ -69,14 +69,6 @@ export default function Hero() {
               >
                 {HERO_CONTENT.cta.primary.label}
               </Button>
-
-              <Button
-                variant="outline"
-                size="md"
-                href={HERO_CONTENT.cta.secondary.link}
-              >
-                {HERO_CONTENT.cta.secondary.label}
-              </Button>
             </div>
           </motion.div>
 

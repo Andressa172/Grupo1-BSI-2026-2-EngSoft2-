@@ -193,12 +193,8 @@ export default function Navbar() {
 
         {/* Desktop Call to Action Buttons */}
         <div className="hidden items-center gap-3 md:flex">
-          <Button variant="outline" size="md" href="/auth">
-            Entrar
-          </Button>
-
           <Button variant="primary" size="md" href="/auth">
-            Acessar Sistema
+            Entrar
           </Button>
         </div>
 
@@ -332,12 +328,8 @@ export default function Navbar() {
 
               {/* Mobile Call to Action Buttons */}
               <div className="flex flex-col gap-2.5 pt-4">
-                <Button variant="outline" size="md" href="/auth">
-                  Entrar
-                </Button>
-
                 <Button variant="primary" size="md" href="/auth">
-                  Acessar Sistema
+                  Entrar
                 </Button>
               </div>
             </div>

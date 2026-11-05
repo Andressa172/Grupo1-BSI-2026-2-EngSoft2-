@@ -1,6 +1,9 @@
-import { ErroNaoEncontrado, ErroRegraDeNegocio, ErroValidacao } from './erros';
+import { ErroAutenticacao, ErroNaoEncontrado, ErroRegraDeNegocio, ErroValidacao } from './erros';
 
 export function respostaDeErro(erro: unknown): Response {
+  if (erro instanceof ErroAutenticacao) {
+    return Response.json({ erro: erro.message }, { status: 401 });
+  }
   if (erro instanceof ErroNaoEncontrado) {
     return Response.json({ erro: erro.message }, { status: 404 });
   }
@@ -10,3 +13,4 @@ export function respostaDeErro(erro: unknown): Response {
   console.error(erro);
   return Response.json({ erro: 'Erro interno ao processar a requisição.' }, { status: 500 });
 }
+

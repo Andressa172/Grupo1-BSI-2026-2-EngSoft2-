@@ -3,11 +3,11 @@
 -- Rodar depois do schema.sql: npm run db:seed
 -- ============================================================================
 
-INSERT INTO usuario (nome, login, senha_hash, perfil) VALUES
-    ('Gerente SOS Criança', 'gerente', 'demo', 'GERENTE'),
-    ('Secretário SOS Criança', 'secretario', 'demo', 'SECRETARIO'),
-    ('Funcionário SOS Criança', 'funcionario', 'demo', 'FUNCIONARIO')
-ON CONFLICT (login) DO NOTHING;
+INSERT INTO usuario (nome, login, senha_hash, perfil, cpf) VALUES
+    ('Gerente SOS Criança', 'gerente', 'demo', 'GERENTE', '52998224725'),
+    ('Secretário SOS Criança', 'secretario', 'demo', 'SECRETARIO', '11144477735'),
+    ('Funcionário SOS Criança', 'funcionario', 'demo', 'FUNCIONARIO', '12345678909')
+ON CONFLICT (login) DO UPDATE SET cpf = EXCLUDED.cpf WHERE usuario.cpf IS NULL;
 
 INSERT INTO produto (nome, categoria, unidade_medida, quantidade_estoque, estoque_minimo, data_validade) VALUES
     ('Arroz 5kg', 'Alimento', 'pacote', 42, 10, '2027-03-01'),
