@@ -1,5 +1,6 @@
 import { DoacaoProduto } from '@/model/DoacaoProduto';
 import { ItemDoacao } from '@/model/ItemDoacao';
+import { FiltroDoacao } from '@/model/FiltroDoacao';
 import { type ErrosValidacao, parseDataBR } from '@/model/validacao';
 import type { AtlasGateway } from '@/dao/AtlasGateway';
 import { DoadorDAO } from '@/dao/DoadorDAO';
@@ -14,6 +15,13 @@ export interface DadosDoacaoProduto {
   itens: { produtoId: string; quantidade: string; dataValidade: string }[];
 }
 
+/** Filtros como digitados na tela (texto). */
+export interface DadosFiltroDoacao {
+  doadorId: string;
+  dataInicial: string;
+  dataFinal: string;
+}
+
 export interface ResultadoRegistro {
   sucesso: boolean;
   erros: ErrosValidacao;
@@ -26,6 +34,7 @@ export interface OpcaoSelecao {
 
 export interface LinhaDoacaoProduto {
   id: string;
+  doadorId: string;
   data: string;
   doador: string;
   itens: { produto: string; quantidade: number }[];
@@ -77,6 +86,7 @@ export class ControlReceberDoacaoProduto {
     const produtos = this.produtoDAO.listar();
     return this.doacaoDAO.listar().map((d) => ({
       id: d.id,
+      doadorId: d.doadorId,
       data: d.data,
       doador: doadores.find((x) => x.id === d.doadorId)?.nome ?? '—',
       itens: d.itens.map((i) => ({
@@ -84,6 +94,18 @@ export class ControlReceberDoacaoProduto {
         quantidade: i.quantidade,
       })),
     }));
+  }
+
+  /** Valida os filtros da consulta (datas válidas, inicial <= final). Vazio = ok. */
+  validarFiltro(dados: DadosFiltroDoacao): ErrosValidacao {
+    return new FiltroDoacao(dados.doadorId, dados.dataInicial, dados.dataFinal).validar();
+  }
+
+  /** Consulta com 2 filtros: doador e período. Retorna as doações que atendem aos dois. */
+  consultarDoacoes(dados: DadosFiltroDoacao): LinhaDoacaoProduto[] {
+    const filtro = new FiltroDoacao(dados.doadorId, dados.dataInicial, dados.dataFinal);
+    if (Object.keys(filtro.validar()).length > 0) return [];
+    return this.listarDoacoes().filter((d) => filtro.aceita(d.doadorId, d.data));
   }
 
   /** Passos 1 a 9 do fluxo básico: valida tudo, depois registra a doação (e o estoque). */

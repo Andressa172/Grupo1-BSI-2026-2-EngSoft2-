@@ -11,7 +11,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { useAtlas } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Card, Field, Input, Select, Modal, Table, THead, EmptyRow } from '@/components/app/ui';
-import { ControlReceberDoacaoProduto } from '@/control/ControlReceberDoacaoProduto';
+import { ControlReceberDoacaoProduto, type DadosFiltroDoacao } from '@/control/ControlReceberDoacaoProduto';
 import { ControlReceberDoacaoDinheiro } from '@/control/ControlReceberDoacaoDinheiro';
 import type { SelecaoDoador } from '@/control/resolverDoador';
 import { dataHojeBR, mascaraData, mascaraMoeda, mascaraTelefone } from '@/view/mascaras';
@@ -44,8 +44,27 @@ export default function DoacoesPage() {
 
   const doadores = controlProduto.listarDoadores();
   const produtos = controlProduto.listarProdutos();
-  const doacoesProduto = controlProduto.listarDoacoes();
-  const doacoesDinheiro = controlDinheiro.listarDoacoes();
+
+  // consulta (RF_F3/RF_F11): filtro digitado x filtro aplicado ao clicar em Consultar
+  const filtroVazio: DadosFiltroDoacao = { doadorId: '', dataInicial: '', dataFinal: '' };
+  const [filtro, setFiltro] = useState<DadosFiltroDoacao>(filtroVazio);
+  const [filtroAplicado, setFiltroAplicado] = useState<DadosFiltroDoacao>(filtroVazio);
+  const [errosFiltro, setErrosFiltro] = useState<Record<string, string>>({});
+  const doacoesProduto = controlProduto.consultarDoacoes(filtroAplicado);
+  const doacoesDinheiro = controlDinheiro.consultarDoacoes(filtroAplicado);
+
+  function consultar(e: React.FormEvent) {
+    e.preventDefault();
+    const e2 = controlProduto.validarFiltro(filtro);
+    setErrosFiltro(e2);
+    if (Object.keys(e2).length === 0) setFiltroAplicado(filtro);
+  }
+
+  function limparFiltro() {
+    setFiltro(filtroVazio);
+    setFiltroAplicado(filtroVazio);
+    setErrosFiltro({});
+  }
 
   const [tab, setTab] = useState<'produto' | 'dinheiro'>('produto');
   const [modalOpen, setModalOpen] = useState(false);
@@ -132,12 +151,59 @@ export default function DoacoesPage() {
         ))}
       </div>
 
+      <form onSubmit={consultar} className="flex flex-wrap items-start gap-3">
+        <div className="min-w-48">
+          <Field label="Doador">
+            <Select value={filtro.doadorId} onChange={(e) => setFiltro({ ...filtro, doadorId: e.target.value })}>
+              <option value="">Todos</option>
+              {doadores.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.nome}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        <div className="w-36">
+          <Field label="Data inicial">
+            <Input
+              value={filtro.dataInicial}
+              onChange={(e) => setFiltro({ ...filtro, dataInicial: mascaraData(e.target.value) })}
+              placeholder="dd/mm/aaaa"
+              inputMode="numeric"
+              className={destaque(errosFiltro.dataInicial)}
+            />
+          </Field>
+          <MensagemErro texto={errosFiltro.dataInicial} />
+        </div>
+        <div className="w-36">
+          <Field label="Data final">
+            <Input
+              value={filtro.dataFinal}
+              onChange={(e) => setFiltro({ ...filtro, dataFinal: mascaraData(e.target.value) })}
+              placeholder="dd/mm/aaaa"
+              inputMode="numeric"
+              className={destaque(errosFiltro.dataFinal)}
+            />
+          </Field>
+          <MensagemErro texto={errosFiltro.dataFinal} />
+        </div>
+        <div className="flex gap-2 mt-6">
+          <Button type="submit" variant="primary" size="md">
+            Consultar
+          </Button>
+          <Button type="button" variant="outline" size="md" onClick={limparFiltro}>
+            Limpar
+          </Button>
+        </div>
+      </form>
+
       {tab === 'produto' ? (
         <Card className="p-0">
           <Table>
             <THead cols={['Data', 'Doador', 'Itens']} />
             <tbody>
-              {doacoesProduto.length === 0 && <EmptyRow colSpan={3} label="Nenhuma doação de produto registrada." />}
+              {doacoesProduto.length === 0 && <EmptyRow colSpan={3} label="Nenhuma doação de produto encontrada." />}
               {doacoesProduto.map((d) => (
                 <tr key={d.id} className="border-b border-border-line/10 last:border-0 align-top">
                   <td className="px-4 py-3 text-foreground/60 whitespace-nowrap">{formatDate(d.data)}</td>
@@ -161,7 +227,7 @@ export default function DoacoesPage() {
           <Table>
             <THead cols={['Data', 'Doador', 'Valor', 'Forma de Recebimento']} />
             <tbody>
-              {doacoesDinheiro.length === 0 && <EmptyRow colSpan={4} label="Nenhuma doação em dinheiro registrada." />}
+              {doacoesDinheiro.length === 0 && <EmptyRow colSpan={4} label="Nenhuma doação em dinheiro encontrada." />}
               {doacoesDinheiro.map((d) => (
                 <tr key={d.id} className="border-b border-border-line/10 last:border-0">
                   <td className="px-4 py-3 text-foreground/60 whitespace-nowrap">{formatDate(d.data)}</td>
