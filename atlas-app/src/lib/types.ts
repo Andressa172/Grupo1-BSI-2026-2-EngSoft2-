@@ -42,6 +42,7 @@ export interface Doador {
 export interface ItemDoacao {
   produtoId: string;
   quantidade: number;
+  dataValidade?: string;
 }
 
 export interface DoacaoProduto {
