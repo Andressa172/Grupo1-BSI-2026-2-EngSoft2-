@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Package,
@@ -13,6 +14,7 @@ import {
   CalendarHeart,
   UtensilsCrossed,
   UserCog,
+  Settings,
   LogOut,
   type LucideIcon,
 } from 'lucide-react';
@@ -44,6 +46,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/cardapios', label: 'Cardápios', icon: UtensilsCrossed },
   { href: '/caixa', label: 'Caixa', icon: Wallet },
   { href: '/cotacoes', label: 'Cotações', icon: FileSpreadsheet },
+  { href: '/configuracoes', label: 'Configurações', icon: Settings },
 ];
 
 const PAGE_TITLES: Record<string, string> = {
@@ -57,19 +60,40 @@ const PAGE_TITLES: Record<string, string> = {
   '/cardapios': 'Cardápios',
   '/caixa': 'Caixa',
   '/cotacoes': 'Cotações',
+  '/configuracoes': 'Configurações',
 };
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [organizacao, setOrganizacao] = useState({ nomeFantasia: 'ATLAS', caminhoLogo: null as string | null });
   const title = PAGE_TITLES[pathname] ?? 'ATLAS';
   const itensVisiveis = NAV_ITEMS.filter((item) => podeVisualizarItem(item));
+
+  useEffect(() => {
+    fetch('/api/organizacao')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((dados) => {
+        if (dados) {
+          setOrganizacao({
+            nomeFantasia: dados.nomeFantasia || 'ATLAS',
+            caminhoLogo: dados.caminhoLogo || null,
+          });
+        }
+      })
+      .catch(() => undefined);
+  }, []);
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
       {/* Sidebar */}
       <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border-line/20 bg-background px-4 py-6">
         <div className="px-2 mb-8">
-          <Logo alt="Logo ATLAS" text="ATLAS" href="/dashboard" />
+          <Logo
+            alt={`Logo ${organizacao.nomeFantasia}`}
+            src={organizacao.caminhoLogo ?? undefined}
+            text={organizacao.nomeFantasia}
+            href="/dashboard"
+          />
         </div>
 
         <nav className="flex flex-col gap-1">

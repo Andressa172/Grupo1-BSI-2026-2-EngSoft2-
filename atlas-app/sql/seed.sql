@@ -22,3 +22,8 @@ INSERT INTO doador (nome, contato, tipo_pessoa, anonimo) VALUES
     ('Maria Aparecida', '(18) 99999-1234', 'FISICA', FALSE),
     ('Doador Anônimo', NULL, 'FISICA', TRUE)
 ON CONFLICT DO NOTHING;
+
+
+INSERT INTO organizacao (id, nome_fantasia, caminho_logo)
+VALUES (1, 'Minha Organização', NULL)
+ON CONFLICT (id) DO NOTHING;
