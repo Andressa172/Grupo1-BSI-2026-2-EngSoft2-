@@ -7,8 +7,11 @@ import {
   Package,
   PackageSearch,
   HandCoins,
+  Users,
   Wallet,
   FileSpreadsheet,
+  CalendarHeart,
+  UtensilsCrossed,
   LogOut,
 } from 'lucide-react';
 import { Logo } from '@/components/ui/logo';
@@ -16,8 +19,11 @@ import { Logo } from '@/components/ui/logo';
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/produtos', label: 'Produtos', icon: Package },
+  { href: '/doadores', label: 'Doadores', icon: Users },
   { href: '/estoque', label: 'Estoque', icon: PackageSearch },
   { href: '/doacoes', label: 'Doações', icon: HandCoins },
+  { href: '/eventos', label: 'Eventos', icon: CalendarHeart },
+  { href: '/cardapios', label: 'Cardápios', icon: UtensilsCrossed },
   { href: '/caixa', label: 'Caixa', icon: Wallet },
   { href: '/cotacoes', label: 'Cotações', icon: FileSpreadsheet },
 ];
@@ -25,8 +31,11 @@ const NAV_ITEMS = [
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/produtos': 'Produtos',
+  '/doadores': 'Doadores',
   '/estoque': 'Estoque',
   '/doacoes': 'Doações',
+  '/eventos': 'Eventos',
+  '/cardapios': 'Cardápios',
   '/caixa': 'Caixa',
   '/cotacoes': 'Cotações',
 };
@@ -40,7 +49,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border-line/20 bg-background px-4 py-6">
         <div className="px-2 mb-8">
-          <Logo src="/logo.svg" alt="Logo ATLAS" text="ATLAS" href="/dashboard" />
+          <Logo alt="Logo ATLAS" text="ATLAS" href="/dashboard" />
         </div>
 
         <nav className="flex flex-col gap-1">
