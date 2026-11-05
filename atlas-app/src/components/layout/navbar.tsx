@@ -85,7 +85,6 @@ export default function Navbar() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Brand Logo */}
         <Logo
-          src="/logo.svg"
           alt="Logo ATLAS"
           text="ATLAS"
           className="flex items-center"
@@ -194,12 +193,8 @@ export default function Navbar() {
 
         {/* Desktop Call to Action Buttons */}
         <div className="hidden items-center gap-3 md:flex">
-          <Button variant="outline" size="md" href="/auth">
-            Entrar
-          </Button>
-
           <Button variant="primary" size="md" href="/auth">
-            Acessar Sistema
+            Entrar
           </Button>
         </div>
 
@@ -333,12 +328,8 @@ export default function Navbar() {
 
               {/* Mobile Call to Action Buttons */}
               <div className="flex flex-col gap-2.5 pt-4">
-                <Button variant="outline" size="md" href="/auth">
-                  Entrar
-                </Button>
-
                 <Button variant="primary" size="md" href="/auth">
-                  Acessar Sistema
+                  Entrar
                 </Button>
               </div>
             </div>

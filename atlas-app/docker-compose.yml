@@ -1,0 +1,17 @@
+services:
+  # Banco de dados local do ATLAS, conforme especificado na ERS (seção 2.1 /
+  # 3.1.2): PostgreSQL. Uso: `npm run db:up` (ou `docker compose up -d db`).
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: atlas
+      POSTGRES_PASSWORD: atlas
+      POSTGRES_DB: atlas
+    ports:
+      - '5432:5432'
+    volumes:
+      - atlas_db_data:/var/lib/postgresql/data
+
+volumes:
+  atlas_db_data:

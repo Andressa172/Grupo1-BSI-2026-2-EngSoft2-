@@ -11,8 +11,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 
 export interface LogoProps {
-  /** Image source path or URL */
-  src: string;
+  /** Image source path or URL. Omita para exibir só o texto, sem ícone. */
+  src?: string;
   /** Alt text for accessibility */
   alt?: string;
   /** Brand text displayed next to the image logo */
@@ -50,14 +50,16 @@ export const Logo: React.FC<LogoProps> = ({
   // Inner logo content (Image + Optional Text)
   const content = (
     <>
-      <Image
-        src={src}
-        alt={alt}
-        width={width}
-        height={height}
-        priority
-        className="object-contain shrink-0"
-      />
+      {src && (
+        <Image
+          src={src}
+          alt={alt}
+          width={width}
+          height={height}
+          priority
+          className="object-contain shrink-0"
+        />
+      )}
       {text && (
         <span
           className={`font-semibold text-lg tracking-tight text-foreground ${textClassName}`.trim()}

@@ -46,10 +46,6 @@ export const HERO_CONTENT = {
    */
   cta: {
     primary: {
-      label: "Acessar o Sistema",
-      link: "/auth",
-    },
-    secondary: {
       label: "Entrar",
       link: "/auth",
     },

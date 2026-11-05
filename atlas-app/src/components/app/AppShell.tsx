@@ -4,29 +4,60 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
+  Package,
   PackageSearch,
   HandCoins,
   Users,
   Wallet,
   FileSpreadsheet,
+  CalendarHeart,
+  UtensilsCrossed,
+  UserCog,
+  UserRound,
   LogOut,
+  type LucideIcon,
 } from 'lucide-react';
 import { Logo } from '@/components/ui/logo';
+import type { PerfilUsuario } from '@/lib/types';
 
-const NAV_ITEMS = [
+export interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  // Preparado para futura restrição de acesso por cargo/perfil do usuário autenticado
+  perfisPermitidos?: PerfilUsuario[];
+}
+
+export function podeVisualizarItem(item: NavItem, _perfilAtual?: PerfilUsuario): boolean {
+  // Por enquanto todos os usuários autenticados visualizam os itens independentemente do cargo.
+  // Futuramente, basta ativar: return !item.perfisPermitidos || (!!_perfilAtual && item.perfisPermitidos.includes(_perfilAtual));
+  return Boolean(item);
+}
+
+const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/produtos', label: 'Produtos', icon: Package },
+  { href: '/doadores', label: 'Doadores', icon: Users },
+  { href: '/funcionarios', label: 'Funcionários', icon: UserCog, perfisPermitidos: ['GERENTE', 'SECRETARIO', 'FUNCIONARIO'] },
   { href: '/estoque', label: 'Estoque', icon: PackageSearch },
   { href: '/doacoes', label: 'Doações', icon: HandCoins },
-  { href: '/atendidos', label: 'Atendidos', icon: Users },
+  { href: '/atendidos', label: 'Atendidos', icon: UserRound },
+  { href: '/eventos', label: 'Eventos', icon: CalendarHeart },
+  { href: '/cardapios', label: 'Cardápios', icon: UtensilsCrossed },
   { href: '/caixa', label: 'Caixa', icon: Wallet },
   { href: '/cotacoes', label: 'Cotações', icon: FileSpreadsheet },
 ];
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
+  '/produtos': 'Produtos',
+  '/doadores': 'Doadores',
+  '/funcionarios': 'Funcionários',
   '/estoque': 'Estoque',
   '/doacoes': 'Doações',
   '/atendidos': 'Atendidos',
+  '/eventos': 'Eventos',
+  '/cardapios': 'Cardápios',
   '/caixa': 'Caixa',
   '/cotacoes': 'Cotações',
 };
@@ -34,17 +65,18 @@ const PAGE_TITLES: Record<string, string> = {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const title = PAGE_TITLES[pathname] ?? 'ATLAS';
+  const itensVisiveis = NAV_ITEMS.filter((item) => podeVisualizarItem(item));
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
       {/* Sidebar */}
       <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border-line/20 bg-background px-4 py-6">
         <div className="px-2 mb-8">
-          <Logo src="/logo.svg" alt="Logo ATLAS" text="ATLAS" href="/dashboard" />
+          <Logo alt="Logo ATLAS" text="ATLAS" href="/dashboard" />
         </div>
 
         <nav className="flex flex-col gap-1">
-          {NAV_ITEMS.map((item) => {
+          {itensVisiveis.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;
             return (
