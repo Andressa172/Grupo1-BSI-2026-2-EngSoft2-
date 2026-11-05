@@ -1,23 +1,27 @@
 /**
- * API de produtos (RF_B3)
+ * API de produtos (RF_B3 - Gerenciar produtos)
  * GET  /api/produtos -> lista os produtos
  * POST /api/produtos -> cadastra um produto
  */
 
-import { ProdutoService } from '@/server/ProdutoService';
+import { ProdutoController } from '@/server/ProdutoController';
+import { respostaDeErro } from '@/server/http';
 
 export async function GET() {
-  const service = ProdutoService.getInstancia();
-  return Response.json(service.listar());
+  try {
+    const produtos = await ProdutoController.getInstancia().listar();
+    return Response.json(produtos.map((p) => p.paraLinhaDeDados()));
+  } catch (erro) {
+    return respostaDeErro(erro);
+  }
 }
 
 export async function POST(request: Request) {
-  const service = ProdutoService.getInstancia();
-  const dados = await request.json();
   try {
-    const produto = service.cadastrar(dados);
-    return Response.json(produto, { status: 201 });
+    const dados = await request.json();
+    const produto = await ProdutoController.getInstancia().cadastrar(dados);
+    return Response.json(produto.paraLinhaDeDados(), { status: 201 });
   } catch (erro) {
-    return Response.json({ erro: (erro as Error).message }, { status: 400 });
+    return respostaDeErro(erro);
   }
 }
