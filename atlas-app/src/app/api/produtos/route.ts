@@ -1,15 +1,20 @@
 /**
  * API de produtos (RF_B3 - Gerenciar produtos)
- * GET  /api/produtos -> lista os produtos
- * POST /api/produtos -> cadastra um produto
+ * GET  /api/produtos?nome=&categoria=&validade= -> consulta os produtos (filtros opcionais)
+ * POST /api/produtos                            -> cadastra um produto
  */
 
 import { ProdutoController } from '@/server/ProdutoController';
 import { respostaDeErro } from '@/server/http';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const produtos = await ProdutoController.getInstancia().listar();
+    const parametros = new URL(request.url).searchParams;
+    const produtos = await ProdutoController.getInstancia().consultar({
+      nome: parametros.get('nome'),
+      categoria: parametros.get('categoria'),
+      validade: parametros.get('validade'),
+    });
     return Response.json(produtos.map((p) => p.paraLinhaDeDados()));
   } catch (erro) {
     return respostaDeErro(erro);

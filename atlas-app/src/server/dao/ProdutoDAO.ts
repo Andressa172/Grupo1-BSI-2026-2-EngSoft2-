@@ -1,9 +1,11 @@
 // DAO - Produto
 // - listarTodos / decrementarEstoque / registrarMovimentacao: usados pelos controles de F9/F10
-// - demais métodos: CRUD do RF_B3 (Gerenciar produtos), trabalhando com o model Produto
+// - demais métodos: CRUD do RF_B3 (Gerenciar produtos). Quem cria este DAO é o
+//   model Produto, com a conexão que recebe do ProdutoController.
 import type { ExecutorSQL } from './tipos';
 import { Database } from '../db/Database';
 import { Produto } from '../model/Produto';
+import type { FiltroProduto } from '../model/FiltroProduto';
 import { paraDataSimples } from './datas';
 import { ErroRegraDeNegocio } from '../erros';
 
@@ -18,9 +20,10 @@ export interface ProdutoLinha {
 interface ProdutoLinhaCompleta extends ProdutoLinha {
   categoria: string;
   data_validade: string | Date | null;
+  numero_lote: string | null;
 }
 
-const COLUNAS = 'id, nome, categoria, unidade_medida, quantidade_estoque, estoque_minimo, data_validade';
+const COLUNAS = 'id, nome, categoria, unidade_medida, quantidade_estoque, estoque_minimo, data_validade, numero_lote';
 
 function linhaParaProduto(linha: ProdutoLinhaCompleta): Produto {
   return new Produto({
@@ -31,6 +34,7 @@ function linhaParaProduto(linha: ProdutoLinhaCompleta): Produto {
     quantidadeEstoque: linha.quantidade_estoque,
     estoqueMinimo: linha.estoque_minimo,
     dataValidade: linha.data_validade ? paraDataSimples(linha.data_validade) : null,
+    numeroLote: linha.numero_lote,
   });
 }
 
@@ -65,8 +69,36 @@ export class ProdutoDAO {
 
   // ------------------------- RF_B3 - Gerenciar produtos -------------------------
 
-  async listarProdutos(): Promise<Produto[]> {
-    const resultado = await this.executor.query<ProdutoLinhaCompleta>(`SELECT ${COLUNAS} FROM produto ORDER BY nome`);
+  // consulta com os filtros da tela; filtro vazio traz todos os produtos
+  async consultar(filtro: FiltroProduto): Promise<Produto[]> {
+    const condicoes: string[] = [];
+    const parametros: unknown[] = [];
+
+    if (filtro.getNome() !== '') {
+      parametros.push(`%${filtro.getNome()}%`);
+      condicoes.push(`nome ILIKE $${parametros.length}`);
+    }
+    if (filtro.getCategoria() !== '') {
+      parametros.push(filtro.getCategoria());
+      condicoes.push(`categoria = $${parametros.length}`);
+    }
+    switch (filtro.getValidade()) {
+      case 'VENCIDOS':
+        condicoes.push('data_validade < CURRENT_DATE');
+        break;
+      case 'VENCE_EM_30_DIAS':
+        condicoes.push("data_validade BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'");
+        break;
+      case 'SEM_VALIDADE':
+        condicoes.push('data_validade IS NULL');
+        break;
+    }
+
+    const where = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
+    const resultado = await this.executor.query<ProdutoLinhaCompleta>(
+      `SELECT ${COLUNAS} FROM produto ${where} ORDER BY nome`,
+      parametros
+    );
     return resultado.rows.map(linhaParaProduto);
   }
 
@@ -87,10 +119,10 @@ export class ProdutoDAO {
   async inserir(produto: Produto): Promise<Produto> {
     const dados = produto.paraLinhaDeDados();
     const resultado = await this.executor.query<ProdutoLinhaCompleta>(
-      `INSERT INTO produto (nome, categoria, unidade_medida, estoque_minimo, data_validade)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO produto (nome, categoria, unidade_medida, estoque_minimo, data_validade, numero_lote)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${COLUNAS}`,
-      [dados.nome, dados.categoria, dados.unidadeMedida, dados.estoqueMinimo, dados.dataValidade]
+      [dados.nome, dados.categoria, dados.unidadeMedida, dados.estoqueMinimo, dados.dataValidade, dados.numeroLote]
     );
     return linhaParaProduto(resultado.rows[0]);
   }
@@ -100,10 +132,10 @@ export class ProdutoDAO {
     const dados = produto.paraLinhaDeDados();
     const resultado = await this.executor.query<ProdutoLinhaCompleta>(
       `UPDATE produto
-          SET nome = $1, categoria = $2, unidade_medida = $3, estoque_minimo = $4, data_validade = $5
-        WHERE id = $6
+          SET nome = $1, categoria = $2, unidade_medida = $3, estoque_minimo = $4, data_validade = $5, numero_lote = $6
+        WHERE id = $7
     RETURNING ${COLUNAS}`,
-      [dados.nome, dados.categoria, dados.unidadeMedida, dados.estoqueMinimo, dados.dataValidade, dados.id]
+      [dados.nome, dados.categoria, dados.unidadeMedida, dados.estoqueMinimo, dados.dataValidade, dados.numeroLote, dados.id]
     );
     return resultado.rows[0] ? linhaParaProduto(resultado.rows[0]) : null;
   }

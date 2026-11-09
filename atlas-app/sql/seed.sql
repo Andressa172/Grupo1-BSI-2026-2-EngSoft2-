@@ -9,13 +9,16 @@ INSERT INTO usuario (nome, login, senha_hash, perfil, cpf) VALUES
     ('Funcionário SOS Criança', 'funcionario', 'demo', 'FUNCIONARIO', '12345678909')
 ON CONFLICT (login) DO UPDATE SET cpf = EXCLUDED.cpf WHERE usuario.cpf IS NULL;
 
-INSERT INTO produto (nome, categoria, unidade_medida, quantidade_estoque, estoque_minimo, data_validade) VALUES
-    ('Arroz 5kg', 'Alimento', 'pacote', 42, 10, '2027-03-01'),
-    ('Feijão 1kg', 'Alimento', 'pacote', 18, 15, '2026-12-15'),
-    ('Leite em pó', 'Alimento', 'lata', 6, 10, '2026-11-05'),
-    ('Óleo de soja', 'Alimento', 'litro', 24, 8, '2027-01-20'),
-    ('Material escolar (kit)', 'Material', 'kit', 30, 5, NULL)
+INSERT INTO produto (nome, categoria, unidade_medida, quantidade_estoque, estoque_minimo, data_validade, numero_lote) VALUES
+    ('Arroz 5kg', 'Alimento', 'pacote', 42, 10, '2027-03-01', 'ARZ-2027-01'),
+    ('Feijão 1kg', 'Alimento', 'pacote', 18, 15, '2026-12-15', 'FJN-2026-12'),
+    ('Leite em pó', 'Alimento', 'lata', 6, 10, '2026-11-05', 'LTP-2026-11'),
+    ('Óleo de soja', 'Alimento', 'litro', 24, 8, '2027-01-20', 'OLS-2027-01'),
+    ('Material escolar (kit)', 'Material', 'kit', 30, 5, NULL, 'MAT-2026-01')
 ON CONFLICT (nome) DO NOTHING;
+
+-- produtos cadastrados antes do nº do lote recebem um lote provisório
+UPDATE produto SET numero_lote = 'LOTE-' || lpad(id::text, 4, '0') WHERE numero_lote IS NULL;
 
 INSERT INTO doador (nome, contato, tipo_pessoa, anonimo) VALUES
     ('Supermercado Boa Compra', '(18) 3222-1000', 'JURIDICA', FALSE),

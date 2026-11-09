@@ -56,8 +56,12 @@ CREATE TABLE IF NOT EXISTS produto (
     unidade_medida VARCHAR(30) NOT NULL,
     quantidade_estoque INTEGER NOT NULL DEFAULT 0 CHECK (quantidade_estoque >= 0),
     estoque_minimo INTEGER NOT NULL DEFAULT 0 CHECK (estoque_minimo >= 0),
-    data_validade DATE
+    data_validade DATE,
+    numero_lote VARCHAR(30)
 );
+
+-- bancos criados antes do nº do lote: acrescenta a coluna sem perder dados
+ALTER TABLE produto ADD COLUMN IF NOT EXISTS numero_lote VARCHAR(30);
 
 -- RF_F1 - Atualizar estoque (histórico de movimentações)
 CREATE TABLE IF NOT EXISTS movimentacao_estoque (
