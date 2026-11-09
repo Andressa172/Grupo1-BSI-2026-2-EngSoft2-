@@ -1,12 +1,28 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Produto } from './Produto';
-import { ErroValidacao } from '../erros';
+import { FiltroProduto } from './FiltroProduto';
 
-const valido = { nome: 'Arroz 5kg', categoria: 'Alimento', unidadeMedida: 'pacote', estoqueMinimo: 10 };
+const valido = {
+  nome: 'Arroz 5kg',
+  categoria: 'Alimento',
+  unidadeMedida: 'pacote',
+  numeroLote: 'ARZ-2027-01',
+  estoqueMinimo: 10,
+};
 
 describe('Model Produto - RF_B3 Gerenciar produtos', () => {
-  it('aceita um produto válido', () => {
-    expect(() => new Produto(valido).validar()).not.toThrow();
+  beforeEach(() => {
+    // "hoje" fixo em 09/11/2026 para os testes de validade
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 10, 9, 10, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('aceita um produto válido (sem erros)', () => {
+    expect(new Produto(valido).validar()).toEqual({});
   });
 
   it('começa com quantidade em estoque zero', () => {
@@ -14,26 +30,115 @@ describe('Model Produto - RF_B3 Gerenciar produtos', () => {
   });
 
   it('rejeita nome em branco', () => {
-    expect(() => new Produto({ ...valido, nome: '   ' }).validar()).toThrow(ErroValidacao);
+    expect(new Produto({ ...valido, nome: '   ' }).validar()).toHaveProperty('nome');
   });
 
   it('rejeita nome maior que 120 caracteres', () => {
-    expect(() => new Produto({ ...valido, nome: 'a'.repeat(121) }).validar()).toThrow(ErroValidacao);
+    expect(new Produto({ ...valido, nome: 'a'.repeat(121) }).validar()).toHaveProperty('nome');
   });
 
   it('rejeita unidade de medida em branco', () => {
-    expect(() => new Produto({ ...valido, unidadeMedida: '' }).validar()).toThrow(ErroValidacao);
+    expect(new Produto({ ...valido, unidadeMedida: '' }).validar()).toHaveProperty('unidadeMedida');
   });
 
-  it('rejeita categoria em branco', () => {
-    expect(() => new Produto({ ...valido, categoria: '' }).validar()).toThrow(ErroValidacao);
+  it('rejeita categoria em branco ou fora da lista', () => {
+    expect(new Produto({ ...valido, categoria: '' }).validar()).toHaveProperty('categoria');
+    expect(new Produto({ ...valido, categoria: 'Eletrônico' }).validar()).toHaveProperty('categoria');
   });
 
-  it('rejeita estoque mínimo negativo', () => {
-    expect(() => new Produto({ ...valido, estoqueMinimo: -1 }).validar()).toThrow(ErroValidacao);
+  it('rejeita estoque mínimo negativo, quebrado ou vazio', () => {
+    expect(new Produto({ ...valido, estoqueMinimo: -1 }).validar()).toHaveProperty('estoqueMinimo');
+    expect(new Produto({ ...valido, estoqueMinimo: 1.5 }).validar()).toHaveProperty('estoqueMinimo');
+    expect(new Produto({ ...valido, estoqueMinimo: '' }).validar()).toHaveProperty('estoqueMinimo');
   });
 
-  it('trata data de validade vazia como sem validade', () => {
-    expect(new Produto({ ...valido, dataValidade: '' }).getDataValidade()).toBeNull();
+  it('aceita estoque mínimo vindo como texto do formulário', () => {
+    const produto = new Produto({ ...valido, estoqueMinimo: '15' });
+    expect(produto.validar()).toEqual({});
+    expect(produto.getEstoqueMinimo()).toBe(15);
+  });
+
+  it('devolve todos os erros de uma vez, um por campo', () => {
+    const erros = new Produto({ nome: '', categoria: '', unidadeMedida: '', numeroLote: '', estoqueMinimo: -1 }).validar();
+    expect(Object.keys(erros).sort()).toEqual(['categoria', 'estoqueMinimo', 'nome', 'numeroLote', 'unidadeMedida']);
+  });
+
+  describe('nº do lote', () => {
+    it('é obrigatório', () => {
+      expect(new Produto({ ...valido, numeroLote: '' }).validar()).toHaveProperty('numeroLote');
+      expect(new Produto({ ...valido, numeroLote: null }).validar()).toHaveProperty('numeroLote');
+    });
+
+    it('aceita letras, números, "-", "/" e "."', () => {
+      expect(new Produto({ ...valido, numeroLote: 'L-12/2026.A' }).validar()).toEqual({});
+    });
+
+    it('rejeita caracteres especiais e mais de 30 caracteres', () => {
+      expect(new Produto({ ...valido, numeroLote: 'LOTE #1' }).validar()).toHaveProperty('numeroLote');
+      expect(new Produto({ ...valido, numeroLote: 'A'.repeat(31) }).validar()).toHaveProperty('numeroLote');
+    });
+
+    it('vai para os dados enviados à tela', () => {
+      expect(new Produto(valido).paraLinhaDeDados().numeroLote).toBe('ARZ-2027-01');
+    });
+  });
+
+  describe('data de validade', () => {
+    it('vazia vira "sem validade" e é aceita', () => {
+      const produto = new Produto({ ...valido, dataValidade: '' });
+      expect(produto.getDataValidade()).toBeNull();
+      expect(produto.validar()).toEqual({});
+    });
+
+    it('aceita a data de hoje', () => {
+      expect(new Produto({ ...valido, dataValidade: '2026-11-09' }).validar()).toEqual({});
+    });
+
+    it('aceita data futura', () => {
+      expect(new Produto({ ...valido, dataValidade: '2027-03-01' }).validar()).toEqual({});
+    });
+
+    it('rejeita data anterior à data atual', () => {
+      const erros = new Produto({ ...valido, dataValidade: '2026-11-08' }).validar();
+      expect(erros.dataValidade).toBe('A data de validade não pode ser anterior à data atual.');
+    });
+
+    it('rejeita data inexistente ou em formato errado', () => {
+      expect(new Produto({ ...valido, dataValidade: '2027-02-30' }).validar()).toHaveProperty('dataValidade');
+      expect(new Produto({ ...valido, dataValidade: '01/03/2027' }).validar()).toHaveProperty('dataValidade');
+    });
+
+    it('na alteração, aceita manter a validade vencida que já estava gravada', () => {
+      const produto = new Produto({ ...valido, dataValidade: '2026-11-05' });
+      expect(produto.validar('2026-11-05')).toEqual({});
+    });
+
+    it('na alteração, rejeita trocar para outra data no passado', () => {
+      const produto = new Produto({ ...valido, dataValidade: '2026-11-01' });
+      expect(produto.validar('2026-11-05')).toHaveProperty('dataValidade');
+    });
+  });
+});
+
+describe('Model FiltroProduto - consulta de produtos', () => {
+  it('aceita filtro vazio (traz todos)', () => {
+    expect(new FiltroProduto().validar()).toEqual({});
+  });
+
+  it('aceita os 3 filtros preenchidos', () => {
+    expect(new FiltroProduto({ nome: 'arroz', categoria: 'Alimento', validade: 'VENCIDOS' }).validar()).toEqual({});
+  });
+
+  it('rejeita categoria e situação de validade desconhecidas', () => {
+    const erros = new FiltroProduto({ categoria: 'Xyz', validade: 'ONTEM' }).validar();
+    expect(erros).toHaveProperty('categoria');
+    expect(erros).toHaveProperty('validade');
+  });
+
+  it('ignora espaços e trata nulos como vazio', () => {
+    const filtro = new FiltroProduto({ nome: '  arroz ', categoria: null, validade: null });
+    expect(filtro.getNome()).toBe('arroz');
+    expect(filtro.getCategoria()).toBe('');
+    expect(filtro.getValidade()).toBe('');
   });
 });

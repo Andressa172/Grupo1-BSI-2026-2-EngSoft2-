@@ -1,10 +1,10 @@
 // Conexão com o PostgreSQL (padrão Singleton: um Pool só por processo).
 import { Pool, type PoolClient, type QueryResultRow } from 'pg';
 
-// guardado no global pra sobreviver ao hot reload do Next em dev
-const globalParaSingleton = globalThis as unknown as { atlasDatabase?: Database };
-
 export class Database {
+  // Singleton: a única instância fica numa propriedade estática da própria classe
+  private static instancia: Database | undefined;
+
   private readonly pool: Pool;
 
   private constructor() {
@@ -14,10 +14,10 @@ export class Database {
   }
 
   static getInstancia(): Database {
-    if (!globalParaSingleton.atlasDatabase) {
-      globalParaSingleton.atlasDatabase = new Database();
+    if (!Database.instancia) {
+      Database.instancia = new Database();
     }
-    return globalParaSingleton.atlasDatabase;
+    return Database.instancia;
   }
 
   async query<T extends QueryResultRow = QueryResultRow>(texto: string, parametros?: unknown[]) {

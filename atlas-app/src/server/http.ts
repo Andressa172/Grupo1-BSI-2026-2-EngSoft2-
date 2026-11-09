@@ -7,6 +7,9 @@ export function respostaDeErro(erro: unknown): Response {
   if (erro instanceof ErroNaoEncontrado) {
     return Response.json({ erro: erro.message }, { status: 404 });
   }
+  if (erro instanceof ErroValidacao && erro.erros) {
+    return Response.json({ erro: erro.message, erros: erro.erros }, { status: 400 });
+  }
   if (erro instanceof ErroValidacao || erro instanceof ErroRegraDeNegocio) {
     return Response.json({ erro: erro.message }, { status: 400 });
   }
