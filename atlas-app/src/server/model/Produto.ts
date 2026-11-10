@@ -167,7 +167,7 @@ export class Produto {
     }
 
     if (!Number.isInteger(this.estoqueMinimo) || this.estoqueMinimo < 0) {
-      erros.estoqueMinimo = 'Informe um número inteiro maior ou igual a zero.';
+      erros.estoqueMinimo = 'Use um número inteiro, 0 ou mais.';
     }
 
     if (this.dataValidade !== null) {
