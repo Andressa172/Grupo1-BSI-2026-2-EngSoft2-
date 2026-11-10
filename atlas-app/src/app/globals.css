@@ -6,6 +6,9 @@
   --border-line: #8a7a73;
   --primary: #d94062;
   --secondary: #ffba49;
+  /* cores de estado: sucesso (aberto, aprovado) e perigo (ação destrutiva) */
+  --success: #15803d;
+  --danger: #dc2626;
 }
 
 @theme inline {
@@ -14,6 +17,8 @@
   --color-border-line: var(--border-line);
   --color-primary: var(--primary);
   --color-secondary: var(--secondary);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
    --font-libre: var(--font-libre-baskerville);
