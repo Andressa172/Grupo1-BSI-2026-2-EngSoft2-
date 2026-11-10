@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useId } from 'react';
 import { X } from 'lucide-react';
 
 /* ---------------------------------- Card --------------------------------- */
@@ -60,7 +60,7 @@ export function Field({
 }
 
 const inputClasses =
-  'w-full rounded-md border border-border-line/20 bg-background px-3.5 py-2 text-sm text-foreground shadow-sm outline-none transition-all placeholder:text-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/20';
+  'w-full rounded-md border border-border-line/20 bg-background px-3.5 py-2 text-sm text-foreground shadow-sm outline-none transition-[color,border-color,box-shadow] placeholder:text-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/20';
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${inputClasses} ${props.className ?? ''}`} />;
@@ -78,10 +78,10 @@ export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
 
 export function StatusPill({ status }: { status: string }) {
   const map: Record<string, string> = {
-    ABERTO: 'bg-green-100 text-green-700 border-green-200',
+    ABERTO: 'bg-success/10 text-success border-success/20',
     FECHADO: 'bg-foreground/5 text-foreground/50 border-border-line/20',
     PENDENTE: 'bg-secondary/20 text-secondary border-secondary/30',
-    APROVADA: 'bg-green-100 text-green-700 border-green-200',
+    APROVADA: 'bg-success/10 text-success border-success/20',
     REPROVADA: 'bg-primary/10 text-primary border-primary/20',
   };
   const labelMap: Record<string, string> = {
@@ -124,13 +124,32 @@ export function Modal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const idTitulo = useId();
+
+  // Esc fecha a janela, como em qualquer diálogo
+  useEffect(() => {
+    if (!open) return;
+    function aoTeclar(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', aoTeclar);
+    return () => document.removeEventListener('keydown', aoTeclar);
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-100 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={idTitulo}
+    >
       <div className="absolute inset-0 bg-foreground/30 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-lg rounded-2xl border border-border-line/20 bg-background p-6 shadow-xl max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-medium tracking-tight">{title}</h2>
+          <h2 id={idTitulo} className="text-lg font-medium tracking-tight">
+            {title}
+          </h2>
           <button
             onClick={onClose}
             className="rounded-full p-1.5 text-foreground/50 hover:bg-foreground/5 hover:text-foreground cursor-pointer"
