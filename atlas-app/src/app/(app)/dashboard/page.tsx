@@ -54,7 +54,7 @@ export default function DashboardPage() {
             </Link>
           </div>
           {produtosBaixoEstoque.length === 0 ? (
-            <p className="text-sm text-foreground/40">Nenhum produto abaixo do estoque mínimo.</p>
+            <p className="text-sm text-foreground/50">Nenhum produto abaixo do estoque mínimo.</p>
           ) : (
             <ul className="divide-y divide-border-line/10">
               {produtosBaixoEstoque.map((p) => (
@@ -79,7 +79,7 @@ export default function DashboardPage() {
             </Link>
           </div>
           {cotacoesPendentes.length === 0 ? (
-            <p className="text-sm text-foreground/40">Nenhuma cotação aguardando aprovação.</p>
+            <p className="text-sm text-foreground/50">Nenhuma cotação aguardando aprovação.</p>
           ) : (
             <ul className="divide-y divide-border-line/10">
               {cotacoesPendentes.map((c) => (

@@ -1,16 +1,33 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { Plus, ArrowDownCircle, ArrowUpCircle, ArrowDownUp } from 'lucide-react';
 import { useAtlas } from '@/lib/store';
 import { Button } from '@/components/ui/button';
-import { Card, Field, Input, Select, Modal, Table, THead, EmptyRow, LowStockPill } from '@/components/app/ui';
+import { Field, Input, Select, Modal, Table, THead, EmptyRow, LowStockPill, IconAction, RowActions } from '@/components/app/ui';
 import type { Produto, TipoMovimentacao } from '@/lib/types';
 
 function formatDate(iso?: string) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('pt-BR');
 }
+
+// colunas secundárias somem em telas estreitas
+const COLUNAS_PRODUTOS = [
+  'Produto',
+  { label: 'Categoria', className: 'hidden sm:table-cell' },
+  'Estoque',
+  { label: 'Validade', className: 'hidden md:table-cell' },
+  { label: 'Situação', className: 'hidden sm:table-cell' },
+  { label: 'Ações', className: 'text-right', srOnly: true },
+];
+const COLUNAS_HISTORICO = [
+  { label: 'Data', className: 'hidden sm:table-cell' },
+  'Produto',
+  'Tipo',
+  { label: 'Quantidade', className: 'text-right' },
+  { label: 'Origem', className: 'hidden md:table-cell' },
+];
 
 export default function EstoquePage() {
   const { produtos, movimentacoesEstoque, cadastrarProduto, atualizarEstoque } = useAtlas();
@@ -54,38 +71,38 @@ export default function EstoquePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-foreground/50 max-w-xl">
-          Controle de estoque (RF_B3 / RF_F1): cadastre produtos e registre entradas e saídas manuais.
-          Doações, compras e cardápios atualizam o estoque automaticamente.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:justify-end">
         <Button variant="primary" size="md" onClick={() => setNovoProdutoOpen(true)} iconLeft={<Plus size={16} />}>
-          Novo Produto
+          Novo produto
         </Button>
       </div>
 
       <Table>
-        <THead cols={['Produto', 'Categoria', 'Estoque', 'Validade', 'Status', '']} />
+        <THead cols={COLUNAS_PRODUTOS} />
         <tbody>
-          {produtos.length === 0 && <EmptyRow colSpan={6} label="Nenhum produto cadastrado." />}
+          {produtos.length === 0 && <EmptyRow colSpan={COLUNAS_PRODUTOS.length} label="Nenhum produto cadastrado ainda." />}
           {produtos.map((p) => {
             const low = p.quantidadeEstoque <= p.estoqueMinimo;
             return (
               <tr key={p.id} className="border-b border-border-line/10 last:border-0">
                 <td className="px-4 py-3 font-medium">{p.nome}</td>
-                <td className="px-4 py-3 text-foreground/60">{p.categoria}</td>
-                <td className="px-4 py-3">
-                  {p.quantidadeEstoque} {p.unidadeMedida}
-                  <span className="text-foreground/40"> (mín. {p.estoqueMinimo})</span>
+                <td className="hidden sm:table-cell px-4 py-3 text-foreground/70">{p.categoria}</td>
+                <td className="px-4 py-3 tabular-nums">
+                  <span className={low ? 'text-primary' : ''}>
+                    {p.quantidadeEstoque} {p.unidadeMedida}
+                  </span>
+                  <span className="block text-xs text-foreground/50">mín. {p.estoqueMinimo}</span>
                 </td>
-                <td className="px-4 py-3 text-foreground/60">{formatDate(p.dataValidade)}</td>
-                <td className="px-4 py-3">
+                <td className="hidden md:table-cell px-4 py-3 text-foreground/70 tabular-nums">{formatDate(p.dataValidade)}</td>
+                <td className="hidden sm:table-cell px-4 py-3">
                   <LowStockPill low={low} />
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <Button variant="outline" size="sm" onClick={() => setMovimentarOpen(p)}>
-                    Movimentar
-                  </Button>
+                <td className="px-2 py-2 sm:px-4">
+                  <RowActions>
+                    <IconAction label={`Movimentar estoque de ${p.nome}`} onClick={() => setMovimentarOpen(p)}>
+                      <ArrowDownUp size={16} />
+                    </IconAction>
+                  </RowActions>
                 </td>
               </tr>
             );
@@ -93,37 +110,39 @@ export default function EstoquePage() {
         </tbody>
       </Table>
 
-      <Card className="p-5">
-        <h2 className="text-sm font-semibold mb-4">Histórico de movimentações</h2>
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold">Histórico de movimentações</h2>
         <Table>
-          <THead cols={['Data', 'Produto', 'Tipo', 'Quantidade', 'Origem']} />
+          <THead cols={COLUNAS_HISTORICO} />
           <tbody>
-            {movimentacoesEstoque.length === 0 && <EmptyRow colSpan={5} label="Nenhuma movimentação registrada ainda." />}
+            {movimentacoesEstoque.length === 0 && (
+              <EmptyRow colSpan={COLUNAS_HISTORICO.length} label="Nenhuma movimentação registrada ainda." />
+            )}
             {movimentacoesEstoque.slice(0, 20).map((m) => (
               <tr key={m.id} className="border-b border-border-line/10 last:border-0">
-                <td className="px-4 py-3 text-foreground/60">{formatDate(m.data)}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-foreground/70 tabular-nums">{formatDate(m.data)}</td>
                 <td className="px-4 py-3">{produtoPorId(m.produtoId)?.nome ?? m.produtoId}</td>
                 <td className="px-4 py-3">
-                  <span className={`inline-flex items-center gap-1.5 ${m.tipo === 'ENTRADA' ? 'text-green-600' : 'text-primary'}`}>
+                  <span className={`inline-flex items-center gap-1.5 ${m.tipo === 'ENTRADA' ? 'text-success' : 'text-primary'}`}>
                     {m.tipo === 'ENTRADA' ? <ArrowDownCircle size={14} /> : <ArrowUpCircle size={14} />}
                     {m.tipo === 'ENTRADA' ? 'Entrada' : 'Saída'}
                   </span>
                 </td>
-                <td className="px-4 py-3">{m.quantidade}</td>
-                <td className="px-4 py-3 text-foreground/60">{m.origem}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{m.quantidade}</td>
+                <td className="hidden md:table-cell px-4 py-3 text-foreground/70">{m.origem}</td>
               </tr>
             ))}
           </tbody>
         </Table>
-      </Card>
+      </section>
 
       {/* Modal: novo produto (RF_B3) */}
-      <Modal open={novoProdutoOpen} title="Cadastrar Produto" onClose={() => setNovoProdutoOpen(false)}>
+      <Modal open={novoProdutoOpen} title="Novo produto" onClose={() => setNovoProdutoOpen(false)}>
         <form onSubmit={submitNovoProduto} className="flex flex-col gap-4">
           <Field label="Nome do produto">
             <Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} required />
           </Field>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Categoria">
               <Select value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })}>
                 <option>Alimento</option>
@@ -141,7 +160,7 @@ export default function EstoquePage() {
               />
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Estoque mínimo">
               <Input
                 type="number"
@@ -154,19 +173,25 @@ export default function EstoquePage() {
               <Input type="date" value={form.dataValidade} onChange={(e) => setForm({ ...form, dataValidade: e.target.value })} />
             </Field>
           </div>
-          <Button type="submit" variant="primary" size="md" className="w-full mt-2">
-            Cadastrar
-          </Button>
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="ghost" size="md" onClick={() => setNovoProdutoOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" size="md">
+              Cadastrar
+            </Button>
+          </div>
         </form>
       </Modal>
 
       {/* Modal: movimentar estoque (RF_F1) */}
       <Modal open={!!movimentarOpen} title={`Movimentar: ${movimentarOpen?.nome ?? ''}`} onClose={() => setMovimentarOpen(null)}>
         <form onSubmit={submitMovimentacao} className="flex flex-col gap-4">
-          <p className="text-xs text-foreground/50">
-            Estoque atual: <strong>{movimentarOpen?.quantidadeEstoque}</strong> {movimentarOpen?.unidadeMedida}
+          <p className="text-sm text-foreground/70">
+            Estoque atual: <strong className="font-medium text-foreground">{movimentarOpen?.quantidadeEstoque}</strong>{' '}
+            {movimentarOpen?.unidadeMedida}
           </p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Tipo de movimentação">
               <Select
                 value={movForm.tipo}
@@ -186,9 +211,14 @@ export default function EstoquePage() {
               />
             </Field>
           </div>
-          <Button type="submit" variant="primary" size="md" className="w-full mt-2">
-            Confirmar
-          </Button>
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="ghost" size="md" onClick={() => setMovimentarOpen(null)}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" size="md">
+              Confirmar
+            </Button>
+          </div>
         </form>
       </Modal>
     </div>

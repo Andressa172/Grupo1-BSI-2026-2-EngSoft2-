@@ -109,33 +109,26 @@ export default function ConfiguracoesPage() {
 
   return (
     <div className="flex flex-col gap-6 max-w-4xl">
-      <div className="flex flex-col gap-1">
-        <p className="text-sm text-foreground/50">
-          Parametrização do Sistema: defina as informações cadastrais e visuais da organização
-          que serão exibidas nos relatórios, cabeçalhos e menus da plataforma.
-        </p>
-      </div>
-
       {mensagemSucesso && (
-        <div className="p-3 text-sm rounded-lg bg-green-500/10 border border-green-500/20 text-green-600">
+        <div role="status" className="p-3 text-sm rounded-lg bg-success/10 border border-success/20 text-success">
           {mensagemSucesso}
         </div>
       )}
 
       {erro && (
-        <div className="p-3 text-sm rounded-lg bg-destructive/10 border border-destructive/20 text-destructive">
+        <div role="alert" className="p-3 text-sm rounded-lg bg-danger/10 border border-danger/20 text-danger">
           {erro}
         </div>
       )}
 
       <Card className="p-6">
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          <div className="flex items-center gap-2 pb-2 border-b border-border-line/10 text-foreground/80 font-medium text-sm">
-            <Building2 size={18} />
-            <span>Identidade e Dados Cadastrais</span>
+          <div className="flex items-center gap-2 pb-3 border-b border-border-line/10 font-medium text-sm">
+            <Building2 size={18} className="text-foreground/50" aria-hidden />
+            <h2>Identidade e dados cadastrais</h2>
           </div>
 
-          <Field label="Nome / Nome Fantasia *">
+          <Field label="Nome / nome fantasia *">
             <Input
               required
               value={form.nomeFantasia}
@@ -153,7 +146,7 @@ export default function ConfiguracoesPage() {
               />
             </Field>
 
-            <Field label="Telefone de Contato">
+            <Field label="Telefone de contato">
               <Input
                 value={form.telefone}
                 onChange={(e) => setForm({ ...form, telefone: e.target.value })}
@@ -163,7 +156,7 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="E-mail Institucional">
+            <Field label="E-mail institucional">
               <Input
                 type="email"
                 value={form.email}
@@ -177,16 +170,16 @@ export default function ConfiguracoesPage() {
                 type="file"
                 accept="image/png,image/jpeg,image/gif,image/webp"
                 onChange={(e) => setLogoArquivo(e.target.files?.[0] ?? null)}
-                className="text-foreground/40 file:mr-4 file:rounded-md file:border-0 file:bg-foreground/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground/70"
+                className="text-foreground/50 py-1.5 file:mr-4 file:rounded-md file:border-0 file:bg-foreground/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground/70"
               />
-              <span className="mt-1 text-xs text-foreground/45">
+              <span className="mt-1 text-xs text-foreground/50">
                 PNG, JPEG, GIF ou WebP, até 5 MB.
                 {logoArquivo ? ` Arquivo selecionado: ${logoArquivo.name}` : ''}
               </span>
             </Field>
           </div>
 
-          <Field label="Endereço Completo">
+          <Field label="Endereço completo">
             <Input
               value={form.endereco}
               onChange={(e) => setForm({ ...form, endereco: e.target.value })}
@@ -216,7 +209,7 @@ export default function ConfiguracoesPage() {
               disabled={salvando}
               iconLeft={<Save size={16} />}
             >
-              {salvando ? 'Salvando alterações...' : 'Salvar Parâmetros'}
+              {salvando ? 'Salvando...' : 'Salvar parâmetros'}
             </Button>
           </div>
         </form>

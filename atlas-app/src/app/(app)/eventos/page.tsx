@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Field, Input, Select, Textarea, Modal, Card, Table, THead, EmptyRow } from '@/components/app/ui';
+import { Field, Input, Select, Textarea, Modal, Table, THead, EmptyRow, LoadingRows } from '@/components/app/ui';
 
 interface Produto {
   id: number;
@@ -42,6 +42,9 @@ function formatarBRL(valor: number) {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+// a coluna de data some em telas estreitas
+const COLUNAS = [{ label: 'Data', className: 'hidden sm:table-cell' }, 'Evento', 'Recursos alocados'];
+
 export default function EventosPage() {
   const [eventos, setEventos] = useState<EventoComRecursos[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
@@ -51,20 +54,33 @@ export default function EventosPage() {
   const [dadosEvento, setDadosEvento] = useState({ nome: '', data: '', descricao: '' });
   const [recursos, setRecursos] = useState<LinhaRecursoForm[]>([{ ...RECURSO_VAZIO }]);
 
+  const [estado, setEstado] = useState<'carregando' | 'pronto' | 'erro'>('carregando');
+
+  // falha no servidor vira estado de erro, não lista vazia
   async function carregar() {
-    const resposta = await fetch('/api/eventos');
+    const resposta = await fetch('/api/eventos').catch(() => null);
+    if (!resposta?.ok) {
+      setEstado('erro');
+      return;
+    }
     const dados = await resposta.json();
+    setEstado('pronto');
     setEventos(dados.eventos);
     setProdutos(dados.produtos);
   }
 
   useEffect(() => {
     fetch('/api/eventos')
-      .then((resposta) => resposta.json())
+      .then((resposta) => {
+        if (!resposta.ok) throw new Error();
+        return resposta.json();
+      })
       .then((dados) => {
+        setEstado('pronto');
         setEventos(dados.eventos);
         setProdutos(dados.produtos);
-      });
+      })
+      .catch(() => setEstado('erro'));
   }, []);
 
   function abrirNovo() {
@@ -112,27 +128,31 @@ export default function EventosPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <p className="text-sm text-foreground/50 max-w-xl">
-          Alocação de recursos para eventos (RF_F9): registre o evento e os recursos necessários — produtos
-          do estoque ou valores financeiros. O sistema verifica a disponibilidade antes de confirmar.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:justify-end">
         <Button variant="primary" size="md" onClick={abrirNovo} iconLeft={<Plus size={16} />}>
-          Novo Evento
+          Novo evento
         </Button>
       </div>
 
-      <Card className="p-0">
-        <Table>
-          <THead cols={['Data', 'Evento', 'Recursos alocados', '']} />
+      <Table>
+          <THead cols={COLUNAS} />
           <tbody>
-            {eventos.length === 0 && <EmptyRow colSpan={4} label="Nenhum evento cadastrado." />}
-            {eventos.map(({ evento, recursos: recursosDoEvento }) => (
+            {estado === 'carregando' && <LoadingRows colSpan={COLUNAS.length} />}
+            {estado === 'erro' && (
+              <EmptyRow colSpan={COLUNAS.length}>
+                Não foi possível carregar os dados.{' '}
+                <button type="button" onClick={carregar} className="font-medium text-foreground underline underline-offset-2 cursor-pointer hover:text-primary">
+                  Tentar de novo
+                </button>
+              </EmptyRow>
+            )}
+            {estado === 'pronto' && eventos.length === 0 && <EmptyRow colSpan={COLUNAS.length} label="Nenhum evento cadastrado ainda." />}
+            {estado === 'pronto' && eventos.map(({ evento, recursos: recursosDoEvento }) => (
               <tr key={evento.id} className="border-b border-border-line/10 last:border-0 align-top">
-                <td className="px-4 py-3 text-foreground/60 whitespace-nowrap">{formatarData(evento.data)}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap tabular-nums">{formatarData(evento.data)}</td>
                 <td className="px-4 py-3">
                   <p className="font-medium">{evento.nome}</p>
-                  {evento.descricao && <p className="text-xs text-foreground/40">{evento.descricao}</p>}
+                  {evento.descricao && <p className="text-xs text-foreground/50">{evento.descricao}</p>}
                 </td>
                 <td className="px-4 py-3">
                   <ul className="space-y-1">
@@ -143,19 +163,17 @@ export default function EventosPage() {
                     ))}
                   </ul>
                 </td>
-                <td className="px-4 py-3" />
               </tr>
             ))}
           </tbody>
         </Table>
-      </Card>
 
-      <Modal open={modalAberto} title="Alocar Recursos para Evento" onClose={() => setModalAberto(false)}>
+      <Modal open={modalAberto} title="Novo evento" onClose={() => setModalAberto(false)}>
         <form onSubmit={salvar} className="flex flex-col gap-4">
           <Field label="Nome do evento">
             <Input value={dadosEvento.nome} onChange={(e) => setDadosEvento({ ...dadosEvento, nome: e.target.value })} required />
           </Field>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Data do evento">
               <Input
                 type="date"
@@ -229,7 +247,7 @@ export default function EventosPage() {
                 <button
                   type="button"
                   onClick={() => setRecursos(recursos.filter((_, i) => i !== indice))}
-                  className="p-2 text-foreground/40 hover:text-primary cursor-pointer"
+                  className="rounded-md p-2 text-foreground/50 hover:text-primary hover:bg-foreground/5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   aria-label="Remover recurso"
                 >
                   <Trash2 size={16} />
@@ -239,16 +257,22 @@ export default function EventosPage() {
             <button
               type="button"
               onClick={() => setRecursos([...recursos, { ...RECURSO_VAZIO }])}
-              className="text-xs font-medium text-primary hover:underline w-fit"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline w-fit cursor-pointer"
             >
-              + Adicionar outro recurso
+              <Plus size={14} aria-hidden />
+              Adicionar outro recurso
             </button>
           </div>
 
           {erro && <p className="text-sm text-primary">{erro}</p>}
-          <Button type="submit" variant="primary" size="md" className="w-full mt-2">
-            Confirmar Alocação
-          </Button>
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="ghost" size="md" onClick={() => setModalAberto(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" size="md">
+              Confirmar alocação
+            </Button>
+          </div>
         </form>
       </Modal>
     </div>

@@ -1,15 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, Check, X as XIcon } from 'lucide-react';
+import { Plus, Trash2, Check, X as XIcon, ClipboardCheck } from 'lucide-react';
 import { useAtlas } from '@/lib/store';
 import { Button } from '@/components/ui/button';
-import { Card, Field, Input, Select, Textarea, Modal, Table, THead, EmptyRow, StatusPill } from '@/components/app/ui';
+import { Field, Input, Select, Textarea, Modal, Table, THead, EmptyRow, StatusPill, IconAction, RowActions } from '@/components/app/ui';
 import type { Cotacao } from '@/lib/types';
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR');
 }
+
+// data e itens somem em telas estreitas; a ação fica sempre visível
+const COLUNAS = [
+  { label: 'Data', className: 'hidden md:table-cell' },
+  'Descrição',
+  { label: 'Itens', className: 'hidden sm:table-cell' },
+  'Status',
+  { label: 'Ações', className: 'text-right', srOnly: true },
+];
 
 export default function CotacoesPage() {
   const { produtos, cotacoes, abrirCotacao, avaliarCotacao } = useAtlas();
@@ -47,26 +56,21 @@ export default function CotacoesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <p className="text-sm text-foreground/50 max-w-xl">
-          Cotações de compra (RF_F7 / RF_F8): o secretário abre a cotação com os produtos desejados e o
-          gerente aprova ou reprova antes da compra ser realizada.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:justify-end">
         <Button variant="primary" size="md" onClick={() => setNovaOpen(true)} iconLeft={<Plus size={16} />}>
-          Nova Cotação
+          Nova cotação
         </Button>
       </div>
 
-      <Card className="p-0">
-        <Table>
-          <THead cols={['Data', 'Descrição', 'Itens', 'Status', '']} />
+      <Table>
+          <THead cols={COLUNAS} />
           <tbody>
-            {cotacoes.length === 0 && <EmptyRow colSpan={5} label="Nenhuma cotação registrada." />}
+            {cotacoes.length === 0 && <EmptyRow colSpan={COLUNAS.length} label="Nenhuma cotação registrada ainda." />}
             {cotacoes.map((c) => (
               <tr key={c.id} className="border-b border-border-line/10 last:border-0 align-top">
-                <td className="px-4 py-3 text-foreground/60 whitespace-nowrap">{formatDate(c.dataAbertura)}</td>
+                <td className="hidden md:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap tabular-nums">{formatDate(c.dataAbertura)}</td>
                 <td className="px-4 py-3 max-w-xs">{c.descricao}</td>
-                <td className="px-4 py-3">
+                <td className="hidden sm:table-cell px-4 py-3">
                   <ul className="space-y-1">
                     {c.itens.map((i, idx) => (
                       <li key={idx} className="text-foreground/70">
@@ -77,23 +81,24 @@ export default function CotacoesPage() {
                 </td>
                 <td className="px-4 py-3">
                   <StatusPill status={c.status} />
-                  {c.justificativa && <p className="text-xs text-foreground/40 mt-1 max-w-[12rem]">{c.justificativa}</p>}
+                  {c.justificativa && <p className="text-xs text-foreground/50 mt-1 max-w-48">{c.justificativa}</p>}
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-2 py-2 sm:px-4">
                   {c.status === 'PENDENTE' && (
-                    <Button variant="outline" size="sm" onClick={() => setAvaliarAlvo(c)}>
-                      Avaliar
-                    </Button>
+                    <RowActions>
+                      <IconAction label={`Avaliar cotação: ${c.descricao}`} onClick={() => setAvaliarAlvo(c)}>
+                        <ClipboardCheck size={16} />
+                      </IconAction>
+                    </RowActions>
                   )}
                 </td>
               </tr>
             ))}
           </tbody>
         </Table>
-      </Card>
 
       {/* Nova cotação (RF_F7) */}
-      <Modal open={novaOpen} title="Abrir Cotação" onClose={() => setNovaOpen(false)}>
+      <Modal open={novaOpen} title="Nova cotação" onClose={() => setNovaOpen(false)}>
         <form onSubmit={submitNovaCotacao} className="flex flex-col gap-4">
           <Field label="Descrição da cotação">
             <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="ex: Reposição mensal de alimentos" required />
@@ -137,7 +142,7 @@ export default function CotacoesPage() {
                 <button
                   type="button"
                   onClick={() => setItens(itens.filter((_, i) => i !== idx))}
-                  className="p-2 text-foreground/40 hover:text-primary cursor-pointer"
+                  className="rounded-md p-2 text-foreground/50 hover:text-primary hover:bg-foreground/5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   aria-label="Remover item"
                 >
                   <Trash2 size={16} />
@@ -147,24 +152,30 @@ export default function CotacoesPage() {
             <button
               type="button"
               onClick={() => setItens([...itens, { produtoId: produtos[0]?.id ?? '', quantidadeDesejada: '' }])}
-              className="text-xs font-medium text-primary hover:underline w-fit"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline w-fit cursor-pointer"
             >
-              + Adicionar outro item
+              <Plus size={14} aria-hidden />
+              Adicionar outro item
             </button>
           </div>
 
-          <Button type="submit" variant="primary" size="md" className="w-full mt-2">
-            Enviar Cotação
-          </Button>
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="ghost" size="md" onClick={() => setNovaOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" size="md">
+              Enviar cotação
+            </Button>
+          </div>
         </form>
       </Modal>
 
       {/* Avaliar cotação (RF_F8) */}
-      <Modal open={!!avaliarAlvo} title="Avaliar Cotação" onClose={() => setAvaliarAlvo(null)}>
+      <Modal open={!!avaliarAlvo} title="Avaliar cotação" onClose={() => setAvaliarAlvo(null)}>
         {avaliarAlvo && (
           <div className="flex flex-col gap-4">
             <p className="text-sm">{avaliarAlvo.descricao}</p>
-            <ul className="text-sm text-foreground/60 space-y-1 border-y border-border-line/10 py-3">
+            <ul className="text-sm text-foreground/70 space-y-1 border-y border-border-line/10 py-3">
               {avaliarAlvo.itens.map((i, idx) => (
                 <li key={idx}>
                   {produtos.find((p) => p.id === i.produtoId)?.nome ?? i.produtoId} — {i.quantidadeDesejada}
@@ -174,17 +185,17 @@ export default function CotacoesPage() {
             <Field label="Justificativa / observações (opcional)">
               <Textarea rows={3} value={justificativa} onChange={(e) => setJustificativa(e.target.value)} />
             </Field>
-            <div className="flex gap-3">
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button
                 variant="outline"
                 size="md"
-                className="w-full border-primary/40 text-primary"
+                className="text-primary"
                 iconLeft={<XIcon size={16} />}
                 onClick={() => confirmarAvaliacao('REPROVADA')}
               >
                 Reprovar
               </Button>
-              <Button variant="primary" size="md" className="w-full" iconLeft={<Check size={16} />} onClick={() => confirmarAvaliacao('APROVADA')}>
+              <Button variant="primary" size="md" iconLeft={<Check size={16} />} onClick={() => confirmarAvaliacao('APROVADA')}>
                 Aprovar
               </Button>
             </div>
