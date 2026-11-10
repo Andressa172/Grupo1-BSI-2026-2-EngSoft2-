@@ -123,7 +123,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <div className="mt-auto pt-6 border-t border-border-line/20">
           <Link
             href="/"
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/60 hover:bg-primary/10 hover:text-primary transition-colors"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/70 hover:bg-primary/10 hover:text-primary transition-colors"
           >
             <LogOut size={18} />
             Sair
@@ -135,7 +135,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border-line/20 bg-background/90 backdrop-blur px-6 py-4">
           <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-          <div className="flex items-center gap-2 text-sm text-foreground/60">
+          <div className="flex items-center gap-2 text-sm text-foreground/70">
             <span className="h-8 w-8 rounded-full bg-primary/15 text-primary flex items-center justify-center font-semibold">
               G
             </span>

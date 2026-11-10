@@ -69,9 +69,9 @@ export const Button: React.FC<ButtonProps> = ({
         lg: 'p-3 text-lg',
       }
     : {
-        sm: 'px-3 py-1.5 text-sm gap-1.5',
-        md: 'px-4 py-2 text-base gap-2',
-        lg: 'px-6 py-3 text-lg gap-2.5',
+        sm: 'h-8 px-3 text-sm gap-1.5',
+        md: 'h-10 px-4 text-sm gap-2',
+        lg: 'h-12 px-6 text-base gap-2.5',
       };
 
   const combinedClasses = `${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`;

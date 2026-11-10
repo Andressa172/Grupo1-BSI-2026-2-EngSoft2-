@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useAtlas } from '@/lib/store';
 import { Button } from '@/components/ui/button';
-import { Card, Field, Input, Select, Modal, Table, THead, EmptyRow } from '@/components/app/ui';
+import { Field, Input, Select, Modal, Table, THead, EmptyRow } from '@/components/app/ui';
 import { ControlReceberDoacaoProduto, type DadosFiltroDoacao } from '@/control/ControlReceberDoacaoProduto';
 import { ControlReceberDoacaoDinheiro } from '@/control/ControlReceberDoacaoDinheiro';
 import type { SelecaoDoador } from '@/control/resolverDoador';
@@ -34,6 +34,21 @@ function MensagemErro({ texto }: { texto?: string }) {
   return <span className="text-xs text-primary mt-1 block">{texto}</span>;
 }
 const destaque = (erro?: string) => (erro ? 'border-primary!' : '');
+
+const COLUNAS_PRODUTO = [{ label: 'Data', className: 'hidden sm:table-cell' }, 'Doador', 'Itens'];
+const COLUNAS_DINHEIRO = [
+  { label: 'Data', className: 'hidden sm:table-cell' },
+  'Doador',
+  { label: 'Valor', className: 'text-right' },
+  { label: 'Forma de recebimento', className: 'hidden md:table-cell' },
+];
+
+// abas em formato de pílula; a selecionada fica com fundo claro
+function classeAba(ativa: boolean, pequena = false) {
+  return `rounded-full px-4 py-1.5 ${pequena ? 'text-xs' : 'text-sm'} font-medium cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+    ativa ? 'bg-background text-foreground shadow-sm' : 'text-foreground/50 hover:text-foreground'
+  }`;
+}
 
 export default function DoacoesPage() {
   const atlas = useAtlas();
@@ -127,32 +142,21 @@ export default function DoacoesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <p className="text-sm text-foreground/50 max-w-xl">
-          Registro de doações (RF_F3 / RF_F11): doações de produto atualizam o estoque e doações em
-          dinheiro atualizam o caixa automaticamente.
-        </p>
+      <div className="flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div role="tablist" aria-label="Tipo de doação" className="inline-flex items-center gap-1 rounded-full bg-border-line/10 p-1 w-fit">
+          {(['produto', 'dinheiro'] as const).map((t) => (
+            <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={classeAba(tab === t)}>
+              {t === 'produto' ? 'Produtos' : 'Dinheiro'}
+            </button>
+          ))}
+        </div>
         <Button variant="primary" size="md" onClick={abrirModal} iconLeft={<Plus size={16} />}>
-          Registrar Doação
+          Registrar doação
         </Button>
       </div>
 
-      <div className="inline-flex items-center gap-2 rounded-full bg-border-line/10 p-1.5 border border-border-line/5 w-fit">
-        {(['produto', 'dinheiro'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
-              tab === t ? 'bg-background text-foreground shadow-sm' : 'text-foreground/50 hover:text-foreground/80'
-            }`}
-          >
-            {t === 'produto' ? 'Doações de Produto' : 'Doações em Dinheiro'}
-          </button>
-        ))}
-      </div>
-
-      <form onSubmit={consultar} className="flex flex-wrap items-start gap-3">
-        <div className="min-w-48">
+      <form onSubmit={consultar} className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-start">
+        <div className="col-span-2 sm:min-w-48">
           <Field label="Doador">
             <Select value={filtro.doadorId} onChange={(e) => setFiltro({ ...filtro, doadorId: e.target.value })}>
               <option value="">Todos</option>
@@ -164,7 +168,7 @@ export default function DoacoesPage() {
             </Select>
           </Field>
         </div>
-        <div className="w-36">
+        <div className="sm:w-36">
           <Field label="Data inicial">
             <Input
               value={filtro.dataInicial}
@@ -176,7 +180,7 @@ export default function DoacoesPage() {
           </Field>
           <MensagemErro texto={errosFiltro.dataInicial} />
         </div>
-        <div className="w-36">
+        <div className="sm:w-36">
           <Field label="Data final">
             <Input
               value={filtro.dataFinal}
@@ -188,25 +192,26 @@ export default function DoacoesPage() {
           </Field>
           <MensagemErro texto={errosFiltro.dataFinal} />
         </div>
-        <div className="flex gap-2 mt-6">
-          <Button type="submit" variant="primary" size="md">
+        <div className="col-span-2 flex gap-2 sm:mt-5.5">
+          <Button type="submit" variant="outline" size="md">
             Consultar
           </Button>
-          <Button type="button" variant="outline" size="md" onClick={limparFiltro}>
+          <Button type="button" variant="ghost" size="md" onClick={limparFiltro}>
             Limpar
           </Button>
         </div>
       </form>
 
       {tab === 'produto' ? (
-        <Card className="p-0">
-          <Table>
-            <THead cols={['Data', 'Doador', 'Itens']} />
+        <Table>
+            <THead cols={COLUNAS_PRODUTO} />
             <tbody>
-              {doacoesProduto.length === 0 && <EmptyRow colSpan={3} label="Nenhuma doação de produto encontrada." />}
+              {doacoesProduto.length === 0 && (
+                <EmptyRow colSpan={COLUNAS_PRODUTO.length} label="Nenhuma doação de produto encontrada." />
+              )}
               {doacoesProduto.map((d) => (
                 <tr key={d.id} className="border-b border-border-line/10 last:border-0 align-top">
-                  <td className="px-4 py-3 text-foreground/60 whitespace-nowrap">{formatDate(d.data)}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap tabular-nums">{formatDate(d.data)}</td>
                   <td className="px-4 py-3">{d.doador}</td>
                   <td className="px-4 py-3">
                     <ul className="space-y-1">
@@ -221,28 +226,27 @@ export default function DoacoesPage() {
               ))}
             </tbody>
           </Table>
-        </Card>
       ) : (
-        <Card className="p-0">
           <Table>
-            <THead cols={['Data', 'Doador', 'Valor', 'Forma de Recebimento']} />
+            <THead cols={COLUNAS_DINHEIRO} />
             <tbody>
-              {doacoesDinheiro.length === 0 && <EmptyRow colSpan={4} label="Nenhuma doação em dinheiro encontrada." />}
+              {doacoesDinheiro.length === 0 && (
+                <EmptyRow colSpan={COLUNAS_DINHEIRO.length} label="Nenhuma doação em dinheiro encontrada." />
+              )}
               {doacoesDinheiro.map((d) => (
                 <tr key={d.id} className="border-b border-border-line/10 last:border-0">
-                  <td className="px-4 py-3 text-foreground/60 whitespace-nowrap">{formatDate(d.data)}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap tabular-nums">{formatDate(d.data)}</td>
                   <td className="px-4 py-3">{d.doador}</td>
-                  <td className="px-4 py-3 font-medium text-green-600">{formatBRL(d.valor)}</td>
-                  <td className="px-4 py-3 text-foreground/60">{d.formaRecebimento}</td>
+                  <td className="px-4 py-3 text-right font-medium text-success tabular-nums whitespace-nowrap">{formatBRL(d.valor)}</td>
+                  <td className="hidden md:table-cell px-4 py-3 text-foreground/70">{d.formaRecebimento}</td>
                 </tr>
               ))}
             </tbody>
           </Table>
-        </Card>
       )}
 
-      <Modal open={modalOpen} title="Registrar Doação" onClose={() => setModalOpen(false)}>
-        <div className="inline-flex items-center gap-2 rounded-full bg-border-line/10 p-1.5 border border-border-line/5 w-fit mb-5">
+      <Modal open={modalOpen} title="Registrar doação" onClose={() => setModalOpen(false)}>
+        <div role="tablist" aria-label="Tipo de doação" className="inline-flex items-center gap-1 rounded-full bg-border-line/10 p-1 w-fit mb-5">
           {(['produto', 'dinheiro'] as const).map((t) => (
             <button
               key={t}
@@ -251,9 +255,9 @@ export default function DoacoesPage() {
                 setErros({});
               }}
               type="button"
-              className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
-                tab === t ? 'bg-background text-foreground shadow-sm' : 'text-foreground/50 hover:text-foreground/80'
-              }`}
+              role="tab"
+              aria-selected={tab === t}
+              className={classeAba(tab === t, true)}
             >
               {t === 'produto' ? 'Produto' : 'Dinheiro'}
             </button>
@@ -284,7 +288,7 @@ export default function DoacoesPage() {
           </div>
 
           {doadorSel === DOADOR_NOVO && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Field label="Nome do doador *">
                   <Input
@@ -349,7 +353,7 @@ export default function DoacoesPage() {
                     <button
                       type="button"
                       onClick={() => setItens(itens.length > 1 ? itens.filter((_, i) => i !== idx) : [itemVazio()])}
-                      className="mt-6 p-2 text-foreground/40 hover:text-primary cursor-pointer"
+                      className="mt-6 rounded-md p-2 text-foreground/50 hover:text-primary hover:bg-foreground/5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                       aria-label="Remover item"
                     >
                       <Trash2 size={16} />
@@ -386,13 +390,14 @@ export default function DoacoesPage() {
               <button
                 type="button"
                 onClick={() => setItens([...itens, itemVazio()])}
-                className="text-xs font-medium text-primary hover:underline w-fit"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline w-fit cursor-pointer"
               >
-                + Adicionar outro item
+                <Plus size={14} aria-hidden />
+                Adicionar outro item
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Field label="Valor (R$) *">
                   <Input
@@ -422,9 +427,14 @@ export default function DoacoesPage() {
             </div>
           )}
 
-          <Button type="submit" variant="primary" size="md" className="w-full mt-2">
-            Confirmar Doação
-          </Button>
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="ghost" size="md" onClick={() => setModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" size="md">
+              Confirmar doação
+            </Button>
+          </div>
         </form>
       </Modal>
     </div>

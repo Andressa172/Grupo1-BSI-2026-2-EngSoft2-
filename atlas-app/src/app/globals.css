@@ -9,6 +9,8 @@
   /* cores de estado: sucesso (aberto, aprovado) e perigo (ação destrutiva) */
   --success: #15803d;
   --danger: #dc2626;
+  /* texto sobre o amarelo (--secondary), que sozinho não tem contraste em fundo claro */
+  --warning: #8a5a00;
 }
 
 @theme inline {
@@ -19,6 +21,7 @@
   --color-secondary: var(--secondary);
   --color-success: var(--success);
   --color-danger: var(--danger);
+  --color-warning: var(--warning);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
    --font-libre: var(--font-libre-baskerville);

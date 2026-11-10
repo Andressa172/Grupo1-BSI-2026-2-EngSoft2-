@@ -9,7 +9,7 @@
 import { useReducer, useState, useSyncExternalStore } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, Field, Input, Select, Modal, Table, THead, EmptyRow } from '@/components/app/ui';
+import { Field, Input, Select, Modal, Table, THead, EmptyRow, IconAction, RowActions } from '@/components/app/ui';
 import {
   ControlGerenciarAtendidos,
   type DadosAtendido,
@@ -29,6 +29,17 @@ function MensagemErro({ texto }: { texto?: string }) {
   return <span className="text-xs text-primary mt-1 block">{texto}</span>;
 }
 const destaque = (erro?: string) => (erro ? 'border-primary!' : '');
+
+// colunas secundárias somem em telas estreitas para as ações continuarem visíveis
+const COLUNAS = [
+  'Nome',
+  { label: 'Nascimento', className: 'hidden md:table-cell' },
+  { label: 'Idade', className: 'text-right' },
+  { label: 'Sexo', className: 'hidden sm:table-cell' },
+  { label: 'Responsável legal', className: 'hidden lg:table-cell' },
+  { label: 'Cadastro', className: 'hidden lg:table-cell' },
+  { label: 'Ações', className: 'text-right', srOnly: true },
+];
 
 export default function AtendidosPage() {
   // false no servidor, true no navegador: os dados ficam no localStorage, que só existe lá
@@ -103,14 +114,14 @@ export default function AtendidosPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-end">
+      <div className="flex flex-col sm:flex-row sm:justify-end">
         <Button variant="primary" size="md" onClick={abrirNovo} iconLeft={<Plus size={16} />}>
-          Novo Atendido
+          Novo atendido
         </Button>
       </div>
 
-      <form onSubmit={consultar} className="flex flex-wrap items-start gap-3">
-        <div className="min-w-52 flex-1">
+      <form onSubmit={consultar} className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-start">
+        <div className="col-span-2 min-w-52 flex-1">
           <Field label="Nome">
             <Input
               value={filtro.nome}
@@ -119,7 +130,7 @@ export default function AtendidosPage() {
             />
           </Field>
         </div>
-        <div className="w-40">
+        <div className="col-span-2 sm:w-40">
           <Field label="Sexo">
             <Select value={filtro.sexo} onChange={(e) => setFiltro({ ...filtro, sexo: e.target.value })}>
               <option value="">Todos</option>
@@ -129,7 +140,7 @@ export default function AtendidosPage() {
             </Select>
           </Field>
         </div>
-        <div className="w-28">
+        <div className="sm:w-28">
           <Field label="Idade mín.">
             <Input
               inputMode="numeric"
@@ -140,7 +151,7 @@ export default function AtendidosPage() {
           </Field>
           <MensagemErro texto={errosFiltro.idadeMinima} />
         </div>
-        <div className="w-28">
+        <div className="sm:w-28">
           <Field label="Idade máx.">
             <Input
               inputMode="numeric"
@@ -151,54 +162,44 @@ export default function AtendidosPage() {
           </Field>
           <MensagemErro texto={errosFiltro.idadeMaxima} />
         </div>
-        <div className="flex gap-2 mt-6">
-          <Button type="submit" variant="primary" size="md">
+        <div className="col-span-2 flex gap-2 sm:mt-5.5">
+          <Button type="submit" variant="outline" size="md">
             Consultar
           </Button>
-          <Button type="button" variant="outline" size="md" onClick={limparFiltro}>
+          <Button type="button" variant="ghost" size="md" onClick={limparFiltro}>
             Limpar
           </Button>
         </div>
       </form>
 
-      <Card className="p-0">
-        <Table>
-          <THead cols={['Nome', 'Nascimento', 'Idade', 'Sexo', 'Responsável legal', 'Cadastro', 'Ações']} />
+      <Table>
+          <THead cols={COLUNAS} />
           <tbody>
-            {linhas.length === 0 && <EmptyRow colSpan={7} label="Nenhum atendido encontrado." />}
+            {linhas.length === 0 && <EmptyRow colSpan={COLUNAS.length} label="Nenhum atendido encontrado." />}
             {linhas.map((a) => (
               <tr key={a.id} className="border-b border-border-line/10 last:border-0">
                 <td className="px-4 py-3 font-medium">{a.nome}</td>
-                <td className="px-4 py-3 text-foreground/60 whitespace-nowrap">{a.dataNascimento}</td>
-                <td className="px-4 py-3 text-foreground/60">{a.idade}</td>
-                <td className="px-4 py-3 text-foreground/60">{a.sexo}</td>
-                <td className="px-4 py-3">{a.responsavelLegal}</td>
-                <td className="px-4 py-3 text-foreground/60 whitespace-nowrap">{a.dataCadastro}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => abrirEdicao(a.id)}
-                      className="p-2 text-foreground/40 hover:text-foreground cursor-pointer"
-                      aria-label={`Alterar ${a.nome}`}
-                    >
+                <td className="hidden md:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap tabular-nums">{a.dataNascimento}</td>
+                <td className="px-4 py-3 text-right text-foreground/70 tabular-nums">{a.idade}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-foreground/70">{a.sexo}</td>
+                <td className="hidden lg:table-cell px-4 py-3">{a.responsavelLegal}</td>
+                <td className="hidden lg:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap tabular-nums">{a.dataCadastro}</td>
+                <td className="px-2 py-2 sm:px-4">
+                  <RowActions>
+                    <IconAction label={`Editar ${a.nome}`} onClick={() => abrirEdicao(a.id)}>
                       <Pencil size={16} />
-                    </button>
-                    <button
-                      onClick={() => setExcluindo(a)}
-                      className="p-2 text-foreground/40 hover:text-primary cursor-pointer"
-                      aria-label={`Excluir ${a.nome}`}
-                    >
+                    </IconAction>
+                    <IconAction label={`Excluir ${a.nome}`} danger onClick={() => setExcluindo(a)}>
                       <Trash2 size={16} />
-                    </button>
-                  </div>
+                    </IconAction>
+                  </RowActions>
                 </td>
               </tr>
             ))}
           </tbody>
         </Table>
-      </Card>
 
-      <Modal open={modalOpen} title={editandoId ? 'Alterar Atendido' : 'Novo Atendido'} onClose={() => setModalOpen(false)}>
+      <Modal open={modalOpen} title={editandoId ? 'Editar atendido' : 'Novo atendido'} onClose={() => setModalOpen(false)}>
         <form onSubmit={salvar} className="flex flex-col gap-4">
           <div>
             <Field label="Nome *">
@@ -210,7 +211,7 @@ export default function AtendidosPage() {
             </Field>
             <MensagemErro texto={erros.nome} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Field label="Data de nascimento *">
                 <Input
@@ -252,18 +253,24 @@ export default function AtendidosPage() {
             <MensagemErro texto={erros.responsavelLegal} />
           </div>
           <MensagemErro texto={erros.geral} />
-          <Button type="submit" variant="primary" size="md" className="w-full mt-2">
-            {editandoId ? 'Salvar alterações' : 'Cadastrar Atendido'}
-          </Button>
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="ghost" size="md" onClick={() => setModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" size="md">
+              {editandoId ? 'Salvar alterações' : 'Cadastrar'}
+            </Button>
+          </div>
         </form>
       </Modal>
 
       <Modal open={excluindo !== null} title="Excluir atendido" onClose={() => setExcluindo(null)}>
-        <p className="text-sm text-foreground/70 mb-5">
-          Tem certeza que deseja excluir <strong>{excluindo?.nome}</strong>? Essa ação não pode ser desfeita.
+        <p className="text-sm text-foreground/70">
+          <strong className="font-medium text-foreground">{excluindo?.nome}</strong> sai do cadastro de vez. Essa ação não pode
+          ser desfeita.
         </p>
-        <div className="flex gap-2 justify-end">
-          <Button variant="outline" size="md" onClick={() => setExcluindo(null)}>
+        <div className="mt-8 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="ghost" size="md" onClick={() => setExcluindo(null)}>
             Cancelar
           </Button>
           <Button variant="danger" size="md" onClick={confirmarExclusao}>

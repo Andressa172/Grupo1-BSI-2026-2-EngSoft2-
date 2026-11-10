@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Field, Input, Select, Modal, Table } from '@/components/app/ui';
+import { Field, Input, Select, Modal, Table, IconAction, RowActions } from '@/components/app/ui';
 
 // formato que a API /api/produtos devolve
 interface Produto {
@@ -91,33 +91,6 @@ function montarUrlConsulta(filtro: typeof FILTRO_VAZIO) {
 
 function temFiltro(filtro: typeof FILTRO_VAZIO) {
   return filtro.nome.trim() !== '' || filtro.categoria !== '' || filtro.validade !== '';
-}
-
-// botão só com ícone das linhas da tabela; o nome vai no aria-label e no title
-function AcaoDaLinha({
-  rotulo,
-  perigo = false,
-  onClick,
-  children,
-}: {
-  rotulo: string;
-  perigo?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={rotulo}
-      title={rotulo}
-      className={`rounded-md p-2 text-foreground/50 transition-colors cursor-pointer hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
-        perigo ? 'hover:text-primary' : 'hover:text-foreground'
-      }`}
-    >
-      {children}
-    </button>
-  );
 }
 
 function LinhaDeAviso({ children }: { children: React.ReactNode }) {
@@ -486,21 +459,21 @@ export default function ProdutosPage() {
                     )}
                   </td>
                   <td className="px-2 py-2 sm:px-4">
-                    <div className="flex justify-end gap-0.5">
-                      <AcaoDaLinha rotulo={`Editar ${p.nome}`} onClick={() => abrirEdicao(p)}>
+                    <RowActions>
+                      <IconAction label={`Editar ${p.nome}`} onClick={() => abrirEdicao(p)}>
                         <Pencil size={16} />
-                      </AcaoDaLinha>
-                      <AcaoDaLinha
-                        rotulo={`Excluir ${p.nome}`}
-                        perigo
+                      </IconAction>
+                      <IconAction
+                        label={`Excluir ${p.nome}`}
+                        danger
                         onClick={() => {
                           setErroExclusao('');
                           setExcluindo(p);
                         }}
                       >
                         <Trash2 size={16} />
-                      </AcaoDaLinha>
-                    </div>
+                      </IconAction>
+                    </RowActions>
                   </td>
                 </tr>
               );

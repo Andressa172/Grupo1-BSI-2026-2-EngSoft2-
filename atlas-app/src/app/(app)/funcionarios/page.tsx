@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, Field, Input, Select, Table, THead, EmptyRow } from '@/components/app/ui';
+import { Card, Field, Input, Select, Table, THead, EmptyRow, LoadingRows } from '@/components/app/ui';
 import type { PerfilUsuario } from '@/lib/types';
 
 interface Funcionario {
@@ -34,6 +34,14 @@ const FORM_VAZIO: FormFuncionario = {
   perfil: 'FUNCIONARIO',
   cpf: '',
 };
+
+// login e CPF somem em telas estreitas
+const COLUNAS = [
+  'Nome',
+  { label: 'Login', className: 'hidden sm:table-cell' },
+  { label: 'CPF', className: 'hidden md:table-cell' },
+  'Cargo',
+];
 
 const LABEL_PERFIL: Record<PerfilUsuario, string> = {
   GERENTE: 'Gerente',
@@ -78,19 +86,31 @@ export default function FuncionariosPage() {
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
   const [carregando, setCarregando] = useState(false);
+  const [estadoLista, setEstadoLista] = useState<'carregando' | 'pronto' | 'erro'>('carregando');
 
+  // falha no servidor vira estado de erro, não "nenhum funcionário"
   async function carregarFuncionarios() {
-    const resposta = await fetch('/api/usuarios');
-    if (resposta.ok) {
-      const dados = await resposta.json();
-      setFuncionarios(dados);
+    try {
+      const resposta = await fetch('/api/usuarios');
+      if (!resposta.ok) throw new Error();
+      setFuncionarios(await resposta.json());
+      setEstadoLista('pronto');
+    } catch {
+      setEstadoLista('erro');
     }
   }
 
   useEffect(() => {
     fetch('/api/usuarios')
-      .then((resposta) => (resposta.ok ? resposta.json() : []))
-      .then((dados) => setFuncionarios(dados));
+      .then((resposta) => {
+        if (!resposta.ok) throw new Error();
+        return resposta.json();
+      })
+      .then((dados) => {
+        setFuncionarios(dados);
+        setEstadoLista('pronto');
+      })
+      .catch(() => setEstadoLista('erro'));
   }, []);
 
   async function cadastrar(e: React.FormEvent) {
@@ -133,12 +153,8 @@ export default function FuncionariosPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-sm text-foreground/50 max-w-xl">
-        Cadastro de funcionários (RF_B2): gerencie os usuários com acesso ao sistema ATLAS e seus respectivos cargos.
-      </p>
-
       <Card className="p-6">
-        <h2 className="text-base font-medium tracking-tight mb-4">Cadastrar Funcionário</h2>
+        <h2 className="text-base font-medium tracking-tight mb-5">Novo funcionário</h2>
         <form onSubmit={cadastrar} className="flex flex-col gap-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Nome">
@@ -194,9 +210,9 @@ export default function FuncionariosPage() {
           </div>
 
           {erro && <p className="text-sm text-primary">{erro}</p>}
-          {sucesso && <p className="text-sm text-green-700">{sucesso}</p>}
+          {sucesso && <p className="text-sm text-success">{sucesso}</p>}
 
-          <div className="flex justify-end mt-1">
+          <div className="flex justify-end mt-4">
             <Button type="submit" variant="primary" size="md" isLoading={carregando}>
               Cadastrar
             </Button>
@@ -205,17 +221,29 @@ export default function FuncionariosPage() {
       </Card>
 
       <Table>
-        <THead cols={['Nome', 'Login', 'CPF', 'Cargo']} />
+        <THead cols={COLUNAS} />
         <tbody>
-          {funcionarios.length === 0 && <EmptyRow colSpan={4} label="Nenhum funcionário cadastrado." />}
-          {funcionarios.map((f) => (
-            <tr key={f.id} className="border-b border-border-line/10 last:border-0">
-              <td className="px-4 py-3 font-medium">{f.nome}</td>
-              <td className="px-4 py-3 text-foreground/60">{f.login}</td>
-              <td className="px-4 py-3 text-foreground/60">{f.cpf || '—'}</td>
-              <td className="px-4 py-3 text-foreground/60">{LABEL_PERFIL[f.perfil] ?? f.perfil}</td>
-            </tr>
-          ))}
+          {estadoLista === 'carregando' && <LoadingRows colSpan={COLUNAS.length} />}
+          {estadoLista === 'erro' && (
+            <EmptyRow colSpan={COLUNAS.length}>
+              Não foi possível carregar os funcionários.{' '}
+              <button type="button" onClick={carregarFuncionarios} className="font-medium text-foreground underline underline-offset-2 cursor-pointer hover:text-primary">
+                Tentar de novo
+              </button>
+            </EmptyRow>
+          )}
+          {estadoLista === 'pronto' && funcionarios.length === 0 && (
+            <EmptyRow colSpan={COLUNAS.length} label="Nenhum funcionário cadastrado ainda." />
+          )}
+          {estadoLista === 'pronto' &&
+            funcionarios.map((f) => (
+              <tr key={f.id} className="border-b border-border-line/10 last:border-0">
+                <td className="px-4 py-3 font-medium">{f.nome}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-foreground/70">{f.login}</td>
+                <td className="hidden md:table-cell px-4 py-3 text-foreground/70 tabular-nums whitespace-nowrap">{f.cpf || '—'}</td>
+                <td className="px-4 py-3 text-foreground/70">{LABEL_PERFIL[f.perfil] ?? f.perfil}</td>
+              </tr>
+            ))}
         </tbody>
       </Table>
     </div>
