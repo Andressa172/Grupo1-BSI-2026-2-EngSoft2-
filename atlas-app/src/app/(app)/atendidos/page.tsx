@@ -17,7 +17,8 @@ import {
   type LinhaAtendido,
 } from '@/control/ControlGerenciarAtendidos';
 import { SEXOS } from '@/model/Atendido';
-import { mascaraData, mascaraNome } from '@/view/mascaras';
+import { mascaraNome } from '@/view/mascaras';
+import { CampoData } from '@/view/CampoData';
 
 const control = ControlGerenciarAtendidos.getInstancia();
 
@@ -214,13 +215,7 @@ export default function AtendidosPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Field label="Data de nascimento *">
-                <Input
-                  value={form.dataNascimento}
-                  onChange={(e) => setForm({ ...form, dataNascimento: mascaraData(e.target.value) })}
-                  placeholder="dd/mm/aaaa"
-                  inputMode="numeric"
-                  className={destaque(erros.dataNascimento)}
-                />
+                <CampoData value={form.dataNascimento} onChange={(t) => setForm({ ...form, dataNascimento: t })} className={destaque(erros.dataNascimento)} />
               </Field>
               <MensagemErro texto={erros.dataNascimento} />
             </div>

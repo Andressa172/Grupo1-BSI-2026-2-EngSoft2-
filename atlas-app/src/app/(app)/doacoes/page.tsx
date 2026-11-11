@@ -14,7 +14,8 @@ import { Field, Input, Select, Modal, Table, THead, EmptyRow } from '@/component
 import { ControlReceberDoacaoProduto, type DadosFiltroDoacao } from '@/control/ControlReceberDoacaoProduto';
 import { ControlReceberDoacaoDinheiro } from '@/control/ControlReceberDoacaoDinheiro';
 import type { SelecaoDoador } from '@/control/resolverDoador';
-import { dataHojeBR, mascaraData, mascaraMoeda, mascaraTelefone } from '@/view/mascaras';
+import { dataHojeBR, mascaraMoeda, mascaraTelefone } from '@/view/mascaras';
+import { CampoData } from '@/view/CampoData';
 
 function formatBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -170,25 +171,13 @@ export default function DoacoesPage() {
         </div>
         <div className="sm:w-36">
           <Field label="Data inicial">
-            <Input
-              value={filtro.dataInicial}
-              onChange={(e) => setFiltro({ ...filtro, dataInicial: mascaraData(e.target.value) })}
-              placeholder="dd/mm/aaaa"
-              inputMode="numeric"
-              className={destaque(errosFiltro.dataInicial)}
-            />
+            <CampoData value={filtro.dataInicial} onChange={(t) => setFiltro({ ...filtro, dataInicial: t })} className={destaque(errosFiltro.dataInicial)} />
           </Field>
           <MensagemErro texto={errosFiltro.dataInicial} />
         </div>
         <div className="sm:w-36">
           <Field label="Data final">
-            <Input
-              value={filtro.dataFinal}
-              onChange={(e) => setFiltro({ ...filtro, dataFinal: mascaraData(e.target.value) })}
-              placeholder="dd/mm/aaaa"
-              inputMode="numeric"
-              className={destaque(errosFiltro.dataFinal)}
-            />
+            <CampoData value={filtro.dataFinal} onChange={(t) => setFiltro({ ...filtro, dataFinal: t })} className={destaque(errosFiltro.dataFinal)} />
           </Field>
           <MensagemErro texto={errosFiltro.dataFinal} />
         </div>
@@ -315,13 +304,7 @@ export default function DoacoesPage() {
 
           <div>
             <Field label="Data de recebimento *">
-              <Input
-                value={dataRecebimento}
-                onChange={(e) => setDataRecebimento(mascaraData(e.target.value))}
-                placeholder="dd/mm/aaaa"
-                inputMode="numeric"
-                className={destaque(erros.dataRecebimento)}
-              />
+              <CampoData value={dataRecebimento} onChange={(t) => setDataRecebimento(t)} className={destaque(erros.dataRecebimento)} />
             </Field>
             <MensagemErro texto={erros.dataRecebimento} />
           </div>
@@ -373,13 +356,7 @@ export default function DoacoesPage() {
                     </div>
                     <div>
                       <Field label="Data de validade">
-                        <Input
-                          value={item.dataValidade}
-                          onChange={(e) => alterarItem(idx, 'dataValidade', mascaraData(e.target.value))}
-                          placeholder="dd/mm/aaaa"
-                          inputMode="numeric"
-                          className={destaque(erros[`item.${idx}.dataValidade`])}
-                        />
+                        <CampoData value={item.dataValidade} onChange={(t) => alterarItem(idx, 'dataValidade', t)} className={destaque(erros[`item.${idx}.dataValidade`])} />
                       </Field>
                       <MensagemErro texto={erros[`item.${idx}.dataValidade`]} />
                     </div>
