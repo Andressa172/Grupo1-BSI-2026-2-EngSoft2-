@@ -2,25 +2,56 @@
 
 /**
  * View de RF_F3 (Receber doação de produto) e RF_F11 (Receber doação em dinheiro).
- * Esta tela só mostra dados e captura o que o funcionário digita: validação,
- * cadastro de doador e registro da doação ficam nos Controls.
+ * Esta tela só mostra dados e captura o que o funcionário digita. Ela conversa APENAS com a API
+ * (/api/doacoes/produto e /api/doacoes/dinheiro), que chama os Controls no servidor.
+ * Validação, cadastro de doador, estoque, caixa e gravação no banco ficam do lado do servidor.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { useAtlas } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Modal, Table, THead, EmptyRow } from '@/components/app/ui';
-import { ControlReceberDoacaoProduto, type DadosFiltroDoacao } from '@/control/ControlReceberDoacaoProduto';
-import { ControlReceberDoacaoDinheiro } from '@/control/ControlReceberDoacaoDinheiro';
-import type { SelecaoDoador } from '@/control/resolverDoador';
-import { dataHojeBR, mascaraData, mascaraMoeda, mascaraTelefone } from '@/view/mascaras';
+import { dataHojeBR, mascaraMoeda, mascaraTelefone } from '@/view/mascaras';
+import { CampoData } from '@/view/CampoData';
 
 function formatBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
+// aaaa-mm-dd (banco) -> dd/mm/aaaa (tela)
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('pt-BR');
+  const [a, m, d] = iso.slice(0, 10).split('-');
+  return d && m && a ? `${d}/${m}/${a}` : iso;
+}
+
+// tipos do que a API devolve
+interface DoadorApi { id: number; nome: string; anonimo: boolean }
+interface ProdutoApi { id: number; nome: string }
+interface DoacaoProdutoApi { id: number; doador: string; data: string; itens: { produto: string; quantidade: number }[] }
+interface DoacaoDinheiroApi { id: number; doador: string; data: string; valor: number; formaRecebimento: string }
+interface DadosFiltroDoacao { doadorId: string; dataInicial: string; dataFinal: string }
+type SelecaoDoador =
+  | { tipo: 'existente'; id: string }
+  | { tipo: 'anonimo' }
+  | { tipo: 'novo'; nome: string; contato: string }
+  | { tipo: 'nenhum' };
+
+function montarParametros(f: DadosFiltroDoacao): string {
+  const p = new URLSearchParams();
+  (Object.keys(f) as (keyof DadosFiltroDoacao)[]).forEach((k) => {
+    if (f[k].trim() !== '') p.set(k, f[k].trim());
+  });
+  return p.toString();
+}
+
+// resposta de erro da API: { erro, erros? } -> mapa campo -> mensagem
+async function lerErros(resposta: Response): Promise<Record<string, string>> {
+  try {
+    const corpo = await resposta.json();
+    if (corpo.erros && typeof corpo.erros === 'object') return corpo.erros as Record<string, string>;
+    return { geral: typeof corpo.erro === 'string' ? corpo.erro : 'Não foi possível concluir a operação.' };
+  } catch {
+    return { geral: 'Não foi possível concluir a operação.' };
+  }
 }
 
 const DOADOR_ANONIMO = '__anonimo__';
@@ -51,28 +82,77 @@ function classeAba(ativa: boolean, pequena = false) {
 }
 
 export default function DoacoesPage() {
-  const atlas = useAtlas();
-  const controlProduto = ControlReceberDoacaoProduto.getInstancia();
-  const controlDinheiro = ControlReceberDoacaoDinheiro.getInstancia();
-  controlProduto.configurar(atlas);
-  controlDinheiro.configurar(atlas);
-
-  const doadores = controlProduto.listarDoadores();
-  const produtos = controlProduto.listarProdutos();
+  const [doadores, setDoadores] = useState<DoadorApi[]>([]);
+  const [produtos, setProdutos] = useState<ProdutoApi[]>([]);
+  const [doacoesProduto, setDoacoesProduto] = useState<DoacaoProdutoApi[]>([]);
+  const [doacoesDinheiro, setDoacoesDinheiro] = useState<DoacaoDinheiroApi[]>([]);
+  const [erroCarga, setErroCarga] = useState('');
+  const [aviso, setAviso] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [recarregar, setRecarregar] = useState(0); // muda após registrar, para refazer as consultas
 
   // consulta (RF_F3/RF_F11): filtro digitado x filtro aplicado ao clicar em Consultar
   const filtroVazio: DadosFiltroDoacao = { doadorId: '', dataInicial: '', dataFinal: '' };
   const [filtro, setFiltro] = useState<DadosFiltroDoacao>(filtroVazio);
   const [filtroAplicado, setFiltroAplicado] = useState<DadosFiltroDoacao>(filtroVazio);
   const [errosFiltro, setErrosFiltro] = useState<Record<string, string>>({});
-  const doacoesProduto = controlProduto.consultarDoacoes(filtroAplicado);
-  const doacoesDinheiro = controlDinheiro.consultarDoacoes(filtroAplicado);
 
-  function consultar(e: React.FormEvent) {
+  // listas dos campos de seleção (carrega quando a tela abre e depois de cada doação)
+  useEffect(() => {
+    let cancelado = false;
+    Promise.all([fetch('/api/doadores'), fetch('/api/produtos')])
+      .then(async ([rd, rp]) => {
+        if (!rd.ok || !rp.ok) throw new Error('falha');
+        const d = (await rd.json()) as DoadorApi[];
+        const p = (await rp.json()) as ProdutoApi[];
+        if (cancelado) return;
+        setDoadores(d.filter((x) => !x.anonimo));
+        setProdutos(p);
+      })
+      .catch(() => {
+        if (!cancelado) setErroCarga('Não foi possível carregar doadores e produtos. Confira se o banco de dados está no ar.');
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [recarregar]);
+
+  // histórico de doações, de acordo com o filtro aplicado
+  useEffect(() => {
+    let cancelado = false;
+    const qs = montarParametros(filtroAplicado);
+    Promise.all([fetch(`/api/doacoes/produto?${qs}`), fetch(`/api/doacoes/dinheiro?${qs}`)])
+      .then(async ([rp, rd]) => {
+        if (!rp.ok || !rd.ok) throw new Error('falha');
+        const p = (await rp.json()) as DoacaoProdutoApi[];
+        const d = (await rd.json()) as DoacaoDinheiroApi[];
+        if (cancelado) return;
+        setDoacoesProduto(p);
+        setDoacoesDinheiro(d);
+        setErroCarga('');
+      })
+      .catch(() => {
+        if (!cancelado) setErroCarga('Não foi possível carregar as doações. Confira se o banco de dados está no ar.');
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [filtroAplicado, recarregar]);
+
+  async function consultar(e: React.FormEvent) {
     e.preventDefault();
-    const e2 = controlProduto.validarFiltro(filtro);
-    setErrosFiltro(e2);
-    if (Object.keys(e2).length === 0) setFiltroAplicado(filtro);
+    // o servidor valida o filtro; se houver erro, mostra ao lado do campo
+    try {
+      const resposta = await fetch(`/api/doacoes/produto?${montarParametros(filtro)}`);
+      if (!resposta.ok) {
+        setErrosFiltro(await lerErros(resposta));
+        return;
+      }
+      setErrosFiltro({});
+      setFiltroAplicado(filtro);
+    } catch {
+      setErrosFiltro({ dataInicial: 'Não foi possível consultar agora.' });
+    }
   }
 
   function limparFiltro() {
@@ -117,23 +197,44 @@ export default function DoacoesPage() {
     return { tipo: 'nenhum' };
   }
 
+  // envia a doação para a API; os erros por campo voltam no formato que a tela já usa
+  async function enviar(url: string, corpo: unknown) {
+    setSalvando(true);
+    try {
+      const resposta = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(corpo),
+      });
+      if (!resposta.ok) {
+        setErros(await lerErros(resposta));
+        return;
+      }
+      const registrada = await resposta.json();
+      setErros({});
+      setModalOpen(false);
+      // doação em dinheiro com o caixa fechado: a doação fica gravada e a tela avisa
+      setAviso(
+        registrada.caixaAtualizado === false
+          ? 'Doação registrada, mas não há caixa aberto: o valor não foi lançado no caixa.'
+          : ''
+      );
+      setRecarregar((n) => n + 1);
+    } catch {
+      setErros({ geral: 'Não foi possível registrar. Confira se o banco de dados está no ar.' });
+    } finally {
+      setSalvando(false);
+    }
+  }
+
   function enviarDoacaoProduto(e: React.FormEvent) {
     e.preventDefault();
-    const resultado = controlProduto.registrar({ doador: selecaoDoador(), dataRecebimento, itens });
-    setErros(resultado.erros);
-    if (resultado.sucesso) setModalOpen(false);
+    void enviar('/api/doacoes/produto', { doador: selecaoDoador(), dataRecebimento, itens });
   }
 
   function enviarDoacaoDinheiro(e: React.FormEvent) {
     e.preventDefault();
-    const resultado = controlDinheiro.registrar({
-      doador: selecaoDoador(),
-      valor,
-      formaRecebimento: forma,
-      dataRecebimento,
-    });
-    setErros(resultado.erros);
-    if (resultado.sucesso) setModalOpen(false);
+    void enviar('/api/doacoes/dinheiro', { doador: selecaoDoador(), valor, formaRecebimento: forma, dataRecebimento });
   }
 
   function alterarItem(idx: number, campo: keyof ItemForm, texto: string) {
@@ -155,6 +256,9 @@ export default function DoacoesPage() {
         </Button>
       </div>
 
+      {erroCarga && <p className="text-sm text-primary">{erroCarga}</p>}
+      {aviso && <p className="text-sm text-foreground/70">{aviso}</p>}
+
       <form onSubmit={consultar} className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-start">
         <div className="col-span-2 sm:min-w-48">
           <Field label="Doador">
@@ -170,25 +274,13 @@ export default function DoacoesPage() {
         </div>
         <div className="sm:w-36">
           <Field label="Data inicial">
-            <Input
-              value={filtro.dataInicial}
-              onChange={(e) => setFiltro({ ...filtro, dataInicial: mascaraData(e.target.value) })}
-              placeholder="dd/mm/aaaa"
-              inputMode="numeric"
-              className={destaque(errosFiltro.dataInicial)}
-            />
+            <CampoData value={filtro.dataInicial} onChange={(t) => setFiltro({ ...filtro, dataInicial: t })} className={destaque(errosFiltro.dataInicial)} />
           </Field>
           <MensagemErro texto={errosFiltro.dataInicial} />
         </div>
         <div className="sm:w-36">
           <Field label="Data final">
-            <Input
-              value={filtro.dataFinal}
-              onChange={(e) => setFiltro({ ...filtro, dataFinal: mascaraData(e.target.value) })}
-              placeholder="dd/mm/aaaa"
-              inputMode="numeric"
-              className={destaque(errosFiltro.dataFinal)}
-            />
+            <CampoData value={filtro.dataFinal} onChange={(t) => setFiltro({ ...filtro, dataFinal: t })} className={destaque(errosFiltro.dataFinal)} />
           </Field>
           <MensagemErro texto={errosFiltro.dataFinal} />
         </div>
@@ -315,13 +407,7 @@ export default function DoacoesPage() {
 
           <div>
             <Field label="Data de recebimento *">
-              <Input
-                value={dataRecebimento}
-                onChange={(e) => setDataRecebimento(mascaraData(e.target.value))}
-                placeholder="dd/mm/aaaa"
-                inputMode="numeric"
-                className={destaque(erros.dataRecebimento)}
-              />
+              <CampoData value={dataRecebimento} onChange={(t) => setDataRecebimento(t)} className={destaque(erros.dataRecebimento)} />
             </Field>
             <MensagemErro texto={erros.dataRecebimento} />
           </div>
@@ -373,13 +459,7 @@ export default function DoacoesPage() {
                     </div>
                     <div>
                       <Field label="Data de validade">
-                        <Input
-                          value={item.dataValidade}
-                          onChange={(e) => alterarItem(idx, 'dataValidade', mascaraData(e.target.value))}
-                          placeholder="dd/mm/aaaa"
-                          inputMode="numeric"
-                          className={destaque(erros[`item.${idx}.dataValidade`])}
-                        />
+                        <CampoData value={item.dataValidade} onChange={(t) => alterarItem(idx, 'dataValidade', t)} className={destaque(erros[`item.${idx}.dataValidade`])} />
                       </Field>
                       <MensagemErro texto={erros[`item.${idx}.dataValidade`]} />
                     </div>
@@ -427,11 +507,12 @@ export default function DoacoesPage() {
             </div>
           )}
 
+          <MensagemErro texto={erros.geral} />
           <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="ghost" size="md" onClick={() => setModalOpen(false)}>
               Cancelar
             </Button>
-            <Button type="submit" variant="primary" size="md">
+            <Button type="submit" variant="primary" size="md" disabled={salvando}>
               Confirmar doação
             </Button>
           </div>
