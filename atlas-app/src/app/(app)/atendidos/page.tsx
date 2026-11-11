@@ -2,28 +2,73 @@
 
 /**
  * View de RF_B1 (Gerenciar atendidos).
- * Esta tela só mostra dados e captura o que o funcionário digita: validação,
- * regras e gravação ficam no Control (ControlGerenciarAtendidos).
+ * Esta tela só mostra dados e captura o que o funcionário digita. Ela conversa APENAS com a API
+ * (/api/atendidos), que chama o Control (GerenciarAtendidosController) no servidor.
+ * Validação, regras e gravação no banco ficam do lado do servidor (Control -> Model -> DAO).
  */
 
-import { useReducer, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Modal, Table, THead, EmptyRow, IconAction, RowActions } from '@/components/app/ui';
-import {
-  ControlGerenciarAtendidos,
-  type DadosAtendido,
-  type DadosFiltroAtendido,
-  type LinhaAtendido,
-} from '@/control/ControlGerenciarAtendidos';
-import { SEXOS } from '@/model/Atendido';
 import { mascaraNome } from '@/view/mascaras';
 import { CampoData } from '@/view/CampoData';
 
-const control = ControlGerenciarAtendidos.getInstancia();
+const SEXOS = ['Feminino', 'Masculino'];
+
+interface DadosAtendido {
+  nome: string;
+  dataNascimento: string; // dd/mm/aaaa (como o funcionário digita)
+  sexo: string;
+  responsavelLegal: string;
+}
+interface DadosFiltroAtendido {
+  nome: string;
+  sexo: string;
+  idadeMinima: string;
+  idadeMaxima: string;
+}
+// o que a API devolve (datas em aaaa-mm-dd)
+interface AtendidoApi {
+  id: number;
+  nome: string;
+  dataNascimento: string;
+  idade: number;
+  sexo: string;
+  responsavelLegal: string;
+  dataCadastro: string;
+}
+interface LinhaAtendido extends Omit<AtendidoApi, 'id'> {
+  id: string;
+}
 
 const formVazio: DadosAtendido = { nome: '', dataNascimento: '', sexo: '', responsavelLegal: '' };
 const filtroVazio: DadosFiltroAtendido = { nome: '', sexo: '', idadeMinima: '', idadeMaxima: '' };
+
+// aaaa-mm-dd (banco) -> dd/mm/aaaa (tela)
+function paraBR(iso: string): string {
+  const [a, m, d] = iso.slice(0, 10).split('-');
+  return a && m && d ? `${d}/${m}/${a}` : iso;
+}
+
+function montarParametros(f: DadosFiltroAtendido): string {
+  const parametros = new URLSearchParams();
+  (Object.keys(f) as (keyof DadosFiltroAtendido)[]).forEach((chave) => {
+    if (f[chave].trim() !== '') parametros.set(chave, f[chave].trim());
+  });
+  return parametros.toString();
+}
+
+// resposta de erro da API: { erro, erros? } -> mapa campo -> mensagem
+async function lerErros(resposta: Response): Promise<Record<string, string>> {
+  try {
+    const corpo = await resposta.json();
+    if (corpo.erros && typeof corpo.erros === 'object') return corpo.erros as Record<string, string>;
+    return { geral: typeof corpo.erro === 'string' ? corpo.erro : 'Não foi possível concluir a operação.' };
+  } catch {
+    return { geral: 'Não foi possível concluir a operação.' };
+  }
+}
 
 function MensagemErro({ texto }: { texto?: string }) {
   if (!texto) return null;
@@ -43,13 +88,8 @@ const COLUNAS = [
 ];
 
 export default function AtendidosPage() {
-  // false no servidor, true no navegador: os dados ficam no localStorage, que só existe lá
-  const noNavegador = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false
-  );
-  const [, atualizarTela] = useReducer((n: number) => n + 1, 0); // re-renderiza após incluir/alterar/excluir
+  const [linhas, setLinhas] = useState<LinhaAtendido[]>([]);
+  const [erroCarga, setErroCarga] = useState('');
 
   // consulta: filtro digitado x filtro aplicado ao clicar em Consultar
   const [filtro, setFiltro] = useState<DadosFiltroAtendido>(filtroVazio);
@@ -61,15 +101,48 @@ export default function AtendidosPage() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [form, setForm] = useState<DadosAtendido>(formVazio);
   const [erros, setErros] = useState<Record<string, string>>({});
+  const [salvando, setSalvando] = useState(false);
 
   // exclusão
   const [excluindo, setExcluindo] = useState<LinhaAtendido | null>(null);
 
-  const linhas: LinhaAtendido[] = noNavegador ? control.consultar(filtroAplicado) : [];
+  const carregar = useCallback(async (f: DadosFiltroAtendido): Promise<Record<string, string>> => {
+    try {
+      const resposta = await fetch(`/api/atendidos?${montarParametros(f)}`);
+      if (!resposta.ok) return await lerErros(resposta);
+      const dados = (await resposta.json()) as AtendidoApi[];
+      setLinhas(dados.map((a) => ({ ...a, id: String(a.id) })));
+      setErroCarga('');
+      return {};
+    } catch {
+      setErroCarga('Não foi possível carregar os atendidos. Confira se o banco de dados está no ar.');
+      return {};
+    }
+  }, []);
 
-  function consultar(e: React.FormEvent) {
+  // carrega a lista quando a tela abre (e depois só quando o filtro aplicado muda)
+  useEffect(() => {
+    let cancelado = false;
+    fetch('/api/atendidos?' + montarParametros(filtroAplicado))
+      .then(async (resposta) => {
+        if (!resposta.ok) throw new Error('falha');
+        const dados = (await resposta.json()) as AtendidoApi[];
+        if (cancelado) return;
+        setLinhas(dados.map((a) => ({ ...a, id: String(a.id) })));
+        setErroCarga('');
+      })
+      .catch(() => {
+        if (!cancelado) setErroCarga('Não foi possível carregar os atendidos. Confira se o banco de dados está no ar.');
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [filtroAplicado]);
+
+  async function consultar(e: React.FormEvent) {
     e.preventDefault();
-    const e2 = control.validarFiltro(filtro);
+    // o servidor valida o filtro; se houver erro, mostra ao lado do campo
+    const e2 = await carregar(filtro);
     setErrosFiltro(e2);
     if (Object.keys(e2).length === 0) setFiltroAplicado(filtro);
   }
@@ -87,30 +160,44 @@ export default function AtendidosPage() {
     setModalOpen(true);
   }
 
-  function abrirEdicao(id: string) {
-    const dados = control.obterParaEdicao(id);
-    if (!dados) return;
-    setEditandoId(id);
-    setForm(dados);
+  function abrirEdicao(a: LinhaAtendido) {
+    setEditandoId(a.id);
+    setForm({ nome: a.nome, dataNascimento: paraBR(a.dataNascimento), sexo: a.sexo, responsavelLegal: a.responsavelLegal });
     setErros({});
     setModalOpen(true);
   }
 
-  function salvar(e: React.FormEvent) {
+  async function salvar(e: React.FormEvent) {
     e.preventDefault();
-    const resultado = editandoId ? control.alterar(editandoId, form) : control.incluir(form);
-    setErros(resultado.erros);
-    if (resultado.sucesso) {
+    setSalvando(true);
+    try {
+      const resposta = await fetch(editandoId ? `/api/atendidos/${editandoId}` : '/api/atendidos', {
+        method: editandoId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!resposta.ok) {
+        setErros(await lerErros(resposta));
+        return;
+      }
+      setErros({});
       setModalOpen(false);
-      atualizarTela();
+      await carregar(filtroAplicado);
+    } catch {
+      setErros({ geral: 'Não foi possível salvar. Confira se o banco de dados está no ar.' });
+    } finally {
+      setSalvando(false);
     }
   }
 
-  function confirmarExclusao() {
+  async function confirmarExclusao() {
     if (!excluindo) return;
-    control.excluir(excluindo.id);
-    setExcluindo(null);
-    atualizarTela();
+    try {
+      await fetch(`/api/atendidos/${excluindo.id}`, { method: 'DELETE' });
+    } finally {
+      setExcluindo(null);
+      await carregar(filtroAplicado);
+    }
   }
 
   return (
@@ -173,6 +260,8 @@ export default function AtendidosPage() {
         </div>
       </form>
 
+      {erroCarga && <p className="text-sm text-primary">{erroCarga}</p>}
+
       <Table>
           <THead cols={COLUNAS} />
           <tbody>
@@ -180,14 +269,14 @@ export default function AtendidosPage() {
             {linhas.map((a) => (
               <tr key={a.id} className="border-b border-border-line/10 last:border-0">
                 <td className="px-4 py-3 font-medium">{a.nome}</td>
-                <td className="hidden md:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap tabular-nums">{a.dataNascimento}</td>
+                <td className="hidden md:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap tabular-nums">{paraBR(a.dataNascimento)}</td>
                 <td className="px-4 py-3 text-right text-foreground/70 tabular-nums">{a.idade}</td>
                 <td className="hidden sm:table-cell px-4 py-3 text-foreground/70">{a.sexo}</td>
                 <td className="hidden lg:table-cell px-4 py-3">{a.responsavelLegal}</td>
-                <td className="hidden lg:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap tabular-nums">{a.dataCadastro}</td>
+                <td className="hidden lg:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap tabular-nums">{paraBR(a.dataCadastro)}</td>
                 <td className="px-2 py-2 sm:px-4">
                   <RowActions>
-                    <IconAction label={`Editar ${a.nome}`} onClick={() => abrirEdicao(a.id)}>
+                    <IconAction label={`Editar ${a.nome}`} onClick={() => abrirEdicao(a)}>
                       <Pencil size={16} />
                     </IconAction>
                     <IconAction label={`Excluir ${a.nome}`} danger onClick={() => setExcluindo(a)}>
@@ -252,7 +341,7 @@ export default function AtendidosPage() {
             <Button type="button" variant="ghost" size="md" onClick={() => setModalOpen(false)}>
               Cancelar
             </Button>
-            <Button type="submit" variant="primary" size="md">
+            <Button type="submit" variant="primary" size="md" disabled={salvando}>
               {editandoId ? 'Salvar alterações' : 'Cadastrar'}
             </Button>
           </div>
