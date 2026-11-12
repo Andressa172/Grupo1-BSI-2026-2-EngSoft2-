@@ -4,7 +4,7 @@ import { Evento } from './model/Evento';
 import { AlocacaoRecurso, type TipoRecurso } from './model/AlocacaoRecurso';
 import { EventoDAO } from './dao/EventoDAO';
 import { AlocacaoRecursoDAO } from './dao/AlocacaoRecursoDAO';
-import { ProdutoDAO } from './dao/ProdutoDAO';
+import { MovimentacaoEstoque } from './model/MovimentacaoEstoque';
 import { ErroNaoEncontrado, ErroRegraDeNegocio, ErroValidacao } from './erros';
 import type { ExecutorSQL } from './dao/tipos';
 
@@ -34,9 +34,9 @@ export interface IEventoDAOParaAlocacao {
 export interface IAlocacaoRecursoDAOParaAlocacao {
   inserir(alocacao: AlocacaoRecurso): Promise<AlocacaoRecurso>;
 }
-export interface IProdutoDAOParaAlocacao {
-  decrementarEstoque(produtoId: number, quantidade: number): Promise<{ id: number } | null>;
-  registrarMovimentacao(produtoId: number, tipo: 'ENTRADA' | 'SAIDA', quantidade: number, origem: string): Promise<void>;
+// baixa no estoque (RF_F1): devolve false se não há saldo suficiente
+export interface IEstoqueParaAlocacao {
+  registrarSaida(produtoId: number, quantidade: number, origem: string): Promise<boolean>;
 }
 
 const globalParaSingleton = globalThis as unknown as { alocarRecursosController?: AlocarRecursosController };
@@ -47,7 +47,10 @@ export class AlocarRecursosController {
     private readonly criarEventoDAO: (executor: ExecutorSQL) => IEventoDAOParaAlocacao = (executor) => new EventoDAO(executor),
     private readonly criarAlocacaoDAO: (executor: ExecutorSQL) => IAlocacaoRecursoDAOParaAlocacao = (executor) =>
       new AlocacaoRecursoDAO(executor),
-    private readonly criarProdutoDAO: (executor: ExecutorSQL) => IProdutoDAOParaAlocacao = (executor) => new ProdutoDAO(executor)
+    private readonly criarEstoque: (executor: ExecutorSQL) => IEstoqueParaAlocacao = (executor) => ({
+      registrarSaida: (produtoId, quantidade, origem) =>
+        MovimentacaoEstoque.registrarSaida(executor, produtoId, quantidade, origem),
+    })
   ) {}
 
   static getInstancia(): AlocarRecursosController {
@@ -77,7 +80,7 @@ export class AlocarRecursosController {
     return this.database.comTransacao(async (client) => {
       const eventoDAO = this.criarEventoDAO(client as unknown as ExecutorSQL);
       const alocacaoDAO = this.criarAlocacaoDAO(client as unknown as ExecutorSQL);
-      const produtoDAO = this.criarProdutoDAO(client as unknown as ExecutorSQL);
+      const estoque = this.criarEstoque(client as unknown as ExecutorSQL);
 
       const eventoSalvo = await eventoDAO.inserir(evento);
 
@@ -87,13 +90,12 @@ export class AlocarRecursosController {
           const produtoId = recurso.getProdutoId()!;
           const quantidade = recurso.getQuantidade()!;
 
-          const atualizado = await produtoDAO.decrementarEstoque(produtoId, quantidade);
+          const atualizado = await estoque.registrarSaida(produtoId, quantidade, `Alocação para evento "${evento.getNome()}"`);
           if (!atualizado) {
             throw new ErroRegraDeNegocio(
               `Estoque insuficiente para o produto ${produtoId}: não é possível alocar ${quantidade} unidade(s).`
             );
           }
-          await produtoDAO.registrarMovimentacao(produtoId, 'SAIDA', quantidade, `Alocação para evento "${evento.getNome()}"`);
         }
 
         recurso.setEventoId(eventoSalvo.getId()!);

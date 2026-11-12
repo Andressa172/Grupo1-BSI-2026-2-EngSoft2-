@@ -1,7 +1,8 @@
 // DAO - Produto
-// - listarTodos / decrementarEstoque / registrarMovimentacao: usados pelos controles de F9/F10
+// - listarTodos: lista simples, usada pelas telas de cardápio (RF_F10) e eventos (RF_F9)
 // - demais métodos: CRUD do RF_B3 (Gerenciar produtos). Quem cria este DAO é o
 //   model Produto, com a conexão que recebe do ProdutoController.
+// A quantidade em estoque não é alterada aqui: só pelo MovimentacaoEstoqueDAO (RF_F1).
 import type { ExecutorSQL } from './tipos';
 import { Database } from '../db/Database';
 import { Produto } from '../model/Produto';
@@ -46,25 +47,6 @@ export class ProdutoDAO {
       'SELECT id, nome, unidade_medida, quantidade_estoque, estoque_minimo FROM produto ORDER BY nome'
     );
     return resultado.rows;
-  }
-
-  // update atômico: a condição no WHERE evita decrementar abaixo de zero
-  async decrementarEstoque(produtoId: number, quantidade: number): Promise<ProdutoLinha | null> {
-    const resultado = await this.executor.query<ProdutoLinha>(
-      `UPDATE produto
-          SET quantidade_estoque = quantidade_estoque - $1
-        WHERE id = $2 AND quantidade_estoque >= $1
-    RETURNING id, nome, unidade_medida, quantidade_estoque, estoque_minimo`,
-      [quantidade, produtoId]
-    );
-    return resultado.rows[0] ?? null;
-  }
-
-  async registrarMovimentacao(produtoId: number, tipo: 'ENTRADA' | 'SAIDA', quantidade: number, origem: string): Promise<void> {
-    await this.executor.query(
-      'INSERT INTO movimentacao_estoque (produto_id, tipo, quantidade, origem) VALUES ($1, $2, $3, $4)',
-      [produtoId, tipo, quantidade, origem]
-    );
   }
 
   // ------------------------- RF_B3 - Gerenciar produtos -------------------------

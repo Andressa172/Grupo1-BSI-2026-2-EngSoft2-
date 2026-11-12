@@ -70,8 +70,13 @@ CREATE TABLE IF NOT EXISTS movimentacao_estoque (
     tipo VARCHAR(10) NOT NULL CHECK (tipo IN ('ENTRADA', 'SAIDA')),
     quantidade INTEGER NOT NULL CHECK (quantidade > 0),
     data TIMESTAMP NOT NULL DEFAULT now(),
-    origem VARCHAR(255) NOT NULL
+    origem VARCHAR(255) NOT NULL,
+    -- validade do que entrou (quando informada); na saída fica vazia
+    data_validade DATE
 );
+
+-- bancos criados antes da validade na movimentação: acrescenta a coluna sem perder dados
+ALTER TABLE movimentacao_estoque ADD COLUMN IF NOT EXISTS data_validade DATE;
 
 -- ---------------------------------------------------------------------------
 -- RF_F2 / Compra (lançar entrada de compras)

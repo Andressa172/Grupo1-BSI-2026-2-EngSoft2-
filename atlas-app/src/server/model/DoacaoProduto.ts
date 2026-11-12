@@ -7,6 +7,7 @@ import type { ExecutorSQL } from '../dao/tipos';
 import { DoacaoProdutoDAO, type DoacaoProdutoRegistro } from '../dao/DoacaoProdutoDAO';
 import type { FiltroDoacao } from './FiltroDoacao';
 import { ItemDoacao } from './ItemDoacao';
+import { MovimentacaoEstoque } from './MovimentacaoEstoque';
 import { SelecaoDoador } from './SelecaoDoador';
 import { dataValida, hoje, paraIso, parseData } from './datasBR';
 
@@ -78,10 +79,18 @@ export class DoacaoProduto {
     this.id = await dao.inserirDoacao(doadorId, paraIso(this.dataRecebimento));
 
     for (let i = 0; i < this.itens.length; i++) {
-      const registrado = await dao.registrarItem(this.id, this.itens[i]);
+      const item = this.itens[i];
+      const registrado = await MovimentacaoEstoque.registrarEntrada(
+        conexao,
+        item.getProdutoId(),
+        item.getQuantidade(),
+        `Doação de produto #${this.id}`,
+        item.getDataValidade()
+      );
       if (!registrado) {
         throw new ErroValidacao('Produto inválido.', { [`item.${i}.produto`]: 'Produto inválido: não cadastrado.' });
       }
+      await dao.inserirItem(this.id, item);
     }
   }
 
