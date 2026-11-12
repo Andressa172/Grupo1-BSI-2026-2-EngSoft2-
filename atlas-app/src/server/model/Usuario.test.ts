@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Usuario, validarCPF, formatarCPF } from './Usuario';
-import { ErroValidacao } from '../erros';
+import { FiltroUsuario } from './FiltroUsuario';
 
 describe('Model Usuario - RF_B2 Gerenciar Funcionários / Autenticação', () => {
   it('aceita um usuário válido com CPF formatado ou apenas dígitos', () => {
@@ -11,7 +11,7 @@ describe('Model Usuario - RF_B2 Gerenciar Funcionários / Autenticação', () =>
       perfil: 'GERENTE',
       cpf: '529.982.247-25',
     });
-    expect(() => usuario.validar()).not.toThrow();
+    expect(usuario.validar()).toEqual({});
     expect(usuario.isAtivo()).toBe(true);
     expect(usuario.getCpf()).toBe('52998224725');
   });
@@ -25,29 +25,47 @@ describe('Model Usuario - RF_B2 Gerenciar Funcionários / Autenticação', () =>
     expect(formatarCPF('52998224725')).toBe('529.982.247-25');
   });
 
-  it('rejeita nome em branco', () => {
-    const usuario = new Usuario({
+  it('rejeita nome em branco ou muito curto', () => {
+    const usuarioVazio = new Usuario({
       nome: '   ',
       login: 'gerente',
       senhaHash: 'demo',
       perfil: 'GERENTE',
       cpf: '52998224725',
     });
-    expect(() => usuario.validar()).toThrow(ErroValidacao);
+    expect(usuarioVazio.validar()).toHaveProperty('nome');
+
+    const usuarioCurto = new Usuario({
+      nome: 'Ab',
+      login: 'gerente',
+      senhaHash: 'demo',
+      perfil: 'GERENTE',
+      cpf: '52998224725',
+    });
+    expect(usuarioCurto.validar()).toHaveProperty('nome');
   });
 
-  it('rejeita login em branco', () => {
-    const usuario = new Usuario({
+  it('rejeita login em branco, curto ou com espaços', () => {
+    const semLogin = new Usuario({
       nome: 'Gerente',
       login: '',
       senhaHash: 'demo',
       perfil: 'GERENTE',
       cpf: '52998224725',
     });
-    expect(() => usuario.validar()).toThrow(ErroValidacao);
+    expect(semLogin.validar()).toHaveProperty('login');
+
+    const comEspaco = new Usuario({
+      nome: 'Gerente',
+      login: 'gerente sos',
+      senhaHash: 'demo',
+      perfil: 'GERENTE',
+      cpf: '52998224725',
+    });
+    expect(comEspaco.validar()).toHaveProperty('login');
   });
 
-  it('rejeita senha em branco', () => {
+  it('rejeita senha em branco no cadastro, mas aceita senha opcional na edição', () => {
     const usuario = new Usuario({
       nome: 'Gerente',
       login: 'gerente',
@@ -55,7 +73,8 @@ describe('Model Usuario - RF_B2 Gerenciar Funcionários / Autenticação', () =>
       perfil: 'GERENTE',
       cpf: '52998224725',
     });
-    expect(() => usuario.validar()).toThrow(ErroValidacao);
+    expect(usuario.validar()).toHaveProperty('senha');
+    expect(usuario.validar({ senhaOpcional: true })).toEqual({});
   });
 
   it('rejeita perfil inválido', () => {
@@ -67,7 +86,7 @@ describe('Model Usuario - RF_B2 Gerenciar Funcionários / Autenticação', () =>
       perfil: 'INVALIDO',
       cpf: '52998224725',
     });
-    expect(() => usuario.validar()).toThrow(ErroValidacao);
+    expect(usuario.validar()).toHaveProperty('perfil');
   });
 
   it('rejeita CPF ausente ou inválido', () => {
@@ -78,7 +97,7 @@ describe('Model Usuario - RF_B2 Gerenciar Funcionários / Autenticação', () =>
       perfil: 'GERENTE',
       cpf: '',
     });
-    expect(() => semCpf.validar()).toThrow(ErroValidacao);
+    expect(semCpf.validar()).toHaveProperty('cpf');
 
     const cpfInvalido = new Usuario({
       nome: 'Gerente',
@@ -87,7 +106,7 @@ describe('Model Usuario - RF_B2 Gerenciar Funcionários / Autenticação', () =>
       perfil: 'GERENTE',
       cpf: '111.111.111-11',
     });
-    expect(() => cpfInvalido.validar()).toThrow(ErroValidacao);
+    expect(cpfInvalido.validar()).toHaveProperty('cpf');
   });
 
   it('omite senhaHash e formata CPF em paraDadosPublicos', () => {
@@ -109,5 +128,11 @@ describe('Model Usuario - RF_B2 Gerenciar Funcionários / Autenticação', () =>
       ativo: true,
     });
     expect('senhaHash' in publico).toBe(false);
+  });
+
+  it('valida FiltroUsuario corretamente', () => {
+    expect(new FiltroUsuario({ nome: 'Maria', perfil: 'GERENTE', status: 'ATIVO' }).validar()).toEqual({});
+    expect(new FiltroUsuario({ perfil: 'INVALIDO' }).validar()).toHaveProperty('perfil');
+    expect(new FiltroUsuario({ status: 'OUTRO' }).validar()).toHaveProperty('status');
   });
 });
