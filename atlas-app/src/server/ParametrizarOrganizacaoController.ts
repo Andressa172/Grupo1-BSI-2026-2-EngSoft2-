@@ -1,9 +1,6 @@
 // Control - ParametrizarOrganizacaoController (RF_Parametrizacao)
-import { Database } from './db/Database';
-import { Organizacao, type OrganizacaoAtributos } from './model/Organization';
-import { OrganizacaoDAO } from './dao/OrganizationDao';
-import { ErroValidacao } from './erros';
-import type { ExecutorSQL } from './dao/tipos';
+import { Organizacao } from './model/Organizacao';
+import { OrganizacaoDAO } from './dao/OrganizacaoDAO';
 
 export interface DadosAtualizacaoOrganizacao {
   nomeFantasia: string;
@@ -16,22 +13,12 @@ export interface DadosAtualizacaoOrganizacao {
 
 export type ResultadoOrganizacao = ReturnType<Organizacao['paraLinhaDeDados']>;
 
-export interface IOrganizacaoDAOParaParametrizacao {
-  obter(): Promise<Organizacao | null>;
-  salvar(org: Organizacao): Promise<Organizacao>;
-}
-
 const globalParaSingleton = globalThis as unknown as {
   parametrizarOrganizacaoController?: ParametrizarOrganizacaoController;
 };
 
 export class ParametrizarOrganizacaoController {
-  constructor(
-    private readonly database: Pick<Database, 'query'> = Database.getInstancia(),
-    private readonly criarOrganizacaoDAO: (executor: ExecutorSQL) => IOrganizacaoDAOParaParametrizacao = (executor) =>
-      new OrganizacaoDAO(executor),
-    private readonly organizacaoDAOSomenteLeitura: IOrganizacaoDAOParaParametrizacao = new OrganizacaoDAO()
-  ) {}
+  constructor(private readonly organizacaoDAO: OrganizacaoDAO = new OrganizacaoDAO()) {}
 
   static getInstancia(): ParametrizarOrganizacaoController {
     if (!globalParaSingleton.parametrizarOrganizacaoController) {
@@ -45,7 +32,7 @@ export class ParametrizarOrganizacaoController {
    * Caso a tabela esteja vazia, retorna um valor padrão em memória.
    */
   async obterParametros(): Promise<ResultadoOrganizacao> {
-    const org = await this.organizacaoDAOSomenteLeitura.obter();
+    const org = await this.organizacaoDAO.obter();
 
     if (!org) {
       const orgPadrao = new Organizacao({
@@ -63,7 +50,6 @@ export class ParametrizarOrganizacaoController {
    * Valida e persiste as informações da organização no banco de dados.
    */
   async salvarParametros(dados: DadosAtualizacaoOrganizacao): Promise<ResultadoOrganizacao> {
-    // 1. Cria a entidade Model passando os atributos
     const org = new Organizacao({
       id: 1,
       nomeFantasia: dados.nomeFantasia,
@@ -74,12 +60,9 @@ export class ParametrizarOrganizacaoController {
       caminhoLogo: dados.caminhoLogo,
     });
 
-    // 2. Executa a validação de domínio
     org.validar();
 
-    // 3. Persiste via DAO usando o executor padrão
-    const orgDAO = this.criarOrganizacaoDAO(this.database as unknown as ExecutorSQL);
-    const orgSalva = await orgDAO.salvar(org);
+    const orgSalva = await this.organizacaoDAO.salvar(org);
 
     return orgSalva.paraLinhaDeDados();
   }

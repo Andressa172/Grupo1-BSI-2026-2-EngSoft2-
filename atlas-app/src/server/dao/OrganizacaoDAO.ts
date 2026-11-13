@@ -1,8 +1,8 @@
 import { Database } from '../db/Database';
-import { Organizacao } from '../model/Organization';
+import { Organizacao } from '../model/Organizacao';
 import type { ExecutorSQL } from './tipos';
 
-interface OrganizacaoLinha {
+export interface OrganizacaoLinha {
   id: number;
   nome_fantasia: string;
   cnpj: string | null;
@@ -49,7 +49,6 @@ export class OrganizacaoDAO {
        RETURNING id, nome_fantasia, cnpj, endereco, telefone, email, caminho_logo`,
       [dados.nomeFantasia, dados.cnpj, dados.endereco, dados.telefone, dados.email, dados.caminhoLogo]
     );
-
     return linhaParaOrganizacao(resultado.rows[0]);
   }
 }
