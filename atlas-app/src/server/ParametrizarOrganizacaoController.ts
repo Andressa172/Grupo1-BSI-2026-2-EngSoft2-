@@ -18,13 +18,22 @@ const globalParaSingleton = globalThis as unknown as {
 };
 
 export class ParametrizarOrganizacaoController {
-  constructor(private readonly organizacaoDAO: OrganizacaoDAO = new OrganizacaoDAO()) {}
+  private constructor(private readonly organizacaoDAO: OrganizacaoDAO = new OrganizacaoDAO()) {}
 
   static getInstancia(): ParametrizarOrganizacaoController {
     if (!globalParaSingleton.parametrizarOrganizacaoController) {
       globalParaSingleton.parametrizarOrganizacaoController = new ParametrizarOrganizacaoController();
     }
     return globalParaSingleton.parametrizarOrganizacaoController;
+  }
+
+  static getInstance(): ParametrizarOrganizacaoController {
+    return ParametrizarOrganizacaoController.getInstancia();
+  }
+
+  /** Fábrica auxiliar para injeção de DAO falso em testes unitários. */
+  static criarParaTeste(organizacaoDAO: OrganizacaoDAO): ParametrizarOrganizacaoController {
+    return new ParametrizarOrganizacaoController(organizacaoDAO);
   }
 
   /**

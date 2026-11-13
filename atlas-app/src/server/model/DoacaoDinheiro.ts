@@ -1,5 +1,6 @@
 // Model - DoacaoDinheiro (RF_F11 - Receber doação em dinheiro)
-import type { ErrosDeCampo } from '../erros';
+import { CaixaController } from '../CaixaController';
+import { ErroCaixaFechado, type ErrosDeCampo } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
 import { DoacaoDinheiroDAO, type DoacaoDinheiroRegistro } from '../dao/DoacaoDinheiroDAO';
 import type { FiltroDoacao } from './FiltroDoacao';
@@ -71,7 +72,24 @@ export class DoacaoDinheiro {
     const doadorId = await this.doador.obterId(conexao);
     const dao = new DoacaoDinheiroDAO(conexao);
     this.id = await dao.inserir(doadorId, this.valor, this.formaRecebimento, paraIso(this.dataRecebimento));
-    this.caixaAtualizado = await dao.registrarEntradaNoCaixa(this.id, this.valor);
+    try {
+      await CaixaController.getInstancia().atualizarCaixa(
+        {
+          valor: this.valor,
+          tipoMovimentacao: 'ENTRADA',
+          formaPag: this.formaRecebimento === 'Dinheiro' ? 'FISICO' : 'DIGITAL',
+          origem: `Doação em dinheiro #${this.id}`,
+        },
+        conexao
+      );
+      this.caixaAtualizado = true;
+    } catch (erro) {
+      if (erro instanceof ErroCaixaFechado) {
+        this.caixaAtualizado = false;
+        return;
+      }
+      throw erro;
+    }
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroDoacao): Promise<DoacaoDinheiroRegistro[]> {

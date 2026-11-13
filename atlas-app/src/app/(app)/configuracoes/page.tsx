@@ -4,25 +4,166 @@ import { useEffect, useState } from 'react';
 import { Save, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, Field, Input } from '@/components/app/ui';
+import { validarCNPJ } from '@/lib/cnpj';
+import { mascaraCEP, mascaraCNPJ, mascaraTelefone, mascaraUF } from '@/view/mascaras';
 
-interface FormOrganizacao {
+interface EnderecoSeparado {
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
+}
+
+interface FormOrganizacao extends EnderecoSeparado {
   nomeFantasia: string;
   cnpj: string;
-  endereco: string;
   telefone: string;
   email: string;
   caminhoLogo: string;
+}
+
+type ErrosOrganizacao = Partial<Record<keyof FormOrganizacao | 'logo', string | null>>;
+
+const TIPOS_LOGO_ACEITOS = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+const MAX_LOGO_BYTES = 5 * 1024 * 1024;
+
+function parsearEndereco(enderecoBruto: string | null | undefined): EnderecoSeparado {
+  const vazio: EnderecoSeparado = {
+    cep: '',
+    logradouro: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
+    cidade: '',
+    uf: '',
+  };
+  const texto = enderecoBruto?.trim() ?? '';
+  if (!texto) return vazio;
+
+  // Formato padrão: "Logradouro, Número (Complemento) - Bairro, Cidade/UF, CEP 00000-000"
+  const match =
+    /^(.+?),\s*([^-(,]+?)(?:\s*\(([^)]+)\))?\s*-\s*([^,]+),\s*([^/]+)\/([A-Za-z]{2})(?:,\s*CEP\s*(\d{5}-?\d{3}))?$/.exec(
+      texto
+    );
+  if (match) {
+    return {
+      logradouro: match[1].trim(),
+      numero: match[2].trim(),
+      complemento: (match[3] ?? '').trim(),
+      bairro: match[4].trim(),
+      cidade: match[5].trim(),
+      uf: mascaraUF(match[6]),
+      cep: mascaraCEP(match[7] ?? ''),
+    };
+  }
+
+  return { ...vazio, logradouro: texto };
+}
+
+function montarEndereco(end: EnderecoSeparado): string {
+  const logradouro = end.logradouro.trim();
+  const numero = end.numero.trim();
+  const complemento = end.complemento.trim();
+  const bairro = end.bairro.trim();
+  const cidade = end.cidade.trim();
+  const uf = end.uf.trim().toUpperCase();
+  const cep = mascaraCEP(end.cep);
+
+  const partes: string[] = [];
+  if (logradouro) {
+    const comp = complemento ? ` (${complemento})` : '';
+    partes.push(numero ? `${logradouro}, ${numero}${comp}` : `${logradouro}${comp}`);
+  }
+  if (bairro) {
+    partes.push(bairro);
+  }
+  const localidade = cidade && uf ? `${cidade}/${uf}` : cidade || uf;
+  if (localidade) {
+    partes.push(localidade);
+  }
+  if (cep) {
+    partes.push(`CEP ${cep}`);
+  }
+
+  if (partes.length === 0) return '';
+  if (logradouro && bairro) {
+    const primeira = partes.shift()!;
+    const segunda = partes.shift()!;
+    return [`${primeira} - ${segunda}`, ...partes].join(', ');
+  }
+  return partes.join(', ');
+}
+
+const BORDA_ERRO = 'border-danger focus:border-danger focus:ring-danger/20';
+const BORDA_VALIDA = 'border-success focus:border-success focus:ring-success/20';
+
+function classeBordaCampo(erro: string | null | undefined, valor: string): string {
+  if (erro) return BORDA_ERRO;
+  if (valor.trim().length > 0) return BORDA_VALIDA;
+  return '';
+}
+
+function validarCampoOrganizacao(
+  campo: keyof FormOrganizacao,
+  valor: string,
+  obrigatorio = false
+): string | null {
+  const t = valor.trim();
+  switch (campo) {
+    case 'nomeFantasia': {
+      if (!t) return obrigatorio ? 'O nome da organização é obrigatório.' : null;
+      if (t.length < 3) return 'O nome deve ter pelo menos 3 caracteres.';
+      if (t.length > 120) return 'O nome deve ter no máximo 120 caracteres.';
+      return null;
+    }
+    case 'cnpj': {
+      if (!t) return null;
+      return validarCNPJ(t) ? null : 'CNPJ inválido. Verifique os dígitos informados.';
+    }
+    case 'telefone': {
+      const digitos = t.replace(/\D/g, '');
+      if (!digitos) return null;
+      return digitos.length === 10 || digitos.length === 11
+        ? null
+        : 'Informe um telefone válido com DDD (10 ou 11 dígitos).';
+    }
+    case 'email': {
+      if (!t) return null;
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t) ? null : 'Informe um e-mail válido.';
+    }
+    case 'cep': {
+      const digitos = t.replace(/\D/g, '');
+      if (!digitos) return null;
+      return digitos.length === 8 ? null : 'O CEP deve conter 8 dígitos (00000-000).';
+    }
+    case 'uf': {
+      if (!t) return null;
+      return /^[A-Z]{2}$/.test(t.toUpperCase()) ? null : 'A UF deve conter 2 letras.';
+    }
+    default:
+      return null;
+  }
 }
 
 export default function ConfiguracoesPage() {
   const [form, setForm] = useState<FormOrganizacao>({
     nomeFantasia: '',
     cnpj: '',
-    endereco: '',
     telefone: '',
     email: '',
     caminhoLogo: '',
+    cep: '',
+    logradouro: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
+    cidade: '',
+    uf: '',
   });
+  const [erros, setErros] = useState<ErrosOrganizacao>({});
 
   const [carregando, setCarregando] = useState(true);
   const [logoArquivo, setLogoArquivo] = useState<File | null>(null);
@@ -48,16 +189,17 @@ export default function ConfiguracoesPage() {
         const res = await fetch('/api/organizacao');
         if (!res.ok) throw new Error('Falha ao obter os dados da organização.');
         const dados = await res.json();
+        const end = parsearEndereco(dados.endereco);
         setForm({
           nomeFantasia: dados.nomeFantasia ?? '',
-          cnpj: dados.cnpj ?? '',
-          endereco: dados.endereco ?? '',
-          telefone: dados.telefone ?? '',
+          cnpj: mascaraCNPJ(dados.cnpj ?? ''),
+          telefone: mascaraTelefone(dados.telefone ?? ''),
           email: dados.email ?? '',
           caminhoLogo: dados.caminhoLogo ?? '',
+          ...end,
         });
-      } catch (e: any) {
-        setErro(e.message ?? 'Erro ao carregar dados.');
+      } catch (e: unknown) {
+        setErro(e instanceof Error ? e.message : 'Erro ao carregar dados.');
       } finally {
         setCarregando(false);
       }
@@ -65,19 +207,59 @@ export default function ConfiguracoesPage() {
     carregarDados();
   }, []);
 
+  function aoAlterarLogo(arquivo: File | null) {
+    if (!arquivo) {
+      setLogoArquivo(null);
+      setErros((prev) => ({ ...prev, logo: null }));
+      return;
+    }
+    if (!TIPOS_LOGO_ACEITOS.has(arquivo.type)) {
+      setLogoArquivo(null);
+      setErros((prev) => ({ ...prev, logo: 'Formato inválido. Use PNG, JPEG, GIF ou WebP.' }));
+      return;
+    }
+    if (arquivo.size > MAX_LOGO_BYTES) {
+      setLogoArquivo(null);
+      setErros((prev) => ({ ...prev, logo: 'O logo deve ter no máximo 5 MB.' }));
+      return;
+    }
+    setLogoArquivo(arquivo);
+    setErros((prev) => ({ ...prev, logo: null }));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSalvando(true);
     setErro(null);
     setMensagemSucesso(null);
 
+    const enderecoMontado = montarEndereco(form);
+    const novosErros: ErrosOrganizacao = {
+      nomeFantasia: validarCampoOrganizacao('nomeFantasia', form.nomeFantasia, true),
+      cnpj: validarCampoOrganizacao('cnpj', form.cnpj),
+      telefone: validarCampoOrganizacao('telefone', form.telefone),
+      email: validarCampoOrganizacao('email', form.email),
+      cep: validarCampoOrganizacao('cep', form.cep),
+      uf: validarCampoOrganizacao('uf', form.uf),
+      logo: erros.logo ?? null,
+    };
+
+    if (enderecoMontado.length > 255) {
+      novosErros.logradouro = 'O endereço combinado ultrapassa o limite de 255 caracteres.';
+    }
+
+    setErros(novosErros);
+    if (Object.values(novosErros).some(Boolean)) {
+      return;
+    }
+
+    setSalvando(true);
     try {
       const dados = new FormData();
-      dados.append('nomeFantasia', form.nomeFantasia);
-      dados.append('cnpj', form.cnpj);
-      dados.append('endereco', form.endereco);
-      dados.append('telefone', form.telefone);
-      dados.append('email', form.email);
+      dados.append('nomeFantasia', form.nomeFantasia.trim());
+      dados.append('cnpj', form.cnpj.trim());
+      dados.append('endereco', enderecoMontado);
+      dados.append('telefone', form.telefone.trim());
+      dados.append('email', form.email.trim());
       dados.append('caminhoLogo', form.caminhoLogo);
       if (logoArquivo) dados.append('logo', logoArquivo);
 
@@ -93,11 +275,9 @@ export default function ConfiguracoesPage() {
       }
 
       setMensagemSucesso('Parâmetros da organização atualizados com sucesso!');
-      
-      // Atualiza o shell/sidebar recarregando os dados globais
       window.location.reload();
-    } catch (e: any) {
-      setErro(e.message ?? 'Falha ao salvar alterações.');
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : 'Falha ao salvar alterações.');
     } finally {
       setSalvando(false);
     }
@@ -122,7 +302,7 @@ export default function ConfiguracoesPage() {
       )}
 
       <Card className="p-6">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
           <div className="flex items-center gap-2 pb-3 border-b border-border-line/10 font-medium text-sm">
             <Building2 size={18} className="text-foreground/50" aria-hidden />
             <h2>Identidade e dados cadastrais</h2>
@@ -130,28 +310,59 @@ export default function ConfiguracoesPage() {
 
           <Field label="Nome / nome fantasia *">
             <Input
-              required
               value={form.nomeFantasia}
-              onChange={(e) => setForm({ ...form, nomeFantasia: e.target.value })}
+              onChange={(e) => {
+                const valor = e.target.value;
+                setForm({ ...form, nomeFantasia: valor });
+                setErros((prev) => ({
+                  ...prev,
+                  nomeFantasia: validarCampoOrganizacao('nomeFantasia', valor),
+                }));
+              }}
               placeholder="ex: SOS Criança"
+              className={classeBordaCampo(erros.nomeFantasia, form.nomeFantasia)}
             />
+            {erros.nomeFantasia && <p className="text-xs text-danger">{erros.nomeFantasia}</p>}
           </Field>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field label="CNPJ">
               <Input
+                maxLength={18}
                 value={form.cnpj}
-                onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
+                onChange={(e) => {
+                  const valor = mascaraCNPJ(e.target.value);
+                  setForm({ ...form, cnpj: valor });
+                  setErros((prev) => ({ ...prev, cnpj: validarCampoOrganizacao('cnpj', valor) }));
+                }}
+                onBlur={(e) => {
+                  const valor = mascaraCNPJ(e.target.value);
+                  setErros((prev) => ({ ...prev, cnpj: validarCampoOrganizacao('cnpj', valor) }));
+                }}
                 placeholder="00.000.000/0000-00"
+                className={classeBordaCampo(erros.cnpj, form.cnpj)}
               />
+              {erros.cnpj && <p className="text-xs text-danger">{erros.cnpj}</p>}
             </Field>
 
             <Field label="Telefone de contato">
               <Input
+                type="tel"
+                inputMode="tel"
+                maxLength={15}
                 value={form.telefone}
-                onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+                onChange={(e) => {
+                  const valor = mascaraTelefone(e.target.value);
+                  setForm({ ...form, telefone: valor });
+                  setErros((prev) => ({
+                    ...prev,
+                    telefone: validarCampoOrganizacao('telefone', valor),
+                  }));
+                }}
                 placeholder="(00) 00000-0000"
+                className={classeBordaCampo(erros.telefone, form.telefone)}
               />
+              {erros.telefone && <p className="text-xs text-danger">{erros.telefone}</p>}
             </Field>
           </div>
 
@@ -160,32 +371,126 @@ export default function ConfiguracoesPage() {
               <Input
                 type="email"
                 value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                onChange={(e) => {
+                  const valor = e.target.value;
+                  setForm({ ...form, email: valor });
+                  setErros((prev) => ({ ...prev, email: validarCampoOrganizacao('email', valor) }));
+                }}
                 placeholder="contato@organizacao.org"
+                className={classeBordaCampo(erros.email, form.email)}
               />
+              {erros.email && <p className="text-xs text-danger">{erros.email}</p>}
             </Field>
 
             <Field label="Logo da organização">
               <Input
                 type="file"
                 accept="image/png,image/jpeg,image/gif,image/webp"
-                onChange={(e) => setLogoArquivo(e.target.files?.[0] ?? null)}
-                className="text-foreground/50 py-1.5 file:mr-4 file:rounded-md file:border-0 file:bg-foreground/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground/70"
+                onChange={(e) => aoAlterarLogo(e.target.files?.[0] ?? null)}
+                className={`text-foreground/50 py-1.5 file:mr-4 file:rounded-md file:border-0 file:bg-foreground/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground/70 ${
+                  erros.logo ? BORDA_ERRO : logoArquivo ? BORDA_VALIDA : ''
+                }`}
               />
-              <span className="mt-1 text-xs text-foreground/50">
-                PNG, JPEG, GIF ou WebP, até 5 MB.
-                {logoArquivo ? ` Arquivo selecionado: ${logoArquivo.name}` : ''}
-              </span>
+              {erros.logo ? (
+                <p className="text-xs text-danger">{erros.logo}</p>
+              ) : (
+                <span className="mt-1 text-xs text-foreground/50">
+                  PNG, JPEG, GIF ou WebP, até 5 MB.
+                  {logoArquivo ? ` Arquivo selecionado: ${logoArquivo.name}` : ''}
+                </span>
+              )}
             </Field>
           </div>
 
-          <Field label="Endereço completo">
-            <Input
-              value={form.endereco}
-              onChange={(e) => setForm({ ...form, endereco: e.target.value })}
-              placeholder="Rua, Número, Bairro, Cidade - UF"
-            />
-          </Field>
+          <div className="border-t border-border-line/10 pt-4 flex flex-col gap-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Endereço</h3>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              <Field label="CEP">
+                <Input
+                  inputMode="numeric"
+                  maxLength={9}
+                  value={form.cep}
+                  onChange={(e) => {
+                    const valor = mascaraCEP(e.target.value);
+                    setForm({ ...form, cep: valor });
+                    setErros((prev) => ({ ...prev, cep: validarCampoOrganizacao('cep', valor) }));
+                  }}
+                  placeholder="00000-000"
+                  className={classeBordaCampo(erros.cep, form.cep)}
+                />
+                {erros.cep && <p className="text-xs text-danger">{erros.cep}</p>}
+              </Field>
+
+              <div className="md:col-span-2">
+                <Field label="Logradouro / rua">
+                  <Input
+                    value={form.logradouro}
+                    onChange={(e) => {
+                      setForm({ ...form, logradouro: e.target.value });
+                      setErros((prev) => ({ ...prev, logradouro: null }));
+                    }}
+                    placeholder="ex: Rua das Flores"
+                    className={classeBordaCampo(erros.logradouro, form.logradouro)}
+                  />
+                  {erros.logradouro && <p className="text-xs text-danger">{erros.logradouro}</p>}
+                </Field>
+              </div>
+
+              <Field label="Número">
+                <Input
+                  value={form.numero}
+                  onChange={(e) => setForm({ ...form, numero: e.target.value })}
+                  placeholder="ex: 123"
+                  className={classeBordaCampo(null, form.numero)}
+                />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              <Field label="Complemento">
+                <Input
+                  value={form.complemento}
+                  onChange={(e) => setForm({ ...form, complemento: e.target.value })}
+                  placeholder="ex: Sala 2"
+                  className={classeBordaCampo(null, form.complemento)}
+                />
+              </Field>
+
+              <Field label="Bairro">
+                <Input
+                  value={form.bairro}
+                  onChange={(e) => setForm({ ...form, bairro: e.target.value })}
+                  placeholder="ex: Centro"
+                  className={classeBordaCampo(null, form.bairro)}
+                />
+              </Field>
+
+              <Field label="Cidade">
+                <Input
+                  value={form.cidade}
+                  onChange={(e) => setForm({ ...form, cidade: e.target.value })}
+                  placeholder="ex: Presidente Prudente"
+                  className={classeBordaCampo(null, form.cidade)}
+                />
+              </Field>
+
+              <Field label="UF">
+                <Input
+                  maxLength={2}
+                  value={form.uf}
+                  onChange={(e) => {
+                    const valor = mascaraUF(e.target.value);
+                    setForm({ ...form, uf: valor });
+                    setErros((prev) => ({ ...prev, uf: validarCampoOrganizacao('uf', valor) }));
+                  }}
+                  placeholder="SP"
+                  className={classeBordaCampo(erros.uf, form.uf)}
+                />
+                {erros.uf && <p className="text-xs text-danger">{erros.uf}</p>}
+              </Field>
+            </div>
+          </div>
 
           {(logoPreview || form.caminhoLogo) && (
             <div className="flex items-center gap-4 p-3 rounded-lg border border-border-line/10 bg-background/50">

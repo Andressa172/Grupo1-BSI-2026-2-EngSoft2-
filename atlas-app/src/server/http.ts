@@ -1,11 +1,28 @@
-import { ErroAutenticacao, ErroNaoEncontrado, ErroRegraDeNegocio, ErroValidacao } from './erros';
+import {
+  ErroAutenticacao,
+  ErroAutorizacao,
+  ErroConflito,
+  ErroDivergenciaCaixa,
+  ErroNaoEncontrado,
+  ErroRegraDeNegocio,
+  ErroValidacao,
+} from './erros';
 
 export function respostaDeErro(erro: unknown): Response {
   if (erro instanceof ErroAutenticacao) {
     return Response.json({ erro: erro.message }, { status: 401 });
   }
+  if (erro instanceof ErroAutorizacao) {
+    return Response.json({ erro: erro.message }, { status: 403 });
+  }
   if (erro instanceof ErroNaoEncontrado) {
     return Response.json({ erro: erro.message }, { status: 404 });
+  }
+  if (erro instanceof ErroDivergenciaCaixa) {
+    return Response.json({ erro: erro.message, ...erro.detalhes }, { status: 409 });
+  }
+  if (erro instanceof ErroConflito) {
+    return Response.json({ erro: erro.message }, { status: 409 });
   }
   if (erro instanceof ErroValidacao && erro.erros) {
     return Response.json({ erro: erro.message, erros: erro.erros }, { status: 400 });

@@ -19,7 +19,7 @@ function criarOrganizacaoDAOFalso(inicial: Organizacao | null = null) {
 
 const dadosValidos = {
   nomeFantasia: 'SOS Criança',
-  cnpj: '12.345.678/0001-90',
+  cnpj: '18.236.120/0001-58',
   email: 'contato@soscrianca.org',
 };
 
@@ -27,7 +27,7 @@ describe('ParametrizarOrganizacaoController - RF_Parametrizacao', () => {
   let controller: ParametrizarOrganizacaoController;
 
   beforeEach(() => {
-    controller = new ParametrizarOrganizacaoController(criarOrganizacaoDAOFalso());
+    controller = ParametrizarOrganizacaoController.criarParaTeste(criarOrganizacaoDAOFalso());
   });
 
   it('retorna parâmetros padrão quando a organização ainda não foi cadastrada', async () => {
@@ -55,7 +55,16 @@ describe('ParametrizarOrganizacaoController - RF_Parametrizacao', () => {
     await expect(controller.salvarParametros({ ...dadosValidos, email: 'invalido' })).rejects.toThrow(ErroValidacao);
   });
 
-  it('rejeita CNPJ com quantidade incorreta de dígitos', async () => {
+  it('rejeita CNPJ com quantidade incorreta de dígitos ou DV inválido', async () => {
     await expect(controller.salvarParametros({ ...dadosValidos, cnpj: '123' })).rejects.toThrow(ErroValidacao);
+    await expect(controller.salvarParametros({ ...dadosValidos, cnpj: '18.236.120/0001-59' })).rejects.toThrow(
+      ErroValidacao
+    );
+  });
+
+  it('aceita CNPJ alfanumérico válido', async () => {
+    await expect(
+      controller.salvarParametros({ ...dadosValidos, cnpj: '12.ABC.345/01DE-35' })
+    ).resolves.toMatchObject({ cnpj: '12.ABC.345/01DE-35' });
   });
 });
