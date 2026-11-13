@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
@@ -27,21 +27,44 @@ export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  // Preparado para futura restrição de acesso por cargo/perfil do usuário autenticado
+  // Restrição de acesso por nível/cargo do usuário autenticado:
+  // - Sem perfisPermitidos: liberado para todos os níveis
+  // - Com perfisPermitidos: restrito aos cargos informados (ex.: Nível ADM = GERENTE)
   perfisPermitidos?: PerfilUsuario[];
 }
 
-export function podeVisualizarItem(item: NavItem, _perfilAtual?: PerfilUsuario): boolean {
-  // Por enquanto todos os usuários autenticados visualizam os itens independentemente do cargo.
-  // Futuramente, basta ativar: return !item.perfisPermitidos || (!!_perfilAtual && item.perfisPermitidos.includes(_perfilAtual));
-  return Boolean(item);
+interface UsuarioSessao {
+  id: number;
+  nome: string;
+  login: string;
+  perfil: PerfilUsuario;
+  ativo: boolean;
+}
+
+const CHAVE_USUARIO_LOGADO = 'atlas-usuario-logado';
+
+const LABEL_PERFIL: Record<PerfilUsuario, string> = {
+  GERENTE: 'Gerente (ADM)',
+  SECRETARIO: 'Secretário',
+  FUNCIONARIO: 'Funcionário',
+};
+
+export function podeVisualizarItem(item: NavItem, perfilAtual?: PerfilUsuario): boolean {
+  if (!item.perfisPermitidos || item.perfisPermitidos.length === 0) {
+    return true;
+  }
+  if (!perfilAtual) {
+    return false;
+  }
+  return item.perfisPermitidos.includes(perfilAtual);
 }
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/produtos', label: 'Produtos', icon: Package },
   { href: '/doadores', label: 'Doadores', icon: Users },
-  { href: '/funcionarios', label: 'Funcionários', icon: UserCog, perfisPermitidos: ['GERENTE', 'SECRETARIO', 'FUNCIONARIO'] },
+  // 2 níveis de acesso: Gerenciar Funcionários é exclusivo do nível Administrador (GERENTE)
+  { href: '/funcionarios', label: 'Funcionários', icon: UserCog, perfisPermitidos: ['GERENTE'] },
   { href: '/estoque', label: 'Estoque', icon: PackageSearch },
   { href: '/compras', label: 'Compras', icon: ShoppingCart, perfisPermitidos: ['GERENTE'] },
   { href: '/doacoes', label: 'Doações', icon: HandCoins },
@@ -49,7 +72,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/eventos', label: 'Eventos', icon: CalendarHeart },
   { href: '/cardapios', label: 'Cardápios', icon: UtensilsCrossed },
   { href: '/caixa', label: 'Caixa', icon: Wallet },
-  { href: '/cotacoes', label: 'Cotações', icon: FileSpreadsheet },
+  // RF_F7 (Abrir cotação - Secretário) e RF_F8 (Aprovar cotação - Gerente)
+  { href: '/cotacoes', label: 'Cotações', icon: FileSpreadsheet, perfisPermitidos: ['SECRETARIO', 'GERENTE'] },
   { href: '/configuracoes', label: 'Configurações', icon: Settings },
 ];
 
@@ -71,9 +95,45 @@ const PAGE_TITLES: Record<string, string> = {
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [organizacao, setOrganizacao] = useState({ nomeFantasia: 'ATLAS', caminhoLogo: null as string | null });
+  const [usuarioAtual, setUsuarioAtual] = useState<UsuarioSessao>({
+    id: 1,
+    nome: 'Gerente SOS Criança',
+    login: 'gerente',
+    perfil: 'GERENTE',
+    ativo: true,
+  });
+
+  useEffect(() => {
+    try {
+      const salvo = window.localStorage.getItem(CHAVE_USUARIO_LOGADO);
+      if (salvo) {
+        const parsed = JSON.parse(salvo) as UsuarioSessao;
+        if (parsed && parsed.perfil) {
+          setUsuarioAtual(parsed);
+        }
+      }
+    } catch {
+      // mantém perfil padrão de demonstração caso localStorage não esteja disponível
+    }
+  }, []);
+
   const title = PAGE_TITLES[pathname] ?? 'ATLAS';
-  const itensVisiveis = NAV_ITEMS.filter((item) => podeVisualizarItem(item));
+  const itensVisiveis = NAV_ITEMS.filter((item) => podeVisualizarItem(item, usuarioAtual.perfil));
+  const itemRotaAtual = NAV_ITEMS.find((item) => item.href === pathname);
+  const acessoPermitido = !itemRotaAtual || podeVisualizarItem(itemRotaAtual, usuarioAtual.perfil);
+
+  function sair() {
+    try {
+      window.localStorage.removeItem(CHAVE_USUARIO_LOGADO);
+    } catch {
+      // ignora
+    }
+    router.push('/auth');
+  }
+
+  const inicial = (usuarioAtual.nome?.trim()?.[0] ?? 'U').toUpperCase();
 
   useEffect(() => {
     fetch('/api/organizacao')
@@ -124,13 +184,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="mt-auto pt-6 border-t border-border-line/20">
-          <Link
-            href="/"
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/70 hover:bg-primary/10 hover:text-primary transition-colors"
+          <button
+            type="button"
+            onClick={sair}
+            className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/60 hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
           >
             <LogOut size={18} />
             Sair
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -140,13 +201,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
           <div className="flex items-center gap-2 text-sm text-foreground/70">
             <span className="h-8 w-8 rounded-full bg-primary/15 text-primary flex items-center justify-center font-semibold">
-              G
+              {inicial}
             </span>
-            <span className="hidden sm:inline">Gerente SOS Criança</span>
+            <div className="hidden sm:flex flex-col leading-tight">
+              <span className="font-medium text-foreground">{usuarioAtual.nome}</span>
+              <span className="text-xs text-foreground/50">{LABEL_PERFIL[usuarioAtual.perfil]}</span>
+            </div>
           </div>
         </header>
 
-        <main className="flex-1 p-6 bg-background">{children}</main>
+        <main className="flex-1 p-6 bg-background">
+          {acessoPermitido ? (
+            children
+          ) : (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-6 text-sm text-primary">
+              Acesso restrito: seu nível de acesso ({LABEL_PERFIL[usuarioAtual.perfil]}) não possui permissão para acessar esta funcionalidade.
+            </div>
+          )}
+        </main>
       </div>
     </div>
   );
