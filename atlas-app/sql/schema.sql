@@ -143,10 +143,14 @@ CREATE TABLE IF NOT EXISTS movimentacao_caixa (
     id SERIAL PRIMARY KEY,
     caixa_id INTEGER NOT NULL REFERENCES caixa(id),
     tipo VARCHAR(10) NOT NULL CHECK (tipo IN ('ENTRADA', 'SAIDA')),
+    forma_pag VARCHAR(10) NOT NULL DEFAULT 'FISICO' CHECK (forma_pag IN ('FISICO', 'DIGITAL')),
     valor NUMERIC(12, 2) NOT NULL CHECK (valor > 0),
     origem VARCHAR(255) NOT NULL,
     data TIMESTAMP NOT NULL DEFAULT now()
 );
+
+ALTER TABLE movimentacao_caixa
+    ADD COLUMN IF NOT EXISTS forma_pag VARCHAR(10) NOT NULL DEFAULT 'FISICO' CHECK (forma_pag IN ('FISICO', 'DIGITAL'));
 
 -- ---------------------------------------------------------------------------
 -- RF_F7 / RF_F8 / Cotação

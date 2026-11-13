@@ -1,3 +1,4 @@
+import { validarCNPJ } from '@/lib/cnpj';
 import { ErroValidacao } from '../erros';
 
 export interface OrganizacaoAtributos {
@@ -47,11 +48,20 @@ export class Organizacao {
     if (this.nomeFantasia.length < 3) {
       throw new ErroValidacao('O nome da organização deve ter pelo menos 3 caracteres.');
     }
-    if (this.email && !this.email.includes('@')) {
+    if (this.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email)) {
       throw new ErroValidacao('Formato de e-mail inválido.');
     }
-    if (this.cnpj && this.cnpj.replace(/\D/g, '').length !== 14) {
-      throw new ErroValidacao('O CNPJ deve conter exatamente 14 dígitos numéricos.');
+    if (this.cnpj && !validarCNPJ(this.cnpj)) {
+      throw new ErroValidacao('CNPJ inválido.');
+    }
+    if (this.telefone) {
+      const digitosTel = this.telefone.replace(/\D/g, '');
+      if (digitosTel.length !== 10 && digitosTel.length !== 11) {
+        throw new ErroValidacao('O telefone deve conter 10 ou 11 dígitos numéricos.');
+      }
+    }
+    if (this.endereco && this.endereco.length > 255) {
+      throw new ErroValidacao('O endereço completo deve ter no máximo 255 caracteres.');
     }
   }
 

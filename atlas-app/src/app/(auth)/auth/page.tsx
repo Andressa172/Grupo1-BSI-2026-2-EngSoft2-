@@ -25,6 +25,12 @@ export default function AuthPage() {
       });
 
       if (resposta.ok) {
+        const usuario = await resposta.json();
+        try {
+          localStorage.setItem('atlas_usuario', JSON.stringify(usuario));
+        } catch {
+          // ignora se localStorage estiver indisponível
+        }
         router.push('/dashboard');
       } else {
         const corpo = await resposta.json();

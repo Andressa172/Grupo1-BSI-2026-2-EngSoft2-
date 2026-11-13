@@ -1,23 +1,51 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { PackageSearch, HandCoins, Wallet, FileSpreadsheet, ArrowRight } from 'lucide-react';
 import { useAtlas } from '@/lib/store';
 import { Card, StatCard, StatusPill } from '@/components/app/ui';
+
+interface CaixaAbertoDashboard {
+  id: number;
+  saldosAtuais: { fisico: number; digital: number };
+}
 
 function formatBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 export default function DashboardPage() {
-  const { produtos, caixaAberto, doacoesProduto, doacoesDinheiro, cotacoes } = useAtlas();
+  const { produtos, doacoesProduto, doacoesDinheiro, cotacoes } = useAtlas();
+  const [caixaAberto, setCaixaAberto] = useState<CaixaAbertoDashboard | null>(null);
+  const [carregandoCaixa, setCarregandoCaixa] = useState(true);
+
+  useEffect(() => {
+    let ativo = true;
+    async function carregarCaixa() {
+      try {
+        const res = await fetch('/api/caixa');
+        if (!res.ok) return;
+        const dados = await res.json();
+        if (ativo) {
+          setCaixaAberto(dados.caixaAberto ?? null);
+        }
+      } finally {
+        if (ativo) {
+          setCarregandoCaixa(false);
+        }
+      }
+    }
+    carregarCaixa();
+    return () => {
+      ativo = false;
+    };
+  }, []);
 
   const produtosBaixoEstoque = produtos.filter((p) => p.quantidadeEstoque <= p.estoqueMinimo);
-  const saldoCaixa = caixaAberto
-    ? caixaAberto.saldoFisicoAbertura +
-      caixaAberto.saldoDigitalAbertura +
-      caixaAberto.movimentacoes.reduce((acc, m) => acc + (m.tipo === 'ENTRADA' ? m.valor : -m.valor), 0)
-    : 0;
+  const saldoFisico = caixaAberto?.saldosAtuais.fisico ?? 0;
+  const saldoDigital = caixaAberto?.saldosAtuais.digital ?? 0;
+  const saldoCaixa = saldoFisico + saldoDigital;
   const cotacoesPendentes = cotacoes.filter((c) => c.status === 'PENDENTE');
   const totalDoacoes = doacoesProduto.length + doacoesDinheiro.length;
 
@@ -32,8 +60,14 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Saldo do caixa"
-          value={caixaAberto ? formatBRL(saldoCaixa) : '—'}
-          hint={caixaAberto ? 'Caixa aberto' : 'Nenhum caixa aberto'}
+          value={carregandoCaixa ? '...' : caixaAberto ? formatBRL(saldoCaixa) : '—'}
+          hint={
+            carregandoCaixa
+              ? 'Carregando...'
+              : caixaAberto
+                ? `Físico: ${formatBRL(saldoFisico)} · Digital: ${formatBRL(saldoDigital)}`
+                : 'Nenhum caixa aberto'
+          }
         />
         <StatCard label="Doações registradas" value={String(totalDoacoes)} hint="Produto + dinheiro" />
         <StatCard
