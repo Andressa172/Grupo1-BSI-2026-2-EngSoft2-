@@ -54,7 +54,7 @@ function formatDateTime(iso?: string | null) {
 function obterHeadersUsuario(): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   try {
-    const bruto = localStorage.getItem('atlas_usuario');
+    const bruto = localStorage.getItem('atlas-usuario-logado');
     if (bruto) {
       const usuario = JSON.parse(bruto) as { id?: number };
       if (usuario?.id) {
