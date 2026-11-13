@@ -142,3 +142,44 @@ describe('Model FiltroProduto - consulta de produtos', () => {
     expect(filtro.getValidade()).toBe('');
   });
 });
+
+describe('Model Produto - RF_F1 Atualizar estoque (getQuantidade / atualizQuantidade)', () => {
+  const comEstoque = (quantidadeEstoque: number, dataValidade: string | null = null) =>
+    new Produto({ ...valido, quantidadeEstoque, dataValidade });
+
+  it('entrada soma e saída subtrai (passo 3)', () => {
+    const p = comEstoque(10);
+    expect(p.atualizQuantidade(5, 'ENTRADA')).toBe(true);
+    expect(p.getQuantidade()).toBe(15);
+    expect(p.atualizQuantidade(3, 'SAIDA')).toBe(true);
+    expect(p.getQuantidade()).toBe(12);
+  });
+
+  it('saída maior que o estoque é recusada e nada muda (fluxo alternativo 3.1)', () => {
+    const p = comEstoque(4, '2030-12-10');
+    expect(p.atualizQuantidade(5, 'SAIDA')).toBe(false);
+    expect(p.getQuantidade()).toBe(4);
+    expect(p.getDataValidade()).toBe('2030-12-10');
+  });
+
+  it('validade: a entrada deixa a mais próxima; saída que zera limpa', () => {
+    const p = comEstoque(0);
+    p.atualizQuantidade(5, 'ENTRADA', '2030-12-20');
+    expect(p.getDataValidade()).toBe('2030-12-20');
+    p.atualizQuantidade(5, 'ENTRADA', '2030-12-10');
+    expect(p.getDataValidade()).toBe('2030-12-10');
+    p.atualizQuantidade(5, 'ENTRADA', '2031-01-01');
+    expect(p.getDataValidade()).toBe('2030-12-10');
+    p.atualizQuantidade(1, 'ENTRADA');
+    expect(p.getDataValidade()).toBe('2030-12-10');
+    p.atualizQuantidade(16, 'SAIDA');
+    expect(p.getQuantidade()).toBe(0);
+    expect(p.getDataValidade()).toBeNull();
+  });
+
+  it('com estoque zerado, a próxima entrada define a validade de novo', () => {
+    const p = comEstoque(0, '2020-01-01');
+    p.atualizQuantidade(2, 'ENTRADA', '2031-05-05');
+    expect(p.getDataValidade()).toBe('2031-05-05');
+  });
+});
