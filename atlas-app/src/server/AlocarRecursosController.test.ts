@@ -28,7 +28,7 @@ function montarAmbiente() {
     ambiente.database,
     () => eventos,
     () => alocacoes,
-    () => ambiente.produtoDAOFalso()
+    () => ambiente.estoqueFalso()
   );
 
   return { ambiente, eventos, alocacoes, controller };

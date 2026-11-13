@@ -36,7 +36,7 @@ function montarAmbiente() {
     ambiente.database,
     () => cardapios,
     () => itens,
-    () => ambiente.produtoDAOFalso(),
+    () => ambiente.estoqueFalso(),
     consultaDuplicidade
   );
 

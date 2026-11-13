@@ -96,8 +96,10 @@ export interface Cotacao {
   id: string;
   descricao: string;
   dataAbertura: string;
+  dataLimite?: string;
   status: StatusCotacao;
   itens: ItemCotacao[];
   abertaPor: string;
+  avaliadaPor?: string;
   justificativa?: string;
 }

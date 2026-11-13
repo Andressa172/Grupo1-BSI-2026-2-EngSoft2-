@@ -35,27 +35,13 @@ export class DoacaoProdutoDAO {
     return resultado.rows[0].id;
   }
 
-  /**
-   * Grava o item e dá entrada no estoque (RF_F1): soma a quantidade no produto e registra a movimentação.
-   * Devolve false se o produto não existe (nada é gravado para esse item).
-   */
-  async registrarItem(doacaoId: number, item: ItemDoacao): Promise<boolean> {
-    const estoque = await this.executor.query(
-      'UPDATE produto SET quantidade_estoque = quantidade_estoque + $1 WHERE id = $2 RETURNING id',
-      [item.getQuantidade(), item.getProdutoId()]
-    );
-    if ((estoque.rowCount ?? 0) === 0) return false;
-
+  /** Grava o item da doação. A entrada no estoque (RF_F1) é feita pelo model MovimentacaoEstoque. */
+  async inserirItem(doacaoId: number, item: ItemDoacao): Promise<void> {
     const validade = item.getDataValidade() ? paraIso(item.getDataValidade() as Date) : null;
     await this.executor.query(
       'INSERT INTO item_doacao (doacao_produto_id, produto_id, quantidade, data_validade) VALUES ($1, $2, $3, $4)',
       [doacaoId, item.getProdutoId(), item.getQuantidade(), validade]
     );
-    await this.executor.query(
-      "INSERT INTO movimentacao_estoque (produto_id, tipo, quantidade, origem) VALUES ($1, 'ENTRADA', $2, $3)",
-      [item.getProdutoId(), item.getQuantidade(), `Doação de produto #${doacaoId}`]
-    );
-    return true;
   }
 
   // filtros (doador e período) se combinam com AND; filtro vazio traz todas as doações

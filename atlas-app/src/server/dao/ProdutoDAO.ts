@@ -1,7 +1,8 @@
 // DAO - Produto
-// - listarTodos / decrementarEstoque / registrarMovimentacao: usados pelos controles de F9/F10
+// - listarTodos: lista simples, usada pelas telas de cardápio (RF_F10) e eventos (RF_F9)
 // - demais métodos: CRUD do RF_B3 (Gerenciar produtos). Quem cria este DAO é o
 //   model Produto, com a conexão que recebe do ProdutoController.
+// - buscarPorIdParaAtualizar / atualizarEstoque: usados só pelo RF_F1 (Atualizar estoque), via model Produto.
 import type { ExecutorSQL } from './tipos';
 import { Database } from '../db/Database';
 import { Produto } from '../model/Produto';
@@ -48,25 +49,6 @@ export class ProdutoDAO {
     return resultado.rows;
   }
 
-  // update atômico: a condição no WHERE evita decrementar abaixo de zero
-  async decrementarEstoque(produtoId: number, quantidade: number): Promise<ProdutoLinha | null> {
-    const resultado = await this.executor.query<ProdutoLinha>(
-      `UPDATE produto
-          SET quantidade_estoque = quantidade_estoque - $1
-        WHERE id = $2 AND quantidade_estoque >= $1
-    RETURNING id, nome, unidade_medida, quantidade_estoque, estoque_minimo`,
-      [quantidade, produtoId]
-    );
-    return resultado.rows[0] ?? null;
-  }
-
-  async registrarMovimentacao(produtoId: number, tipo: 'ENTRADA' | 'SAIDA', quantidade: number, origem: string): Promise<void> {
-    await this.executor.query(
-      'INSERT INTO movimentacao_estoque (produto_id, tipo, quantidade, origem) VALUES ($1, $2, $3, $4)',
-      [produtoId, tipo, quantidade, origem]
-    );
-  }
-
   // ------------------------- RF_B3 - Gerenciar produtos -------------------------
 
   // consulta com os filtros da tela; filtro vazio traz todos os produtos
@@ -105,6 +87,23 @@ export class ProdutoDAO {
   async buscarPorId(id: number): Promise<Produto | null> {
     const resultado = await this.executor.query<ProdutoLinhaCompleta>(`SELECT ${COLUNAS} FROM produto WHERE id = $1`, [id]);
     return resultado.rows[0] ? linhaParaProduto(resultado.rows[0]) : null;
+  }
+
+  // FOR UPDATE: trava a linha até o fim da transação (RF_F1)
+  async buscarPorIdParaAtualizar(id: number): Promise<Produto | null> {
+    const resultado = await this.executor.query<ProdutoLinhaCompleta>(
+      `SELECT ${COLUNAS} FROM produto WHERE id = $1 FOR UPDATE`,
+      [id]
+    );
+    return resultado.rows[0] ? linhaParaProduto(resultado.rows[0]) : null;
+  }
+
+  async atualizarEstoque(id: number, quantidadeEstoque: number, dataValidade: string | null): Promise<void> {
+    await this.executor.query('UPDATE produto SET quantidade_estoque = $1, data_validade = $2 WHERE id = $3', [
+      quantidadeEstoque,
+      dataValidade,
+      id,
+    ]);
   }
 
   async existeComNome(nome: string, idIgnorado?: number): Promise<boolean> {

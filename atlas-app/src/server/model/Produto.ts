@@ -112,6 +112,35 @@ export class Produto {
     return this.quantidadeEstoque;
   }
 
+  // RF_F1, passo 1.2 do diagrama de sequência: qtdAtual = getQuantidade()
+  getQuantidade(): number {
+    return this.quantidadeEstoque;
+  }
+
+  /**
+   * RF_F1, passo 3 (1.3 no diagrama de sequência): calcula a nova quantidade, somando na entrada
+   * ou subtraindo na saída. Devolve false se a saída for maior que o estoque (fluxo alternativo 3.1).
+   * Validade: numa entrada com validade, fica a mais próxima; uma saída que zera o estoque limpa
+   * a validade (não sobrou nada que possa vencer).
+   */
+  atualizQuantidade(quantidade: number, tipoMov: 'ENTRADA' | 'SAIDA', validadeDaEntrada: string | null = null): boolean {
+    if (tipoMov === 'SAIDA') {
+      if (quantidade > this.quantidadeEstoque) return false;
+      this.quantidadeEstoque -= quantidade;
+      if (this.quantidadeEstoque === 0) this.dataValidade = null;
+      return true;
+    }
+
+    if (
+      validadeDaEntrada !== null &&
+      (this.quantidadeEstoque === 0 || this.dataValidade === null || validadeDaEntrada < this.dataValidade)
+    ) {
+      this.dataValidade = validadeDaEntrada;
+    }
+    this.quantidadeEstoque += quantidade;
+    return true;
+  }
+
   getEstoqueMinimo(): number {
     return this.estoqueMinimo;
   }
@@ -206,6 +235,18 @@ export class Produto {
 
   static async buscarPorId(conexao: ExecutorSQL, id: number): Promise<Produto | null> {
     return new ProdutoDAO(conexao).buscarPorId(id);
+  }
+
+  // RF_F1, passo 4: grava a quantidade (e a validade) calculadas em atualizQuantidade
+  async salvarEstoque(conexao: ExecutorSQL): Promise<void> {
+    if (this.id === undefined) return;
+    await new ProdutoDAO(conexao).atualizarEstoque(this.id, this.quantidadeEstoque, this.dataValidade);
+  }
+
+  // RF_F1, passo 2: busca o produto e trava a linha até o fim da transação de quem chamou,
+  // para duas movimentações ao mesmo tempo não calcularem em cima do mesmo saldo
+  static async buscarParaAtualizarEstoque(conexao: ExecutorSQL, id: number): Promise<Produto | null> {
+    return new ProdutoDAO(conexao).buscarPorIdParaAtualizar(id);
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroProduto): Promise<Produto[]> {
