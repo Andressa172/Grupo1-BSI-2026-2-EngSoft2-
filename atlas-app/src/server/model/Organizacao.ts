@@ -21,7 +21,7 @@ export class Organizacao {
 
   constructor(atributos: OrganizacaoAtributos) {
     this.id = atributos.id ?? 1;
-    this.nomeFantasia = atributos.nomeFantasia;
+    this.nomeFantasia = atributos.nomeFantasia?.trim() ?? '';
     this.cnpj = atributos.cnpj?.trim() ?? null;
     this.endereco = atributos.endereco?.trim() ?? null;
     this.telefone = atributos.telefone?.trim() ?? null;
@@ -29,49 +29,29 @@ export class Organizacao {
     this.caminhoLogo = atributos.caminhoLogo ?? null;
   }
 
-  getId(): number | undefined {
-    return this.id;
-  }
-
-  getNomeFantasia(): string {
-    return this.nomeFantasia;
-  }
-
-  getCnpj(): string | null {
-    return this.cnpj;
-  }
-
-  getEndereco(): string | null {
-    return this.endereco;
-  }
-
-  getTelefone(): string | null {
-    return this.telefone;
-  }
-
-  getEmail(): string | null {
-    return this.email;
-  }
-
-  getCaminhoLogo(): string | null {
-    return this.caminhoLogo;
-  }
+  getId(): number | undefined { return this.id; }
+  getNomeFantasia(): string { return this.nomeFantasia; }
+  getCnpj(): string | null { return this.cnpj; }
+  getEndereco(): string | null { return this.endereco; }
+  getTelefone(): string | null { return this.telefone; }
+  getEmail(): string | null { return this.email; }
+  getCaminhoLogo(): string | null { return this.caminhoLogo; }
 
   validar(): void {
-    if (!this.nomeFantasia || this.nomeFantasia.trim().length === 0) {
+    if (!this.nomeFantasia) {
       throw new ErroValidacao('O nome da organização é obrigatório.');
     }
-    if (this.nomeFantasia.trim().length < 3) {
+    if (this.nomeFantasia.length > 120) {
+      throw new ErroValidacao('O nome da organização deve ter no máximo 120 caracteres.');
+    }
+    if (this.nomeFantasia.length < 3) {
       throw new ErroValidacao('O nome da organização deve ter pelo menos 3 caracteres.');
     }
     if (this.email && !this.email.includes('@')) {
       throw new ErroValidacao('Formato de e-mail inválido.');
     }
-    if (this.cnpj) {
-      const digitos = this.cnpj.replace(/\D/g, '');
-      if (digitos.length !== 14) {
-        throw new ErroValidacao('O CNPJ deve conter exatamente 14 dígitos numéricos.');
-      }
+    if (this.cnpj && this.cnpj.replace(/\D/g, '').length !== 14) {
+      throw new ErroValidacao('O CNPJ deve conter exatamente 14 dígitos numéricos.');
     }
   }
 

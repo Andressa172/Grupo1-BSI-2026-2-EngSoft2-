@@ -108,29 +108,29 @@ export default function ConfiguracoesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
+        <h2 className="text-lg font-medium tracking-tight">Dados da organização</h2>
         <p className="text-sm text-foreground/50">
-          Parametrização do Sistema: defina as informações cadastrais e visuais da organização
-          que serão exibidas nos relatórios, cabeçalhos e menus da plataforma.
+          Defina as informações cadastrais e visuais exibidas nos relatórios, cabeçalhos e menus.
         </p>
       </div>
 
       {mensagemSucesso && (
-        <div className="p-3 text-sm rounded-lg bg-green-500/10 border border-green-500/20 text-green-600">
+        <p className="text-sm text-green-600">
           {mensagemSucesso}
-        </div>
+        </p>
       )}
 
       {erro && (
-        <div className="p-3 text-sm rounded-lg bg-destructive/10 border border-destructive/20 text-destructive">
+        <p className="text-sm text-primary">
           {erro}
-        </div>
+        </p>
       )}
 
-      <Card className="p-6">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          <div className="flex items-center gap-2 pb-2 border-b border-border-line/10 text-foreground/80 font-medium text-sm">
+      <Card className="p-5">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex items-center gap-2 border-b border-border-line/10 pb-3 text-sm font-medium text-foreground/80">
             <Building2 size={18} />
             <span>Identidade e Dados Cadastrais</span>
           </div>
@@ -144,7 +144,7 @@ export default function ConfiguracoesPage() {
             />
           </Field>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field label="CNPJ">
               <Input
                 value={form.cnpj}
@@ -162,7 +162,7 @@ export default function ConfiguracoesPage() {
             </Field>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field label="E-mail Institucional">
               <Input
                 type="email"
@@ -195,7 +195,7 @@ export default function ConfiguracoesPage() {
           </Field>
 
           {(logoPreview || form.caminhoLogo) && (
-            <div className="flex items-center gap-4 p-3 rounded-lg border border-border-line/10 bg-background/50">
+            <div className="flex items-center gap-4 rounded-lg border border-border-line/10 bg-background/50 p-3">
               <span className="text-xs text-foreground/50">Pré-visualização do logo:</span>
               <img
                 src={logoPreview ?? form.caminhoLogo}
@@ -208,13 +208,14 @@ export default function ConfiguracoesPage() {
             </div>
           )}
 
-          <div className="flex justify-end pt-3 border-t border-border-line/10">
+          <div className="border-t border-border-line/10 pt-3">
             <Button
               type="submit"
               variant="primary"
               size="md"
               disabled={salvando}
               iconLeft={<Save size={16} />}
+              className="mt-2 w-full"
             >
               {salvando ? 'Salvando alterações...' : 'Salvar Parâmetros'}
             </Button>
