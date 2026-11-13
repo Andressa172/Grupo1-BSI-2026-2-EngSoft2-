@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Field, Input, Select, Modal, Card, Table, THead, EmptyRow } from '@/components/app/ui';
+import { Field, Input, Select, Modal, Table, THead, EmptyRow, LoadingRows } from '@/components/app/ui';
 
 interface Produto {
   id: number;
@@ -43,6 +43,9 @@ function formatarData(data: string) {
   return new Date(data + 'T00:00:00').toLocaleDateString('pt-BR');
 }
 
+// a coluna de data some em telas estreitas
+const COLUNAS = [{ label: 'Data', className: 'hidden sm:table-cell' }, 'Refeição', 'Alimentos utilizados'];
+
 export default function CardapiosPage() {
   const [cardapios, setCardapios] = useState<CardapioComItens[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
@@ -52,20 +55,33 @@ export default function CardapiosPage() {
   const [dadosCardapio, setDadosCardapio] = useState({ data: '', tipoRefeicao: 'CAFE_DA_MANHA' });
   const [itens, setItens] = useState<LinhaItemForm[]>([{ ...ITEM_VAZIO }]);
 
+  const [estado, setEstado] = useState<'carregando' | 'pronto' | 'erro'>('carregando');
+
+  // falha no servidor vira estado de erro, não lista vazia
   async function carregar() {
-    const resposta = await fetch('/api/cardapios');
+    const resposta = await fetch('/api/cardapios').catch(() => null);
+    if (!resposta?.ok) {
+      setEstado('erro');
+      return;
+    }
     const dados = await resposta.json();
+    setEstado('pronto');
     setCardapios(dados.cardapios);
     setProdutos(dados.produtos);
   }
 
   useEffect(() => {
     fetch('/api/cardapios')
-      .then((resposta) => resposta.json())
+      .then((resposta) => {
+        if (!resposta.ok) throw new Error();
+        return resposta.json();
+      })
       .then((dados) => {
+        setEstado('pronto');
         setCardapios(dados.cardapios);
         setProdutos(dados.produtos);
-      });
+      })
+      .catch(() => setEstado('erro'));
   }, []);
 
   function abrirNovo() {
@@ -112,24 +128,28 @@ export default function CardapiosPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <p className="text-sm text-foreground/50 max-w-xl">
-          Cardápio diário (RF_F10): monte o cardápio escolhendo os alimentos disponíveis em estoque e as
-          quantidades. O estoque é atualizado automaticamente ao confirmar.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:justify-end">
         <Button variant="primary" size="md" onClick={abrirNovo} iconLeft={<Plus size={16} />}>
-          Novo Cardápio
+          Novo cardápio
         </Button>
       </div>
 
-      <Card className="p-0">
-        <Table>
-          <THead cols={['Data', 'Refeição', 'Alimentos utilizados']} />
+      <Table>
+          <THead cols={COLUNAS} />
           <tbody>
-            {cardapios.length === 0 && <EmptyRow colSpan={3} label="Nenhum cardápio cadastrado." />}
-            {cardapios.map(({ cardapio, itens: itensDoCardapio }) => (
+            {estado === 'carregando' && <LoadingRows colSpan={COLUNAS.length} />}
+            {estado === 'erro' && (
+              <EmptyRow colSpan={COLUNAS.length}>
+                Não foi possível carregar os dados.{' '}
+                <button type="button" onClick={carregar} className="font-medium text-foreground underline underline-offset-2 cursor-pointer hover:text-primary">
+                  Tentar de novo
+                </button>
+              </EmptyRow>
+            )}
+            {estado === 'pronto' && cardapios.length === 0 && <EmptyRow colSpan={COLUNAS.length} label="Nenhum cardápio cadastrado ainda." />}
+            {estado === 'pronto' && cardapios.map(({ cardapio, itens: itensDoCardapio }) => (
               <tr key={cardapio.id} className="border-b border-border-line/10 last:border-0 align-top">
-                <td className="px-4 py-3 text-foreground/60 whitespace-nowrap">{formatarData(cardapio.data)}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap tabular-nums">{formatarData(cardapio.data)}</td>
                 <td className="px-4 py-3 font-medium">{LABEL_REFEICAO[cardapio.tipoRefeicao] ?? cardapio.tipoRefeicao}</td>
                 <td className="px-4 py-3">
                   <ul className="space-y-1">
@@ -144,11 +164,10 @@ export default function CardapiosPage() {
             ))}
           </tbody>
         </Table>
-      </Card>
 
-      <Modal open={modalAberto} title="Novo Cardápio Diário" onClose={() => setModalAberto(false)}>
+      <Modal open={modalAberto} title="Novo cardápio" onClose={() => setModalAberto(false)}>
         <form onSubmit={salvar} className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Data do cardápio">
               <Input
                 type="date"
@@ -196,7 +215,7 @@ export default function CardapiosPage() {
                 <button
                   type="button"
                   onClick={() => setItens(itens.filter((_, i) => i !== indice))}
-                  className="p-2 text-foreground/40 hover:text-primary cursor-pointer"
+                  className="rounded-md p-2 text-foreground/50 hover:text-primary hover:bg-foreground/5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   aria-label="Remover alimento"
                 >
                   <Trash2 size={16} />
@@ -206,16 +225,22 @@ export default function CardapiosPage() {
             <button
               type="button"
               onClick={() => setItens([...itens, { ...ITEM_VAZIO }])}
-              className="text-xs font-medium text-primary hover:underline w-fit"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline w-fit cursor-pointer"
             >
-              + Adicionar outro alimento
+              <Plus size={14} aria-hidden />
+              Adicionar outro alimento
             </button>
           </div>
 
           {erro && <p className="text-sm text-primary">{erro}</p>}
-          <Button type="submit" variant="primary" size="md" className="w-full mt-2">
-            Confirmar Cardápio
-          </Button>
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="ghost" size="md" onClick={() => setModalAberto(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" size="md">
+              Confirmar cardápio
+            </Button>
+          </div>
         </form>
       </Modal>
     </div>

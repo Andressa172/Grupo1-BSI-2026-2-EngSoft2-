@@ -108,34 +108,27 @@ export default function ConfiguracoesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-medium tracking-tight">Dados da organização</h2>
-        <p className="text-sm text-foreground/50">
-          Defina as informações cadastrais e visuais exibidas nos relatórios, cabeçalhos e menus.
-        </p>
-      </div>
-
+    <div className="flex flex-col gap-6 max-w-4xl">
       {mensagemSucesso && (
-        <p className="text-sm text-green-600">
+        <div role="status" className="p-3 text-sm rounded-lg bg-success/10 border border-success/20 text-success">
           {mensagemSucesso}
-        </p>
+        </div>
       )}
 
       {erro && (
-        <p className="text-sm text-primary">
+        <div role="alert" className="p-3 text-sm rounded-lg bg-danger/10 border border-danger/20 text-danger">
           {erro}
-        </p>
+        </div>
       )}
 
-      <Card className="p-5">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex items-center gap-2 border-b border-border-line/10 pb-3 text-sm font-medium text-foreground/80">
-            <Building2 size={18} />
-            <span>Identidade e Dados Cadastrais</span>
+      <Card className="p-6">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <div className="flex items-center gap-2 pb-3 border-b border-border-line/10 font-medium text-sm">
+            <Building2 size={18} className="text-foreground/50" aria-hidden />
+            <h2>Identidade e dados cadastrais</h2>
           </div>
 
-          <Field label="Nome / Nome Fantasia *">
+          <Field label="Nome / nome fantasia *">
             <Input
               required
               value={form.nomeFantasia}
@@ -144,7 +137,7 @@ export default function ConfiguracoesPage() {
             />
           </Field>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="CNPJ">
               <Input
                 value={form.cnpj}
@@ -153,7 +146,7 @@ export default function ConfiguracoesPage() {
               />
             </Field>
 
-            <Field label="Telefone de Contato">
+            <Field label="Telefone de contato">
               <Input
                 value={form.telefone}
                 onChange={(e) => setForm({ ...form, telefone: e.target.value })}
@@ -162,8 +155,8 @@ export default function ConfiguracoesPage() {
             </Field>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="E-mail Institucional">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="E-mail institucional">
               <Input
                 type="email"
                 value={form.email}
@@ -177,16 +170,16 @@ export default function ConfiguracoesPage() {
                 type="file"
                 accept="image/png,image/jpeg,image/gif,image/webp"
                 onChange={(e) => setLogoArquivo(e.target.files?.[0] ?? null)}
-                className="text-foreground/40 file:mr-4 file:rounded-md file:border-0 file:bg-foreground/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground/70"
+                className="text-foreground/50 py-1.5 file:mr-4 file:rounded-md file:border-0 file:bg-foreground/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground/70"
               />
-              <span className="mt-1 text-xs text-foreground/45">
+              <span className="mt-1 text-xs text-foreground/50">
                 PNG, JPEG, GIF ou WebP, até 5 MB.
                 {logoArquivo ? ` Arquivo selecionado: ${logoArquivo.name}` : ''}
               </span>
             </Field>
           </div>
 
-          <Field label="Endereço Completo">
+          <Field label="Endereço completo">
             <Input
               value={form.endereco}
               onChange={(e) => setForm({ ...form, endereco: e.target.value })}
@@ -195,7 +188,7 @@ export default function ConfiguracoesPage() {
           </Field>
 
           {(logoPreview || form.caminhoLogo) && (
-            <div className="flex items-center gap-4 rounded-lg border border-border-line/10 bg-background/50 p-3">
+            <div className="flex items-center gap-4 p-3 rounded-lg border border-border-line/10 bg-background/50">
               <span className="text-xs text-foreground/50">Pré-visualização do logo:</span>
               <img
                 src={logoPreview ?? form.caminhoLogo}
@@ -208,16 +201,15 @@ export default function ConfiguracoesPage() {
             </div>
           )}
 
-          <div className="border-t border-border-line/10 pt-3">
+          <div className="flex justify-end pt-3 border-t border-border-line/10">
             <Button
               type="submit"
               variant="primary"
               size="md"
               disabled={salvando}
               iconLeft={<Save size={16} />}
-              className="mt-2 w-full"
             >
-              {salvando ? 'Salvando alterações...' : 'Salvar Parâmetros'}
+              {salvando ? 'Salvando...' : 'Salvar parâmetros'}
             </Button>
           </div>
         </form>
