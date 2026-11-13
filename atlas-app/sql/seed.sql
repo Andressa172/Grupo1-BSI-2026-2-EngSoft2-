@@ -30,3 +30,60 @@ ON CONFLICT DO NOTHING;
 INSERT INTO organizacao (id, nome_fantasia, caminho_logo)
 VALUES (1, 'Minha Organização', NULL)
 ON CONFLICT (id) DO NOTHING;
+
+-- Cotações de exemplo para demonstração de RF_F7 (Abrir cotação) e RF_F8 (Aprovar cotação)
+DO $$
+DECLARE
+    v_secretario_id INTEGER;
+    v_gerente_id INTEGER;
+    v_arroz_id INTEGER;
+    v_feijao_id INTEGER;
+    v_leite_id INTEGER;
+    v_oleo_id INTEGER;
+    v_cotacao1_id INTEGER;
+    v_cotacao2_id INTEGER;
+BEGIN
+    SELECT id INTO v_oleo_id FROM produto WHERE nome = 'Óleo de soja' LIMIT 1;
+
+    IF NOT EXISTS (SELECT 1 FROM cotacao) THEN
+        SELECT id INTO v_secretario_id FROM usuario WHERE login = 'secretario' LIMIT 1;
+        SELECT id INTO v_gerente_id FROM usuario WHERE login = 'gerente' LIMIT 1;
+        SELECT id INTO v_arroz_id FROM produto WHERE nome = 'Arroz 5kg' LIMIT 1;
+        SELECT id INTO v_feijao_id FROM produto WHERE nome = 'Feijão 1kg' LIMIT 1;
+        SELECT id INTO v_leite_id FROM produto WHERE nome = 'Leite em pó' LIMIT 1;
+
+        IF v_secretario_id IS NOT NULL AND v_leite_id IS NOT NULL AND v_feijao_id IS NOT NULL THEN
+            INSERT INTO cotacao (descricao, data_abertura, data_limite, status, aberta_por)
+            VALUES ('Reposição mensal de alimentos básicos', '2026-04-10', '2026-04-25', 'PENDENTE', v_secretario_id)
+            RETURNING id INTO v_cotacao1_id;
+
+            INSERT INTO item_cotacao (cotacao_id, produto_id, quantidade_desejada) VALUES
+                (v_cotacao1_id, v_leite_id, 20),
+                (v_cotacao1_id, v_feijao_id, 15);
+            IF v_oleo_id IS NOT NULL THEN
+                INSERT INTO item_cotacao (cotacao_id, produto_id, quantidade_desejada) VALUES
+                    (v_cotacao1_id, v_oleo_id, 12);
+            END IF;
+        END IF;
+
+        IF v_secretario_id IS NOT NULL AND v_gerente_id IS NOT NULL AND v_arroz_id IS NOT NULL THEN
+            INSERT INTO cotacao (descricao, data_abertura, data_limite, data_avaliacao, status, aberta_por, avaliada_por, justificativa)
+            VALUES ('Compra emergencial de arroz para cestas básicas', '2026-04-02', '2026-04-15', '2026-04-03', 'APROVADA', v_secretario_id, v_gerente_id, 'Estoque crítico, compra autorizada com urgência.')
+            RETURNING id INTO v_cotacao2_id;
+
+            INSERT INTO item_cotacao (cotacao_id, produto_id, quantidade_desejada) VALUES
+                (v_cotacao2_id, v_arroz_id, 30);
+        END IF;
+    END IF;
+
+    UPDATE cotacao SET data_avaliacao = '2026-04-03' WHERE status = 'APROVADA' AND data_avaliacao IS NULL;
+
+    -- garante que a cotação #1 de exemplo tenha 3 itens para demonstrar o limite de exibição
+    SELECT id INTO v_cotacao1_id FROM cotacao WHERE descricao = 'Reposição mensal de alimentos básicos' LIMIT 1;
+    IF v_cotacao1_id IS NOT NULL AND v_oleo_id IS NOT NULL THEN
+        IF NOT EXISTS (SELECT 1 FROM item_cotacao WHERE cotacao_id = v_cotacao1_id AND produto_id = v_oleo_id) THEN
+            INSERT INTO item_cotacao (cotacao_id, produto_id, quantidade_desejada)
+            VALUES (v_cotacao1_id, v_oleo_id, 12);
+        END IF;
+    END IF;
+END $$;

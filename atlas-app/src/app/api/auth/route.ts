@@ -5,10 +5,12 @@
 
 import { UsuarioController } from '@/server/UsuarioController';
 import { respostaDeErro } from '@/server/http';
+import { lerJson } from '@/server/lerJson';
 
 export async function POST(request: Request) {
   try {
-    const { login, senha } = await request.json();
+    const corpo = await lerJson(request);
+    const { login, senha } = (typeof corpo === 'object' && corpo !== null ? corpo : {}) as Record<string, unknown>;
     const usuario = await UsuarioController.getInstancia().autenticar(login, senha);
     return Response.json(usuario.paraDadosPublicos());
   } catch (erro) {

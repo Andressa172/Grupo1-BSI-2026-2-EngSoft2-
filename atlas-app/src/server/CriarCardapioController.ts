@@ -4,7 +4,7 @@ import { CardapioDiario, type TipoRefeicao } from './model/CardapioDiario';
 import { ItemCardapio } from './model/ItemCardapio';
 import { CardapioDiarioDAO } from './dao/CardapioDiarioDAO';
 import { ItemCardapioDAO } from './dao/ItemCardapioDAO';
-import { ProdutoDAO } from './dao/ProdutoDAO';
+import { MovimentacaoEstoque } from './model/MovimentacaoEstoque';
 import { ErroRegraDeNegocio, ErroValidacao } from './erros';
 import type { ExecutorSQL } from './dao/tipos';
 
@@ -34,9 +34,9 @@ export interface IConsultaDuplicidadeCardapio {
 export interface IItemCardapioDAOParaCriacao {
   inserir(item: ItemCardapio): Promise<ItemCardapio>;
 }
-export interface IProdutoDAOParaCardapio {
-  decrementarEstoque(produtoId: number, quantidade: number): Promise<{ id: number } | null>;
-  registrarMovimentacao(produtoId: number, tipo: 'ENTRADA' | 'SAIDA', quantidade: number, origem: string): Promise<void>;
+// baixa no estoque (RF_F1): devolve false se não há saldo suficiente
+export interface IEstoqueParaCardapio {
+  registrarSaida(produtoId: number, quantidade: number, origem: string): Promise<boolean>;
 }
 
 const globalParaSingleton = globalThis as unknown as { criarCardapioController?: CriarCardapioController };
@@ -48,7 +48,10 @@ export class CriarCardapioController {
       new CardapioDiarioDAO(executor),
     private readonly criarItemCardapioDAO: (executor: ExecutorSQL) => IItemCardapioDAOParaCriacao = (executor) =>
       new ItemCardapioDAO(executor),
-    private readonly criarProdutoDAO: (executor: ExecutorSQL) => IProdutoDAOParaCardapio = (executor) => new ProdutoDAO(executor),
+    private readonly criarEstoque: (executor: ExecutorSQL) => IEstoqueParaCardapio = (executor) => ({
+      registrarSaida: (produtoId, quantidade, origem) =>
+        MovimentacaoEstoque.registrarSaida(executor, produtoId, quantidade, origem),
+    }),
     private readonly cardapioDAOSomenteLeitura: IConsultaDuplicidadeCardapio = new CardapioDiarioDAO()
   ) {}
 
@@ -80,24 +83,22 @@ export class CriarCardapioController {
     return this.database.comTransacao(async (client) => {
       const cardapioDAO = this.criarCardapioDAO(client as unknown as ExecutorSQL);
       const itemCardapioDAO = this.criarItemCardapioDAO(client as unknown as ExecutorSQL);
-      const produtoDAO = this.criarProdutoDAO(client as unknown as ExecutorSQL);
+      const estoque = this.criarEstoque(client as unknown as ExecutorSQL);
 
       const cardapioSalvo = await cardapioDAO.inserir(cardapio);
 
       const itensSalvos: ItemCardapio[] = [];
       for (const item of modelosItem) {
-        const atualizado = await produtoDAO.decrementarEstoque(item.getProdutoId(), item.getQuantidadeUtilizada());
+        const atualizado = await estoque.registrarSaida(
+          item.getProdutoId(),
+          item.getQuantidadeUtilizada(),
+          `Cardápio diário de ${cardapio.getData()} (${cardapio.getTipoRefeicao()})`
+        );
         if (!atualizado) {
           throw new ErroRegraDeNegocio(
             `Estoque insuficiente para o alimento ${item.getProdutoId()}: não é possível usar ${item.getQuantidadeUtilizada()} unidade(s).`
           );
         }
-        await produtoDAO.registrarMovimentacao(
-          item.getProdutoId(),
-          'SAIDA',
-          item.getQuantidadeUtilizada(),
-          `Cardápio diário de ${cardapio.getData()} (${cardapio.getTipoRefeicao()})`
-        );
 
         item.setCardapioId(cardapioSalvo.getId()!);
         itensSalvos.push(await itemCardapioDAO.inserir(item));

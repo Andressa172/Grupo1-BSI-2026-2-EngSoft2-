@@ -1,9 +1,14 @@
-// Model - Usuario (RF_B2)
-import { ErroValidacao } from '../erros';
+// Model - Usuario (RF_B2 - Gerenciar Funcionários e Autenticação)
+// Guarda os dados do funcionário/usuário, valida os próprios atributos e faz a
+// persistência criando o UsuarioDAO com a conexão que recebe do UsuarioController.
+import type { ErrosDeCampo } from '../erros';
+import type { ExecutorSQL } from '../dao/tipos';
+import { UsuarioDAO } from '../dao/UsuarioDAO';
+import type { FiltroUsuario } from './FiltroUsuario';
 
-export type PerfilUsuario = 'GERENTE' | 'SECRETARIO' | 'FUNCIONARIO';
+export const PERFIS_USUARIO = ['GERENTE', 'SECRETARIO', 'FUNCIONARIO'] as const;
 
-const PERFIS_VALIDOS: PerfilUsuario[] = ['GERENTE', 'SECRETARIO', 'FUNCIONARIO'];
+export type PerfilUsuario = (typeof PERFIS_USUARIO)[number];
 
 export function limparCPF(cpf: string): string {
   return (cpf ?? '').replace(/\D/g, '');
@@ -79,6 +84,8 @@ export class Usuario {
     this.ativo = atributos.ativo ?? true;
   }
 
+  // ------------------------------- get / set -------------------------------
+
   getId(): number | undefined {
     return this.id;
   }
@@ -136,31 +143,94 @@ export class Usuario {
     this.ativo = ativo;
   }
 
-  validar(): void {
+  // ------------------------------- validação -------------------------------
+
+  /**
+   * Valida os atributos do funcionário. Devolve um mapa campo -> mensagem com
+   * TODOS os erros encontrados (mapa vazio = funcionário válido).
+   */
+  validar(opcoes?: { senhaOpcional?: boolean }): ErrosDeCampo {
+    const erros: ErrosDeCampo = {};
+
     if (!this.nome || this.nome.length === 0) {
-      throw new ErroValidacao('O nome do funcionário é obrigatório.');
+      erros.nome = 'O nome do funcionário é obrigatório.';
+    } else if (this.nome.length < 3) {
+      erros.nome = 'O nome do funcionário deve ter ao menos 3 caracteres.';
+    } else if (this.nome.length > 120) {
+      erros.nome = 'O nome do funcionário deve ter no máximo 120 caracteres.';
     }
-    if (this.nome.length > 120) {
-      throw new ErroValidacao('O nome do funcionário deve ter no máximo 120 caracteres.');
-    }
-    if (!this.login || this.login.length === 0) {
-      throw new ErroValidacao('O login do funcionário é obrigatório.');
-    }
-    if (this.login.length > 60) {
-      throw new ErroValidacao('O login do funcionário deve ter no máximo 60 caracteres.');
-    }
-    if (!this.senhaHash || this.senhaHash.trim().length === 0) {
-      throw new ErroValidacao('A senha do funcionário é obrigatória.');
-    }
-    if (!PERFIS_VALIDOS.includes(this.perfil)) {
-      throw new ErroValidacao('Cargo inválido.');
-    }
+
     if (!this.cpfBruto) {
-      throw new ErroValidacao('O CPF do funcionário é obrigatório.');
+      erros.cpf = 'O CPF do funcionário é obrigatório.';
+    } else if (!validarCPF(this.cpfBruto)) {
+      erros.cpf = 'O CPF informado é inválido.';
     }
-    if (!validarCPF(this.cpfBruto)) {
-      throw new ErroValidacao('O CPF informado é inválido.');
+
+    if (!this.login || this.login.length === 0) {
+      erros.login = 'O login do funcionário é obrigatório.';
+    } else if (this.login.length < 3) {
+      erros.login = 'O login do funcionário deve ter ao menos 3 caracteres.';
+    } else if (this.login.length > 60) {
+      erros.login = 'O login do funcionário deve ter no máximo 60 caracteres.';
+    } else if (/\s/.test(this.login)) {
+      erros.login = 'O login não pode conter espaços em branco.';
     }
+
+    const senhaLimpa = this.senhaHash.trim();
+    if (!opcoes?.senhaOpcional && senhaLimpa.length === 0) {
+      erros.senha = 'A senha do funcionário é obrigatória.';
+    } else if (senhaLimpa.length > 0 && senhaLimpa.length < 3) {
+      erros.senha = 'A senha deve ter ao menos 3 caracteres.';
+    }
+
+    if (!(PERFIS_USUARIO as readonly string[]).includes(this.perfil)) {
+      erros.perfil = 'Selecione um cargo válido.';
+    }
+
+    return erros;
+  }
+
+  // ------------------------------ persistência ------------------------------
+  // O Model cria o UsuarioDAO usando a conexão que o Controller abriu.
+
+  async incluir(conexao: ExecutorSQL): Promise<void> {
+    const salvo = await new UsuarioDAO(conexao).inserir(this);
+    this.id = salvo.getId();
+  }
+
+  async alterar(conexao: ExecutorSQL): Promise<boolean> {
+    const salvo = await new UsuarioDAO(conexao).atualizar(this);
+    return salvo !== null;
+  }
+
+  async excluir(conexao: ExecutorSQL): Promise<boolean> {
+    if (this.id === undefined) return false;
+    return new UsuarioDAO(conexao).excluir(this.id);
+  }
+
+  async existeOutroComMesmoLogin(conexao: ExecutorSQL): Promise<boolean> {
+    return new UsuarioDAO(conexao).existeComLogin(this.login, this.id);
+  }
+
+  async existeOutroComMesmoCpf(conexao: ExecutorSQL): Promise<boolean> {
+    if (!this.cpf) return false;
+    return new UsuarioDAO(conexao).existeComCpf(this.cpf, this.id);
+  }
+
+  static async buscarPorId(conexao: ExecutorSQL, id: number): Promise<Usuario | null> {
+    return new UsuarioDAO(conexao).buscarPorId(id);
+  }
+
+  static async buscarPorLogin(conexao: ExecutorSQL, login: string): Promise<Usuario | null> {
+    return new UsuarioDAO(conexao).buscarPorLogin(login);
+  }
+
+  static async consultar(conexao: ExecutorSQL, filtro: FiltroUsuario): Promise<Usuario[]> {
+    return new UsuarioDAO(conexao).consultar(filtro);
+  }
+
+  static async contarGerentesAtivos(conexao: ExecutorSQL, idIgnorado?: number): Promise<number> {
+    return new UsuarioDAO(conexao).contarGerentesAtivos(idIgnorado);
   }
 
   paraLinhaDeDados() {

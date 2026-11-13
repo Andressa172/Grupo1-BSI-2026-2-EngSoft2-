@@ -70,25 +70,24 @@ export function criarAmbienteFalsoDeTransacao(produtosIniciais: ProdutoFalso[]) 
     },
   };
 
-  function produtoDAOFalso() {
+  // imita o MovimentacaoEstoque.registrarSaida (RF_F1): baixa o estoque e guarda a movimentação
+  function estoqueFalso() {
     return {
-      async decrementarEstoque(produtoId: number, quantidade: number) {
+      async registrarSaida(produtoId: number, quantidade: number, origem: string) {
         const alvo = stagingProdutos!.get(produtoId);
         if (!alvo || alvo.quantidade_estoque < quantidade) {
-          return null;
+          return false;
         }
         alvo.quantidade_estoque -= quantidade;
-        return { id: alvo.id };
-      },
-      async registrarMovimentacao(produtoId: number, tipo: 'ENTRADA' | 'SAIDA', quantidade: number, origem: string) {
-        movimentacoes.push({ produtoId, tipo, quantidade, origem });
+        movimentacoes.push({ produtoId, tipo: 'SAIDA' as const, quantidade, origem });
+        return true;
       },
     };
   }
 
   return {
     database,
-    produtoDAOFalso,
+    estoqueFalso,
     registrarListaEstagiada,
     criarListaEstagiada,
     obterProdutoConfirmado(id: number) {
