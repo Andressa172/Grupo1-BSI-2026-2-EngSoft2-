@@ -1,5 +1,5 @@
 // Testes de integração + segurança de RF_F1 (atualizar estoque), com PostgreSQL de verdade.
-// RF_F1 é oculto (ERS 2.2): é acionado pelos casos de uso solicitantes. Os testes chamam o Model
+// RF_F1 é oculto (ERS 2.2): é acionado pelos casos de uso solicitantes. Os testes chamam o Controller
 // do mesmo jeito que eles (dentro de uma transação) e também passam pelos próprios solicitantes:
 // doação de produto (RF_F3), cardápio diário (RF_F10) e alocação para eventos (RF_F9).
 // Só rodam com TEST_DATABASE_URL definida (ver test-utils/bancoDeTeste.ts).
@@ -44,9 +44,9 @@ async function movimentar(
   dataValidade: string | null = null
 ): Promise<ResultadoMovimentacao> {
   const { Database } = await import('./db/Database');
-  const { MovimentacaoEstoque } = await import('./model/MovimentacaoEstoque');
+  const { AtualizarEstoqueController } = await import('./AtualizarEstoqueController');
   return Database.getInstancia().comTransacao((cliente) =>
-    new MovimentacaoEstoque({ produtoId, tipo, quantidade, origem, dataValidade }).aplicar(cliente)
+    AtualizarEstoqueController.getInstancia().atualizarEstoque(cliente, { produtoId, tipo, quantidade, origem, dataValidade })
   );
 }
 
@@ -108,7 +108,7 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Estoque - integração (PostgreSQL)', () =
 
     it('4.1 falha no banco no meio da operação: rollback, nem o estoque nem o histórico ficam gravados', async () => {
       const { Database } = await import('./db/Database');
-      const { MovimentacaoEstoque } = await import('./model/MovimentacaoEstoque');
+      const { AtualizarEstoqueController } = await import('./AtualizarEstoqueController');
       const leite = await novoProduto(nome('Leite'), 10);
       const antes = await contar('movimentacao_estoque');
       await expect(
@@ -118,9 +118,12 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Estoque - integração (PostgreSQL)', () =
             query: (texto: string, p?: unknown[]) =>
               texto.includes('INSERT INTO movimentacao_estoque') ? Promise.reject(new Error('falha simulada')) : cliente.query(texto, p),
           };
-          return new MovimentacaoEstoque({ produtoId: leite, tipo: 'SAIDA', quantidade: 3, origem: 'x' }).aplicar(
-            clienteComFalha as never
-          );
+          return AtualizarEstoqueController.getInstancia().atualizarEstoque(clienteComFalha as never, {
+            produtoId: leite,
+            tipo: 'SAIDA',
+            quantidade: 3,
+            origem: 'x',
+          });
         })
       ).rejects.toThrow('falha simulada');
       expect((await produto(leite)).estoque).toBe(10);

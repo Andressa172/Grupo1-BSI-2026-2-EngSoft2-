@@ -1,15 +1,15 @@
-// Model - MovimentacaoEstoque (RF_F1 - Atualizar estoque)
-// Uma entrada ou saída de um produto. Valida os próprios atributos e aplica a movimentação
+// Model - MovimentacaoEstoque (RF_F1 - Atualizar estoque) - "MovEstoque" no diagrama de classes
+// Uma entrada ou saída de um produto. Valida os próprios atributos e grava o histórico
 // criando o DAO com a conexão que recebe (dentro da transação de quem chamou).
 //
 // RF_F1 é uma função oculta (ERS 2.2): o ator é o Sistema, sem tela própria. Quem aciona são os
-// casos de uso solicitantes (doação de produto, compras, cardápio, eventos), pelos atalhos
-// registrarEntrada / registrarSaida, sempre dentro da transação deles.
+// casos de uso solicitantes, pelo AtualizarEstoqueController.atualizarEstoque, que executa o
+// fluxo básico. registrarEntrada / registrarSaida são atalhos para esse mesmo método.
 import type { ErrosDeCampo } from '../erros';
-import { ErroValidacao } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
 import { MovimentacaoEstoqueDAO, type MovimentacaoEstoqueRegistro } from '../dao/MovimentacaoEstoqueDAO';
 import type { FiltroMovimentacao } from './FiltroMovimentacao';
+import { AtualizarEstoqueController } from '../AtualizarEstoqueController';
 import { dataValida, paraIso, parseData, textoSeguro } from './datasBR';
 
 export type TipoMovimentacao = 'ENTRADA' | 'SAIDA';
@@ -61,6 +61,19 @@ export class MovimentacaoEstoque {
     return this.produtoId;
   }
 
+  getQuantidade(): number {
+    return this.quantidade;
+  }
+
+  getTipo(): TipoMovimentacao {
+    return this.tipo as TipoMovimentacao;
+  }
+
+  // aaaa-mm-dd, ou null se a entrada veio sem validade
+  getDataValidadeIso(): string | null {
+    return this.dataValidade ? paraIso(this.dataValidade) : null;
+  }
+
   validar(): ErrosDeCampo {
     const erros: ErrosDeCampo = {};
 
@@ -87,26 +100,15 @@ export class MovimentacaoEstoque {
 
   // ------------------------------ persistência ------------------------------
 
-  /**
-   * Passos 2 a 6 do fluxo básico: verifica o produto, soma ou subtrai, atualiza o estoque e
-   * registra o histórico. Chamar dentro de uma transação: se o solicitante desistir por causa
-   * do resultado (ou o banco falhar), o rollback desfaz tudo (fluxo alternativo 4.1).
-   */
-  async aplicar(conexao: ExecutorSQL): Promise<ResultadoMovimentacao> {
-    const erros = this.validar();
-    if (Object.keys(erros).length > 0) throw new ErroValidacao('Movimentação de estoque inválida.', erros);
-
-    const dao = new MovimentacaoEstoqueDAO(conexao);
-    const validadeIso = this.dataValidade ? paraIso(this.dataValidade) : null;
-
-    if (this.tipo === 'ENTRADA') {
-      if (!(await dao.somarAoEstoque(this.produtoId, this.quantidade, validadeIso))) return 'PRODUTO_INEXISTENTE';
-    } else if (!(await dao.subtrairDoEstoque(this.produtoId, this.quantidade))) {
-      return (await dao.produtoExiste(this.produtoId)) ? 'SALDO_INSUFICIENTE' : 'PRODUTO_INEXISTENTE';
-    }
-
-    this.id = await dao.inserir(this.produtoId, this.tipo as TipoMovimentacao, this.quantidade, this.origem, validadeIso);
-    return 'APLICADA';
+  /** RF_F1, passo 5 (1.4 no diagrama de sequência): registra o histórico com data, quantidade e tipo. */
+  async registrar(conexao: ExecutorSQL): Promise<void> {
+    this.id = await new MovimentacaoEstoqueDAO(conexao).inserir(
+      this.produtoId,
+      this.getTipo(),
+      this.quantidade,
+      this.origem,
+      this.getDataValidadeIso()
+    );
   }
 
   /** Atalho para os casos de uso solicitantes. Devolve false se o produto não existe. */
@@ -117,14 +119,25 @@ export class MovimentacaoEstoque {
     origem: string,
     dataValidade: Date | null = null
   ): Promise<boolean> {
-    const entrada = new MovimentacaoEstoque({ produtoId, tipo: 'ENTRADA', quantidade, origem, dataValidade });
-    return (await entrada.aplicar(conexao)) === 'APLICADA';
+    const resultado = await AtualizarEstoqueController.getInstancia().atualizarEstoque(conexao, {
+      produtoId,
+      tipo: 'ENTRADA',
+      quantidade,
+      origem,
+      dataValidade,
+    });
+    return resultado === 'APLICADA';
   }
 
   /** Atalho para os casos de uso solicitantes. Devolve false se não há saldo suficiente ou o produto não existe. */
   static async registrarSaida(conexao: ExecutorSQL, produtoId: number, quantidade: number, origem: string): Promise<boolean> {
-    const saida = new MovimentacaoEstoque({ produtoId, tipo: 'SAIDA', quantidade, origem });
-    return (await saida.aplicar(conexao)) === 'APLICADA';
+    const resultado = await AtualizarEstoqueController.getInstancia().atualizarEstoque(conexao, {
+      produtoId,
+      tipo: 'SAIDA',
+      quantidade,
+      origem,
+    });
+    return resultado === 'APLICADA';
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroMovimentacao): Promise<MovimentacaoEstoqueRegistro[]> {

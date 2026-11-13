@@ -2,7 +2,7 @@
 // - listarTodos: lista simples, usada pelas telas de cardápio (RF_F10) e eventos (RF_F9)
 // - demais métodos: CRUD do RF_B3 (Gerenciar produtos). Quem cria este DAO é o
 //   model Produto, com a conexão que recebe do ProdutoController.
-// A quantidade em estoque não é alterada aqui: só pelo MovimentacaoEstoqueDAO (RF_F1).
+// - buscarPorIdParaAtualizar / atualizarEstoque: usados só pelo RF_F1 (Atualizar estoque), via model Produto.
 import type { ExecutorSQL } from './tipos';
 import { Database } from '../db/Database';
 import { Produto } from '../model/Produto';
@@ -87,6 +87,23 @@ export class ProdutoDAO {
   async buscarPorId(id: number): Promise<Produto | null> {
     const resultado = await this.executor.query<ProdutoLinhaCompleta>(`SELECT ${COLUNAS} FROM produto WHERE id = $1`, [id]);
     return resultado.rows[0] ? linhaParaProduto(resultado.rows[0]) : null;
+  }
+
+  // FOR UPDATE: trava a linha até o fim da transação (RF_F1)
+  async buscarPorIdParaAtualizar(id: number): Promise<Produto | null> {
+    const resultado = await this.executor.query<ProdutoLinhaCompleta>(
+      `SELECT ${COLUNAS} FROM produto WHERE id = $1 FOR UPDATE`,
+      [id]
+    );
+    return resultado.rows[0] ? linhaParaProduto(resultado.rows[0]) : null;
+  }
+
+  async atualizarEstoque(id: number, quantidadeEstoque: number, dataValidade: string | null): Promise<void> {
+    await this.executor.query('UPDATE produto SET quantidade_estoque = $1, data_validade = $2 WHERE id = $3', [
+      quantidadeEstoque,
+      dataValidade,
+      id,
+    ]);
   }
 
   async existeComNome(nome: string, idIgnorado?: number): Promise<boolean> {

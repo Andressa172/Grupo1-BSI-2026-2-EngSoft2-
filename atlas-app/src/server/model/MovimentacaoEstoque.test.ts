@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { MovimentacaoEstoque } from './MovimentacaoEstoque';
 import { FiltroMovimentacao } from './FiltroMovimentacao';
 import { ErroValidacao } from '../erros';
+import { AtualizarEstoqueController } from '../AtualizarEstoqueController';
 
 const mov = (dados: Record<string, unknown>) =>
   new MovimentacaoEstoque({ produtoId: 1, tipo: 'ENTRADA', quantidade: 5, origem: 'Doação de produto #1', ...dados });
@@ -40,13 +41,20 @@ describe('MovimentacaoEstoque - validação (passo 1: produto, quantidade e tipo
     expect(mov({ dataValidade: new Date(NaN) }).validar()).toHaveProperty('dataValidade');
   });
 
-  it('aplicar() recusa movimentação inválida antes de tocar no banco', async () => {
+  it('atualizarEstoque() recusa movimentação inválida antes de tocar no banco', async () => {
     const conexaoQueNaoPodeSerUsada = {
       query: () => {
         throw new Error('não deveria chegar ao banco');
       },
     };
-    await expect(mov({ quantidade: 0 }).aplicar(conexaoQueNaoPodeSerUsada)).rejects.toThrow(ErroValidacao);
+    await expect(
+      AtualizarEstoqueController.getInstancia().atualizarEstoque(conexaoQueNaoPodeSerUsada, {
+        produtoId: 1,
+        tipo: 'ENTRADA',
+        quantidade: 0,
+        origem: 'x',
+      })
+    ).rejects.toThrow(ErroValidacao);
     await expect(MovimentacaoEstoque.registrarSaida(conexaoQueNaoPodeSerUsada, 1, -5, 'x')).rejects.toThrow(ErroValidacao);
   });
 });
