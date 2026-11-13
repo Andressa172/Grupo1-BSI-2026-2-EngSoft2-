@@ -20,12 +20,26 @@ ON CONFLICT (nome) DO NOTHING;
 -- produtos cadastrados antes do nº do lote recebem um lote provisório
 UPDATE produto SET numero_lote = 'LOTE-' || lpad(id::text, 4, '0') WHERE numero_lote IS NULL;
 
-INSERT INTO doador (nome, contato, tipo_pessoa, anonimo) VALUES
-    ('Supermercado Boa Compra', '(18) 3222-1000', 'JURIDICA', FALSE),
-    ('Maria Aparecida', '(18) 99999-1234', 'FISICA', FALSE),
-    ('Doador Anônimo', NULL, 'FISICA', TRUE)
+INSERT INTO doador (nome, telefone, email, cpf_cnpj, tipo_pessoa, anonimo) VALUES
+    ('Supermercado Boa Compra', '(18) 3222-1000', 'contato@boacompra.com.br', '12345678000195', 'JURIDICA', FALSE),
+    ('Maria Aparecida', '(18) 99999-1234', 'maria.aparecida@gmail.com', '52998224725', 'FISICA', FALSE),
+    ('Cassia Oliveira', '(18) 98888-5555', 'cassia.oliveira@gmail.com', '11144477735', 'FISICA', FALSE),
+    ('Doador Anônimo', NULL, NULL, NULL, 'FISICA', TRUE)
 ON CONFLICT DO NOTHING;
 
+-- doação de arroz já registrada pra Cassia (pra dar pra testar a exclusão bloqueada por FK)
+INSERT INTO doacao_produto (doador_id, data_recebimento)
+SELECT d.id, now() FROM doador d
+WHERE d.nome = 'Cassia Oliveira'
+  AND NOT EXISTS (SELECT 1 FROM doacao_produto dp WHERE dp.doador_id = d.id);
+
+INSERT INTO item_doacao (doacao_produto_id, produto_id, quantidade)
+SELECT dp.id, p.id, 5
+FROM doacao_produto dp
+JOIN doador d ON d.id = dp.doador_id
+JOIN produto p ON p.nome = 'Arroz 5kg'
+WHERE d.nome = 'Cassia Oliveira'
+  AND NOT EXISTS (SELECT 1 FROM item_doacao i WHERE i.doacao_produto_id = dp.id);
 
 INSERT INTO organizacao (id, nome_fantasia, caminho_logo)
 VALUES (1, 'Minha Organização', NULL)

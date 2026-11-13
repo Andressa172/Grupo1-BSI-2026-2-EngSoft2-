@@ -41,10 +41,24 @@ CREATE TABLE IF NOT EXISTS atendido (
 CREATE TABLE IF NOT EXISTS doador (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(120) NOT NULL,
-    contato VARCHAR(120),
+    telefone VARCHAR(20),
+    email VARCHAR(160),
+    cpf_cnpj VARCHAR(18),
     tipo_pessoa VARCHAR(20) NOT NULL DEFAULT 'FISICA' CHECK (tipo_pessoa IN ('FISICA', 'JURIDICA')),
     anonimo BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+-- bancos criados antes do telefone/email/cpf_cnpj: acrescenta as colunas e migra o contato antigo
+ALTER TABLE doador ADD COLUMN IF NOT EXISTS telefone VARCHAR(20);
+ALTER TABLE doador ADD COLUMN IF NOT EXISTS email VARCHAR(160);
+ALTER TABLE doador ADD COLUMN IF NOT EXISTS cpf_cnpj VARCHAR(18);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'doador' AND column_name = 'contato') THEN
+    UPDATE doador SET telefone = contato WHERE telefone IS NULL AND contato IS NOT NULL;
+    ALTER TABLE doador DROP COLUMN contato;
+  END IF;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- RF_B3 / Produto (controle de estoque)
@@ -128,6 +142,19 @@ CREATE TABLE IF NOT EXISTS doacao_dinheiro (
     data TIMESTAMP NOT NULL DEFAULT now(),
     registrado_por INTEGER REFERENCES usuario(id)
 );
+
+-- bancos com mais de um doador anônimo (de testes antigos): mantém só o mais antigo,
+-- e só apaga os duplicados que nunca receberam doação (senão a FK impede o delete)
+DELETE FROM doador
+ WHERE anonimo = TRUE
+   AND id <> (SELECT MIN(id) FROM doador WHERE anonimo = TRUE)
+   AND id NOT IN (SELECT doador_id FROM doacao_produto UNION SELECT doador_id FROM doacao_dinheiro);
+
+-- regra de negócio: só pode existir 1 doador anônimo cadastrado
+CREATE UNIQUE INDEX IF NOT EXISTS somente_um_doador_anonimo ON doador (anonimo) WHERE anonimo;
+
+-- regra de negócio: não pode ter dois doadores com o mesmo CPF/CNPJ (nome duplicado é permitido)
+CREATE UNIQUE INDEX IF NOT EXISTS doador_cpf_cnpj_unico ON doador (cpf_cnpj) WHERE cpf_cnpj IS NOT NULL;
 
 -- ---------------------------------------------------------------------------
 -- RF_F4 / RF_F5 / RF_F6 / Caixa

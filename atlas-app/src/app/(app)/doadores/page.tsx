@@ -2,77 +2,153 @@
 
 /**
  * Tela de Doadores (RF_B4 - Gerenciar Doadores)
- * Lista, cadastra, edita e exclui doadores usando a API /api/doadores.
+ * Ela conversa APENAS com a API (/api/doadores), que chama o Control (DoadorController) no
+ * servidor. Validação, regras e gravação no banco ficam do lado do servidor (Control -> Model -> DAO).
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Modal, Table, THead, EmptyRow, LoadingRows, IconAction, RowActions } from '@/components/app/ui';
+import { mascaraCpfCnpj, mascaraNome, mascaraTelefone } from '@/view/mascaras';
+
+type TipoPessoa = 'FISICA' | 'JURIDICA';
 
 interface Doador {
   id: number;
   nome: string;
-  contato: string | null;
-  tipoPessoa: 'FISICA' | 'JURIDICA';
+  telefone: string | null;
+  email: string | null;
+  cpfCnpj: string | null;
+  tipoPessoa: TipoPessoa;
   anonimo: boolean;
 }
 
 interface FormDoador {
   nome: string;
-  contato: string;
-  tipoPessoa: 'FISICA' | 'JURIDICA';
+  telefone: string;
+  email: string;
+  cpfCnpj: string;
+  tipoPessoa: TipoPessoa;
   anonimo: boolean;
 }
 
-const FORM_VAZIO: FormDoador = { nome: '', contato: '', tipoPessoa: 'FISICA', anonimo: false };
+interface DadosFiltroDoador {
+  nome: string;
+  tipoPessoa: string;
+  anonimo: string; // '' | 'sim' | 'nao'
+}
+
+const FORM_VAZIO: FormDoador = { nome: '', telefone: '', email: '', cpfCnpj: '', tipoPessoa: 'FISICA', anonimo: false };
+const FILTRO_VAZIO: DadosFiltroDoador = { nome: '', tipoPessoa: '', anonimo: '' };
 
 // colunas secundárias somem em telas estreitas para as ações continuarem visíveis
 const COLUNAS = [
   'Nome',
   { label: 'Tipo', className: 'hidden sm:table-cell' },
-  { label: 'Contato', className: 'hidden md:table-cell' },
+  { label: 'CPF/CNPJ', className: 'hidden md:table-cell' },
+  { label: 'Contato', className: 'hidden lg:table-cell' },
   { label: 'Ações', className: 'text-right', srOnly: true },
 ];
 
+function montarParametros(f: DadosFiltroDoador): string {
+  const parametros = new URLSearchParams();
+  (Object.keys(f) as (keyof DadosFiltroDoador)[]).forEach((chave) => {
+    if (f[chave].trim() !== '') parametros.set(chave, f[chave].trim());
+  });
+  return parametros.toString();
+}
+
+// resposta de erro da API: { erro, erros? } -> mapa campo -> mensagem
+async function lerErros(resposta: Response): Promise<Record<string, string>> {
+  try {
+    const corpo = await resposta.json();
+    if (corpo.erros && typeof corpo.erros === 'object') return corpo.erros as Record<string, string>;
+    return { geral: typeof corpo.erro === 'string' ? corpo.erro : 'Não foi possível concluir a operação.' };
+  } catch {
+    return { geral: 'Não foi possível concluir a operação.' };
+  }
+}
+
+function MensagemErro({ texto }: { texto?: string }) {
+  if (!texto) return null;
+  return <span className="text-xs text-primary mt-1 block">{texto}</span>;
+}
+const destaque = (erro?: string) => (erro ? 'border-primary!' : '');
+
 export default function DoadoresPage() {
   const [doadores, setDoadores] = useState<Doador[]>([]);
-  const [busca, setBusca] = useState('');
+  const [estado, setEstado] = useState<'carregando' | 'pronto' | 'erro'>('carregando');
+  const [erroCarga, setErroCarga] = useState('');
+
+  // consulta: filtro digitado x filtro aplicado ao clicar em Consultar (3 critérios: nome, tipo, anônimo)
+  const [filtro, setFiltro] = useState<DadosFiltroDoador>(FILTRO_VAZIO);
+  const [filtroAplicado, setFiltroAplicado] = useState<DadosFiltroDoador>(FILTRO_VAZIO);
+  const [errosFiltro, setErrosFiltro] = useState<Record<string, string>>({});
+
+  // formulário (inclusão / alteração)
   const [modalAberto, setModalAberto] = useState(false);
   const [doadorEditando, setDoadorEditando] = useState<Doador | null>(null);
   const [form, setForm] = useState(FORM_VAZIO);
-  const [erro, setErro] = useState('');
-  const [estado, setEstado] = useState<'carregando' | 'pronto' | 'erro'>('carregando');
+  const [erros, setErros] = useState<Record<string, string>>({});
+  const [salvando, setSalvando] = useState(false);
 
-  // carregando e erro são estados próprios: falha no servidor não vira "nenhum doador"
-  async function carregarDoadores() {
+  const carregar = useCallback(async (f: DadosFiltroDoador): Promise<Record<string, string>> => {
     try {
-      const resposta = await fetch('/api/doadores');
-      if (!resposta.ok) throw new Error();
+      const resposta = await fetch(`/api/doadores?${montarParametros(f)}`);
+      if (!resposta.ok) return await lerErros(resposta);
       setDoadores(await resposta.json());
       setEstado('pronto');
+      setErroCarga('');
+      return {};
     } catch {
       setEstado('erro');
+      setErroCarga('Não foi possível carregar os doadores. Confira se o banco de dados está no ar.');
+      return {};
     }
-  }
+  }, []);
 
+  // carrega a lista quando a tela abre (e depois só quando o filtro aplicado muda)
   useEffect(() => {
-    fetch('/api/doadores')
-      .then((resposta) => {
-        if (!resposta.ok) throw new Error();
-        return resposta.json();
-      })
-      .then((dados) => {
+    let cancelado = false;
+    fetch(`/api/doadores?${montarParametros(filtroAplicado)}`)
+      .then(async (resposta) => {
+        if (!resposta.ok) throw new Error('falha');
+        const dados = await resposta.json();
+        if (cancelado) return;
         setDoadores(dados);
         setEstado('pronto');
+        setErroCarga('');
       })
-      .catch(() => setEstado('erro'));
-  }, []);
+      .catch(() => {
+        if (!cancelado) {
+          setEstado('erro');
+          setErroCarga('Não foi possível carregar os doadores. Confira se o banco de dados está no ar.');
+        }
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [filtroAplicado]);
+
+  async function consultar(e: React.FormEvent) {
+    e.preventDefault();
+    // o servidor valida o filtro; se houver erro, mostra ao lado do campo
+    const e2 = await carregar(filtro);
+    setErrosFiltro(e2);
+    if (Object.keys(e2).length === 0) setFiltroAplicado(filtro);
+  }
+
+  function limparFiltro() {
+    setFiltro(FILTRO_VAZIO);
+    setFiltroAplicado(FILTRO_VAZIO);
+    setErrosFiltro({});
+  }
 
   function abrirNovo() {
     setDoadorEditando(null);
     setForm(FORM_VAZIO);
-    setErro('');
+    setErros({});
     setModalAberto(true);
   }
 
@@ -80,81 +156,109 @@ export default function DoadoresPage() {
     setDoadorEditando(doador);
     setForm({
       nome: doador.nome,
-      contato: doador.contato ?? '',
+      telefone: doador.telefone ?? '',
+      email: doador.email ?? '',
+      cpfCnpj: doador.cpfCnpj ?? '',
       tipoPessoa: doador.tipoPessoa,
       anonimo: doador.anonimo,
     });
-    setErro('');
+    setErros({});
     setModalAberto(true);
   }
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
-    setErro('');
+    setSalvando(true);
+    try {
+      const url = doadorEditando ? `/api/doadores/${doadorEditando.id}` : '/api/doadores';
+      const metodo = doadorEditando ? 'PUT' : 'POST';
 
-    const url = doadorEditando ? `/api/doadores/${doadorEditando.id}` : '/api/doadores';
-    const metodo = doadorEditando ? 'PUT' : 'POST';
+      const resposta = await fetch(url, {
+        method: metodo,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
 
-    const resposta = await fetch(url, {
-      method: metodo,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
-
-    if (resposta.ok) {
+      if (!resposta.ok) {
+        setErros(await lerErros(resposta));
+        return;
+      }
       setModalAberto(false);
-      carregarDoadores();
-    } else {
-      const corpo = await resposta.json();
-      setErro(corpo.erro);
+      await carregar(filtroAplicado);
+    } finally {
+      setSalvando(false);
     }
   }
 
   async function excluir(doador: Doador) {
-    if (!confirm(`Deseja excluir o doador "${doador.nome}"?`)) return;
+    if (!confirm(`Deseja excluir o doador "${doador.anonimo ? 'Doador anônimo' : doador.nome}"?`)) return;
     const resposta = await fetch(`/api/doadores/${doador.id}`, { method: 'DELETE' });
     if (!resposta.ok) {
       const corpo = await resposta.json().catch(() => ({}));
       alert(corpo.erro ?? 'Não foi possível excluir o doador.');
+      return;
     }
-    carregarDoadores();
+    await carregar(filtroAplicado);
   }
-
-  const doadoresFiltrados = doadores.filter((d) => d.nome.toLowerCase().includes(busca.toLowerCase()));
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <Input
-          type="search"
-          aria-label="Buscar doador pelo nome"
-          placeholder="Buscar doador pelo nome"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          className="sm:max-w-xs"
-        />
+      <div className="flex flex-col sm:flex-row sm:justify-end">
         <Button variant="primary" size="md" onClick={abrirNovo} iconLeft={<Plus size={16} />}>
           Novo doador
         </Button>
       </div>
 
+      <form onSubmit={consultar} className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-start">
+        <div className="col-span-2 min-w-52 flex-1">
+          <Field label="Nome">
+            <Input
+              value={filtro.nome}
+              onChange={(e) => setFiltro({ ...filtro, nome: mascaraNome(e.target.value) })}
+              placeholder="Buscar por nome"
+            />
+          </Field>
+        </div>
+        <div className="col-span-2 sm:w-44">
+          <Field label="Tipo de pessoa">
+            <Select value={filtro.tipoPessoa} onChange={(e) => setFiltro({ ...filtro, tipoPessoa: e.target.value })}>
+              <option value="">Todos</option>
+              <option value="FISICA">Pessoa física</option>
+              <option value="JURIDICA">Pessoa jurídica</option>
+            </Select>
+          </Field>
+        </div>
+        <div className="col-span-2 sm:w-36">
+          <Field label="Anônimo">
+            <Select value={filtro.anonimo} onChange={(e) => setFiltro({ ...filtro, anonimo: e.target.value })}>
+              <option value="">Todos</option>
+              <option value="sim">Sim</option>
+              <option value="nao">Não</option>
+            </Select>
+          </Field>
+        </div>
+        <div className="col-span-2 flex gap-2 sm:mt-5.5">
+          <Button type="submit" variant="outline" size="md">
+            Consultar
+          </Button>
+          <Button type="button" variant="ghost" size="md" onClick={limparFiltro}>
+            Limpar
+          </Button>
+        </div>
+        {errosFiltro.geral && <MensagemErro texto={errosFiltro.geral} />}
+      </form>
+
+      {erroCarga && <p className="text-sm text-primary">{erroCarga}</p>}
+
       <Table>
         <THead cols={COLUNAS} />
         <tbody>
           {estado === 'carregando' && <LoadingRows colSpan={COLUNAS.length} />}
-          {estado === 'erro' && (
-            <EmptyRow colSpan={COLUNAS.length}>
-              Não foi possível carregar os doadores.{' '}
-              <button type="button" onClick={carregarDoadores} className="font-medium text-foreground underline underline-offset-2 cursor-pointer hover:text-primary">
-                Tentar de novo
-              </button>
-            </EmptyRow>
-          )}
-          {estado === 'pronto' && doadoresFiltrados.length === 0 && (
-            <EmptyRow colSpan={COLUNAS.length} label={busca ? 'Nenhum doador com esse nome.' : 'Nenhum doador cadastrado ainda.'} />
+          {estado === 'pronto' && doadores.length === 0 && (
+            <EmptyRow colSpan={COLUNAS.length} label="Nenhum doador encontrado." />
           )}
           {estado === 'pronto' &&
-            doadoresFiltrados.map((d) => (
+            doadores.map((d) => (
               <tr key={d.id} className="border-b border-border-line/10 last:border-0">
                 <td className="px-4 py-3 font-medium">
                   {d.anonimo ? <span className="italic text-foreground/50">Doador anônimo</span> : d.nome}
@@ -162,7 +266,12 @@ export default function DoadoresPage() {
                 <td className="hidden sm:table-cell px-4 py-3 text-foreground/70">
                   {d.tipoPessoa === 'FISICA' ? 'Pessoa física' : 'Pessoa jurídica'}
                 </td>
-                <td className="hidden md:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap">{d.contato || '—'}</td>
+                <td className="hidden md:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap">
+                  {d.cpfCnpj ? mascaraCpfCnpj(d.cpfCnpj) : '—'}
+                </td>
+                <td className="hidden lg:table-cell px-4 py-3 text-foreground/70">
+                  {[d.telefone, d.email].filter(Boolean).join(' · ') || '—'}
+                </td>
                 <td className="px-2 py-2 sm:px-4">
                   <RowActions>
                     <IconAction label={`Editar ${d.anonimo ? 'doador anônimo' : d.nome}`} onClick={() => abrirEdicao(d)}>
@@ -192,32 +301,72 @@ export default function DoadoresPage() {
 
           {!form.anonimo && (
             <>
-              <Field label="Nome do doador">
-                <Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} required={!form.anonimo} />
-              </Field>
+              <div>
+                <Field label="Nome do doador *">
+                  <Input
+                    value={form.nome}
+                    onChange={(e) => setForm({ ...form, nome: mascaraNome(e.target.value) })}
+                    className={destaque(erros.nome)}
+                  />
+                </Field>
+                <MensagemErro texto={erros.nome} />
+              </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Tipo de pessoa">
                   <Select
                     value={form.tipoPessoa}
-                    onChange={(e) => setForm({ ...form, tipoPessoa: e.target.value as 'FISICA' | 'JURIDICA' })}
+                    onChange={(e) => setForm({ ...form, tipoPessoa: e.target.value as TipoPessoa, cpfCnpj: '' })}
                   >
                     <option value="FISICA">Pessoa física</option>
                     <option value="JURIDICA">Pessoa jurídica</option>
                   </Select>
                 </Field>
-                <Field label="Contato (telefone/e-mail)">
-                  <Input value={form.contato} onChange={(e) => setForm({ ...form, contato: e.target.value })} />
-                </Field>
+                <div>
+                  <Field label={form.tipoPessoa === 'JURIDICA' ? 'CNPJ *' : 'CPF *'}>
+                    <Input
+                      value={form.cpfCnpj}
+                      onChange={(e) => setForm({ ...form, cpfCnpj: mascaraCpfCnpj(e.target.value) })}
+                      className={destaque(erros.cpfCnpj)}
+                      placeholder={form.tipoPessoa === 'JURIDICA' ? '00.000.000/0000-00' : '000.000.000-00'}
+                    />
+                  </Field>
+                  <MensagemErro texto={erros.cpfCnpj} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <Field label="Telefone *">
+                    <Input
+                      value={form.telefone}
+                      onChange={(e) => setForm({ ...form, telefone: mascaraTelefone(e.target.value) })}
+                      className={destaque(erros.telefone)}
+                      placeholder="(00) 00000-0000"
+                    />
+                  </Field>
+                  <MensagemErro texto={erros.telefone} />
+                </div>
+                <div>
+                  <Field label="E-mail *">
+                    <Input
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value })}
+                      className={destaque(erros.email)}
+                      placeholder="nome@exemplo.com"
+                    />
+                  </Field>
+                  <MensagemErro texto={erros.email} />
+                </div>
               </div>
             </>
           )}
 
-          {erro && <p className="text-sm text-primary">{erro}</p>}
+          <MensagemErro texto={erros.geral} />
           <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="ghost" size="md" onClick={() => setModalAberto(false)}>
               Cancelar
             </Button>
-            <Button type="submit" variant="primary" size="md">
+            <Button type="submit" variant="primary" size="md" isLoading={salvando}>
               {doadorEditando ? 'Salvar alterações' : 'Cadastrar'}
             </Button>
           </div>

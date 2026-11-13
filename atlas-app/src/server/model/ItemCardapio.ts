@@ -1,40 +1,22 @@
-// Model - ItemCardapio (RF_F10)
-import { ErroValidacao } from '../erros';
+// Model - ItemCardapio: um alimento e a quantidade usada num cardápio diário (RF_F10).
+import type { ErrosDeCampo } from '../erros';
 
-export interface ItemCardapioAtributos {
-  id?: number;
-  cardapioId?: number;
-  produtoId: number;
-  quantidadeUtilizada: number;
-}
+const ID_MAXIMO = 2_147_483_647;
 
 export class ItemCardapio {
-  private id?: number;
-  private cardapioId?: number;
-  private produtoId: number;
-  private quantidadeUtilizada: number;
+  private readonly produtoId: number;
+  private readonly quantidadeUtilizada: number;
 
-  constructor(atributos: ItemCardapioAtributos) {
-    this.id = atributos.id;
-    this.cardapioId = atributos.cardapioId;
-    this.produtoId = atributos.produtoId;
-    this.quantidadeUtilizada = atributos.quantidadeUtilizada;
-  }
-
-  getId(): number | undefined {
-    return this.id;
-  }
-
-  setId(id: number): void {
-    this.id = id;
-  }
-
-  setCardapioId(cardapioId: number): void {
-    this.cardapioId = cardapioId;
-  }
-
-  getCardapioId(): number | undefined {
-    return this.cardapioId;
+  constructor(dados: unknown) {
+    const d = typeof dados === 'object' && dados !== null ? (dados as Record<string, unknown>) : {};
+    this.produtoId =
+      typeof d.produtoId === 'number' || (typeof d.produtoId === 'string' && d.produtoId.trim() !== '')
+        ? Number(d.produtoId)
+        : NaN;
+    this.quantidadeUtilizada =
+      typeof d.quantidadeUtilizada === 'number' || (typeof d.quantidadeUtilizada === 'string' && d.quantidadeUtilizada.trim() !== '')
+        ? Number(d.quantidadeUtilizada)
+        : NaN;
   }
 
   getProdutoId(): number {
@@ -45,21 +27,15 @@ export class ItemCardapio {
     return this.quantidadeUtilizada;
   }
 
-  validar(): void {
-    if (!this.produtoId) {
-      throw new ErroValidacao('Selecione um alimento para o cardápio.');
+  // só o formato; se o produto existe e é um Alimento quem garante é o DAO (regra de negócio, não de campo)
+  validar(): ErrosDeCampo {
+    const erros: ErrosDeCampo = {};
+    if (!Number.isInteger(this.produtoId) || this.produtoId <= 0 || this.produtoId > ID_MAXIMO) {
+      erros.produtoId = 'Selecione um alimento cadastrado.';
     }
-    if (!this.quantidadeUtilizada || this.quantidadeUtilizada <= 0) {
-      throw new ErroValidacao('A quantidade utilizada deve ser maior que zero.');
+    if (!Number.isInteger(this.quantidadeUtilizada) || this.quantidadeUtilizada <= 0) {
+      erros.quantidadeUtilizada = 'A quantidade deve ser um número inteiro maior que zero.';
     }
-  }
-
-  paraLinhaDeDados() {
-    return {
-      id: this.id,
-      cardapioId: this.cardapioId,
-      produtoId: this.produtoId,
-      quantidadeUtilizada: this.quantidadeUtilizada,
-    };
+    return erros;
   }
 }
