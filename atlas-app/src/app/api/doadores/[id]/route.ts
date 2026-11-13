@@ -5,8 +5,9 @@
  * DELETE /api/doadores/:id -> exclui o doador
  */
 
-import { DoadorController } from '@/server/DoadorController';
+import { DoadorController, type DadosDoador } from '@/server/DoadorController';
 import { respostaDeErro } from '@/server/http';
+import { lerJson } from '@/server/lerJson';
 
 type Contexto = { params: Promise<{ id: string }> };
 
@@ -23,7 +24,7 @@ export async function GET(_request: Request, { params }: Contexto) {
 export async function PUT(request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
-    const dados = await request.json();
+    const dados = (await lerJson(request)) as DadosDoador;
     const doador = await DoadorController.getInstancia().editar(Number(id), dados);
     return Response.json(doador.paraLinhaDeDados());
   } catch (erro) {

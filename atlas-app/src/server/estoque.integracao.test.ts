@@ -295,9 +295,11 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Estoque - integração (PostgreSQL)', () =
     it('cardápio: baixa os alimentos e grava a saída no histórico', async () => {
       const { CriarCardapioController } = await import('./CriarCardapioController');
       const feijao = await novoProduto(nome('Feijão cardápio'), 10, '2031-01-01');
-      await CriarCardapioController.getInstancia().criarCardapioDiario({ data: amanhaIso(), tipoRefeicao: 'ALMOCO' }, [
-        { produtoId: feijao, quantidadeUtilizada: 4 },
-      ]);
+      await CriarCardapioController.getInstancia().criarCardapioDiario({
+        data: amanhaIso(),
+        tipoRefeicao: 'ALMOCO',
+        itens: [{ produtoId: feijao, quantidadeUtilizada: 4 }],
+      });
       expect(await produto(feijao)).toEqual({ estoque: 6, validade: '2031-01-01' });
       const [m] = await sql<{ tipo: string; quantidade: number; origem: string }>(
         'SELECT tipo, quantidade, origem FROM movimentacao_estoque WHERE produto_id=$1',
@@ -310,16 +312,20 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Estoque - integração (PostgreSQL)', () =
 
     it('cardápio: um alimento sem saldo desfaz tudo (nem cardápio, nem baixa do 1º alimento)', async () => {
       const { CriarCardapioController } = await import('./CriarCardapioController');
-      const { ErroRegraDeNegocio } = await import('./erros');
+      const { ErroValidacao } = await import('./erros');
       const a = await novoProduto(nome('Arroz cardápio'), 10);
       const b = await novoProduto(nome('Carne cardápio'), 1);
       const antes = { cardapios: await contar('cardapio_diario'), movs: await contar('movimentacao_estoque') };
       await expect(
-        CriarCardapioController.getInstancia().criarCardapioDiario({ data: amanhaIso(), tipoRefeicao: 'JANTAR' }, [
-          { produtoId: a, quantidadeUtilizada: 3 },
-          { produtoId: b, quantidadeUtilizada: 5 },
-        ])
-      ).rejects.toThrow(ErroRegraDeNegocio);
+        CriarCardapioController.getInstancia().criarCardapioDiario({
+          data: amanhaIso(),
+          tipoRefeicao: 'JANTAR',
+          itens: [
+            { produtoId: a, quantidadeUtilizada: 3 },
+            { produtoId: b, quantidadeUtilizada: 5 },
+          ],
+        })
+      ).rejects.toThrow(ErroValidacao);
       expect((await produto(a)).estoque).toBe(10);
       expect((await produto(b)).estoque).toBe(1);
       expect(await contar('cardapio_diario')).toBe(antes.cardapios);
@@ -329,9 +335,11 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Estoque - integração (PostgreSQL)', () =
     it('cardápio: usar todo o estoque zera e limpa a validade', async () => {
       const { CriarCardapioController } = await import('./CriarCardapioController');
       const ovo = await novoProduto(nome('Ovo cardápio'), 3, '2031-02-02');
-      await CriarCardapioController.getInstancia().criarCardapioDiario({ data: amanhaIso(), tipoRefeicao: 'CAFE_DA_MANHA' }, [
-        { produtoId: ovo, quantidadeUtilizada: 3 },
-      ]);
+      await CriarCardapioController.getInstancia().criarCardapioDiario({
+        data: amanhaIso(),
+        tipoRefeicao: 'CAFE_DA_MANHA',
+        itens: [{ produtoId: ovo, quantidadeUtilizada: 3 }],
+      });
       expect(await produto(ovo)).toEqual({ estoque: 0, validade: null });
     });
 
@@ -339,10 +347,14 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Estoque - integração (PostgreSQL)', () =
       const { AlocarRecursosController } = await import('./AlocarRecursosController');
       const suco = await novoProduto(nome('Suco evento'), 20);
       const antes = await contar('movimentacao_estoque');
-      await AlocarRecursosController.getInstancia().alocarRecursosParaEvento({ nome: 'Festa', data: amanhaIso() }, [
-        { tipo: 'PRODUTO', produtoId: suco, quantidade: 7 },
-        { tipo: 'FINANCEIRO', valor: 100 },
-      ]);
+      await AlocarRecursosController.getInstancia().alocarRecursosParaEvento({
+        nome: 'Festa',
+        data: amanhaIso(),
+        recursos: [
+          { tipo: 'PRODUTO', produtoId: suco, quantidade: 7 },
+          { tipo: 'FINANCEIRO', valor: 100 },
+        ],
+      });
       expect((await produto(suco)).estoque).toBe(13);
       expect(await contar('movimentacao_estoque')).toBe(antes + 1);
       const [m] = await sql<{ tipo: string; origem: string }>('SELECT tipo, origem FROM movimentacao_estoque WHERE produto_id=$1', [suco]);
@@ -351,7 +363,7 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Estoque - integração (PostgreSQL)', () =
 
     it('evento: produto sem saldo ou inexistente desfaz tudo (nem evento é criado)', async () => {
       const { AlocarRecursosController } = await import('./AlocarRecursosController');
-      const { ErroRegraDeNegocio } = await import('./erros');
+      const { ErroValidacao } = await import('./erros');
       const bolo = await novoProduto(nome('Bolo evento'), 2);
       const antes = { eventos: await contar('evento'), movs: await contar('movimentacao_estoque') };
       for (const recurso of [
@@ -359,8 +371,8 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Estoque - integração (PostgreSQL)', () =
         { tipo: 'PRODUTO' as const, produtoId: 999999, quantidade: 1 },
       ]) {
         await expect(
-          AlocarRecursosController.getInstancia().alocarRecursosParaEvento({ nome: 'Festa', data: amanhaIso() }, [recurso])
-        ).rejects.toThrow(ErroRegraDeNegocio);
+          AlocarRecursosController.getInstancia().alocarRecursosParaEvento({ nome: 'Festa', data: amanhaIso(), recursos: [recurso] })
+        ).rejects.toThrow(ErroValidacao);
       }
       expect((await produto(bolo)).estoque).toBe(2);
       expect(await contar('evento')).toBe(antes.eventos);

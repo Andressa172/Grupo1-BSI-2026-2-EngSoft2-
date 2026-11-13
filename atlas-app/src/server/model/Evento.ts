@@ -1,82 +1,134 @@
-// Model - Evento (RF_F9)
-import { ErroValidacao } from '../erros';
+// Model - Evento (RF_F9 - Alocar Recursos para Eventos)
+// Guarda o evento e os recursos alocados, valida tudo e persiste criando o EventoDAO
+// com a conexão que recebe do Controller (dentro de uma transação).
+import type { ErrosDeCampo } from '../erros';
+import { ErroNaoEncontrado, ErroValidacao } from '../erros';
+import type { ExecutorSQL } from '../dao/tipos';
+import { EventoDAO, type EventoRegistro } from '../dao/EventoDAO';
+import type { FiltroEvento } from './FiltroEvento';
+import { AlocacaoRecurso } from './AlocacaoRecurso';
+import { dataValida, parseData, paraIso, textoSeguro } from './datasBR';
 
 export interface EventoAtributos {
-  id?: number;
   nome: string;
-  data: string; // 'YYYY-MM-DD'
+  data: string; // dd/mm/aaaa
   descricao?: string | null;
-  criadoPor?: number | null;
+  recursos: unknown;
 }
+
+const MAXIMO_RECURSOS = 50;
 
 export class Evento {
   private id?: number;
-  private nome: string;
-  private data: string;
-  private descricao: string | null;
-  private criadoPor: number | null;
+  private readonly nome: string;
+  private readonly data: Date;
+  private readonly descricao: string | null;
+  private readonly recursos: AlocacaoRecurso[];
+  private readonly recursosEmFormatoInvalido: boolean;
 
-  constructor(atributos: EventoAtributos) {
-    this.id = atributos.id;
-    this.nome = atributos.nome?.trim() ?? '';
-    this.data = atributos.data;
-    this.descricao = atributos.descricao?.trim() || null;
-    this.criadoPor = atributos.criadoPor ?? null;
+  constructor(atributos: Partial<EventoAtributos>) {
+    this.nome = textoSeguro(atributos.nome);
+    this.data = parseData(atributos.data);
+    this.descricao = textoSeguro(atributos.descricao) || null;
+    this.recursosEmFormatoInvalido = atributos.recursos !== undefined && !Array.isArray(atributos.recursos);
+    this.recursos = Array.isArray(atributos.recursos)
+      ? atributos.recursos.slice(0, MAXIMO_RECURSOS + 1).map((r) => new AlocacaoRecurso(r))
+      : [];
   }
 
   getId(): number | undefined {
     return this.id;
   }
 
-  setId(id: number): void {
-    this.id = id;
-  }
-
   getNome(): string {
     return this.nome;
   }
 
-  getData(): string {
+  getData(): Date {
     return this.data;
   }
 
-  getDescricao(): string | null {
-    return this.descricao;
+  getRecursos(): readonly AlocacaoRecurso[] {
+    return this.recursos;
   }
 
-  getCriadoPor(): number | null {
-    return this.criadoPor;
+  validar(): ErrosDeCampo {
+    const erros: ErrosDeCampo = {};
+
+    if (this.nome.length === 0) {
+      erros.nome = 'Nome inválido: o nome do evento é obrigatório.';
+    } else if (this.nome.length > 120) {
+      erros.nome = 'Nome inválido: no máximo 120 caracteres.';
+    }
+
+    // data no passado é permitida (cadastro retroativo), a tela só avisa - não bloqueia
+    if (!dataValida(this.data)) {
+      erros.data = 'Data inválida: use o formato dd/mm/aaaa.';
+    }
+
+    if (this.recursosEmFormatoInvalido || this.recursos.length === 0) {
+      erros.recursos = 'Informe ao menos um recurso para o evento.';
+    } else if (this.recursos.length > MAXIMO_RECURSOS) {
+      erros.recursos = `Um evento pode ter no máximo ${MAXIMO_RECURSOS} recursos.`;
+    } else {
+      this.recursos.forEach((recurso, i) => {
+        const errosRecurso = recurso.validar();
+        for (const campo of Object.keys(errosRecurso)) erros[`recurso.${i}.${campo}`] = errosRecurso[campo];
+      });
+    }
+
+    return erros;
   }
 
-  validar(): void {
-    if (!this.nome || this.nome.length === 0) {
-      throw new ErroValidacao('O nome do evento é obrigatório.');
-    }
-    if (this.nome.length > 120) {
-      throw new ErroValidacao('O nome do evento deve ter no máximo 120 caracteres.');
+  // ------------------------------ persistência ------------------------------
+
+  /** Grava o evento e aloca os recursos (RF_F1). Deve rodar dentro de uma transação. */
+  async incluir(conexao: ExecutorSQL): Promise<void> {
+    const dao = new EventoDAO(conexao);
+    this.id = await dao.inserirEvento(this.nome, paraIso(this.data), this.descricao);
+    await this.alocarRecursos(dao, this.id);
+  }
+
+  /**
+   * Substitui o evento e os recursos alocados: estorna o estoque dos recursos antigos,
+   * apaga-os e aloca os novos na mesma transação. Deve rodar dentro de uma transação.
+   */
+  async alterar(conexao: ExecutorSQL, id: number): Promise<void> {
+    const dao = new EventoDAO(conexao);
+    if (!(await dao.existe(id))) {
+      throw new ErroNaoEncontrado('Evento não encontrado.');
     }
 
-    if (!this.data || !/^\d{4}-\d{2}-\d{2}$/.test(this.data)) {
-      throw new ErroValidacao('A data do evento é inválida.');
-    }
-    const dataEvento = new Date(`${this.data}T00:00:00`);
-    if (Number.isNaN(dataEvento.getTime())) {
-      throw new ErroValidacao('A data do evento é inválida.');
-    }
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    if (dataEvento < hoje) {
-      throw new ErroValidacao('A data do evento não pode ser anterior à data atual.');
+    await dao.restaurarEstoqueRecursos(id);
+    await dao.excluirRecursos(id);
+    await dao.atualizarEvento(id, this.nome, paraIso(this.data), this.descricao);
+    this.id = id;
+    await this.alocarRecursos(dao, id);
+  }
+
+  /** Estorna o estoque alocado e exclui o evento (cascata remove os recursos). */
+  static async excluir(conexao: ExecutorSQL, id: number): Promise<void> {
+    const dao = new EventoDAO(conexao);
+    await dao.restaurarEstoqueRecursos(id);
+    if (!(await dao.excluirEvento(id))) {
+      throw new ErroNaoEncontrado('Evento não encontrado.');
     }
   }
 
-  paraLinhaDeDados() {
-    return {
-      id: this.id,
-      nome: this.nome,
-      data: this.data,
-      descricao: this.descricao,
-      criadoPor: this.criadoPor,
-    };
+  private async alocarRecursos(dao: EventoDAO, eventoId: number): Promise<void> {
+    const origem = `Alocação para evento "${this.nome}"`;
+    for (let i = 0; i < this.recursos.length; i++) {
+      const recurso = this.recursos[i];
+      const alocado = await dao.registrarRecurso(eventoId, recurso, origem);
+      if (!alocado) {
+        throw new ErroValidacao('Estoque insuficiente.', {
+          [`recurso.${i}.quantidade`]: 'Estoque insuficiente para a quantidade informada.',
+        });
+      }
+    }
+  }
+
+  static async consultar(conexao: ExecutorSQL, filtro: FiltroEvento): Promise<EventoRegistro[]> {
+    return new EventoDAO(conexao).consultar(filtro);
   }
 }

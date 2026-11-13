@@ -1,97 +1,77 @@
-  // Model - AlocacaoRecurso (RF_F9): recurso do tipo produto ou financeiro
-  import { ErroValidacao } from '../erros';
+// Model - AlocacaoRecurso: um recurso (produto ou financeiro) alocado para um evento (RF_F9).
+import type { ErrosDeCampo } from '../erros';
+import { textoSeguro } from './datasBR';
 
-  export type TipoRecurso = 'PRODUTO' | 'FINANCEIRO';
+export type TipoRecurso = 'PRODUTO' | 'FINANCEIRO';
+const ID_MAXIMO = 2_147_483_647;
 
-  export interface AlocacaoRecursoAtributos {
-    id?: number;
-    eventoId?: number;
-    tipo: TipoRecurso;
-    produtoId?: number | null;
-    quantidade?: number | null;
-    valor?: number | null;
+export class AlocacaoRecurso {
+  private readonly tipo: TipoRecurso | '';
+  private readonly produtoId: number;
+  private readonly quantidade: number;
+  private readonly valor: number;
+
+  constructor(dados: unknown) {
+    const d = typeof dados === 'object' && dados !== null ? (dados as Record<string, unknown>) : {};
+    const tipo = textoSeguro(d.tipo);
+    this.tipo = tipo === 'PRODUTO' || tipo === 'FINANCEIRO' ? tipo : '';
+    this.produtoId =
+      typeof d.produtoId === 'number' || (typeof d.produtoId === 'string' && d.produtoId.trim() !== '')
+        ? Number(d.produtoId)
+        : NaN;
+    this.quantidade =
+      typeof d.quantidade === 'number' || (typeof d.quantidade === 'string' && d.quantidade.trim() !== '')
+        ? Number(d.quantidade)
+        : NaN;
+    this.valor = typeof d.valor === 'number' || (typeof d.valor === 'string' && d.valor.trim() !== '') ? Number(d.valor) : NaN;
   }
 
-  export class AlocacaoRecurso {
-    private id?: number;
-    private eventoId?: number;
-    private tipo: TipoRecurso;
-    private produtoId: number | null;
-    private quantidade: number | null;
-    private valor: number | null;
+  getTipo(): TipoRecurso | '' {
+    return this.tipo;
+  }
 
-    constructor(atributos: AlocacaoRecursoAtributos) {
-      this.id = atributos.id;
-      this.eventoId = atributos.eventoId;
-      this.tipo = atributos.tipo;
-      this.produtoId = atributos.produtoId ?? null;
-      this.quantidade = atributos.quantidade ?? null;
-      this.valor = atributos.valor ?? null;
+  getProdutoId(): number {
+    return this.produtoId;
+  }
+
+  getQuantidade(): number {
+    return this.quantidade;
+  }
+
+  getValor(): number {
+    return this.valor;
+  }
+
+  validar(): ErrosDeCampo {
+    const erros: ErrosDeCampo = {};
+
+    if (this.tipo === '') {
+      erros.tipo = 'Selecione o tipo do recurso.';
+      return erros;
     }
 
-    getId(): number | undefined {
-      return this.id;
-    }
-
-    setId(id: number): void {
-      this.id = id;
-    }
-
-    setEventoId(eventoId: number): void {
-      this.eventoId = eventoId;
-    }
-
-    getEventoId(): number | undefined {
-      return this.eventoId;
-    }
-
-    getTipo(): TipoRecurso {
-      return this.tipo;
-    }
-
-    getProdutoId(): number | null {
-      return this.produtoId;
-    }
-
-    getQuantidade(): number | null {
-      return this.quantidade;
-    }
-
-    getValor(): number | null {
-      return this.valor;
-    }
-
-    validar(): void {
-      if (this.tipo === 'PRODUTO') {
-        if (!this.produtoId) {
-          throw new ErroValidacao('Selecione um produto para o recurso.');
-        }
-        if (!this.quantidade || this.quantidade <= 0) {
-          throw new ErroValidacao('A quantidade do recurso deve ser maior que zero.');
-        }
-        if (this.valor !== null) {
-          throw new ErroValidacao('Um recurso do tipo produto não deve ter valor financeiro.');
-        }
-      } else if (this.tipo === 'FINANCEIRO') {
-        if (!this.valor || this.valor <= 0) {
-          throw new ErroValidacao('O valor do recurso financeiro deve ser maior que zero.');
-        }
-        if (this.produtoId !== null || this.quantidade !== null) {
-          throw new ErroValidacao('Um recurso financeiro não deve ter produto nem quantidade.');
-        }
-      } else {
-        throw new ErroValidacao('Tipo de recurso inválido.');
+    if (this.tipo === 'PRODUTO') {
+      if (!Number.isInteger(this.produtoId) || this.produtoId <= 0 || this.produtoId > ID_MAXIMO) {
+        erros.produtoId = 'Selecione um produto cadastrado.';
+      }
+      if (!Number.isInteger(this.quantidade) || this.quantidade <= 0) {
+        erros.quantidade = 'A quantidade deve ser um número inteiro maior que zero.';
+      }
+    } else {
+      if (!Number.isFinite(this.valor) || this.valor <= 0) {
+        erros.valor = 'O valor deve ser maior que zero.';
       }
     }
 
-    paraLinhaDeDados() {
-      return {
-        id: this.id,
-        eventoId: this.eventoId,
-        tipo: this.tipo,
-        produtoId: this.produtoId,
-        quantidade: this.quantidade,
-        valor: this.valor,
-      };
-    }
+    return erros;
   }
+
+  paraLinhaDeDados() {
+    return {
+      tipo: this.tipo,
+      produtoId: this.tipo === 'PRODUTO' ? this.produtoId : null,
+      quantidade: this.tipo === 'PRODUTO' ? this.quantidade : null,
+      valor: this.tipo === 'FINANCEIRO' ? this.valor : null,
+    };
+  }
+}

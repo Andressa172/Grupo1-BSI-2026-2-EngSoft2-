@@ -1,136 +1,73 @@
-// Control - AlocarRecursosController (RF_F9)
+// Control - AlocarRecursosController (RF_F9 - Alocar recursos para eventos)
+//
+// - Singleton: uma única instância, guardada na propriedade estática `instancia`.
+// - Façade: a View (via rota /api/eventos) só conhece estes métodos.
+// - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model Evento,
+//   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
+//   Quem cria o EventoDAO é o Model.
 import { Database } from './db/Database';
-import { Evento } from './model/Evento';
-import { AlocacaoRecurso, type TipoRecurso } from './model/AlocacaoRecurso';
-import { EventoDAO } from './dao/EventoDAO';
-import { AlocacaoRecursoDAO } from './dao/AlocacaoRecursoDAO';
-import { MovimentacaoEstoque } from './model/MovimentacaoEstoque';
-import { ErroNaoEncontrado, ErroRegraDeNegocio, ErroValidacao } from './erros';
-import type { ExecutorSQL } from './dao/tipos';
+import { Evento, type EventoAtributos } from './model/Evento';
+import { FiltroEvento, type FiltroEventoAtributos } from './model/FiltroEvento';
+import type { EventoRegistro } from './dao/EventoDAO';
+import { ErroValidacao, type ErrosDeCampo } from './erros';
 
-export interface DadosNovoEvento {
-  nome: string;
-  data: string;
-  descricao?: string | null;
-  criadoPor?: number | null;
+const MENSAGEM_CAMPOS_INVALIDOS = 'Corrija os campos destacados.';
+
+function lancarSeTiverErros(erros: ErrosDeCampo): void {
+  if (Object.keys(erros).length > 0) {
+    throw new ErroValidacao(MENSAGEM_CAMPOS_INVALIDOS, erros);
+  }
 }
 
-export interface DadosRecursoAlocado {
-  tipo: TipoRecurso;
-  produtoId?: number | null;
-  quantidade?: number | null;
-  valor?: number | null;
+function comoObjeto(dados: unknown): Partial<EventoAtributos> {
+  if (typeof dados !== 'object' || dados === null || Array.isArray(dados)) {
+    throw new ErroValidacao('Dados inválidos.');
+  }
+  return dados as Partial<EventoAtributos>;
 }
-
-export interface ResultadoAlocacao {
-  evento: ReturnType<Evento['paraLinhaDeDados']>;
-  recursos: ReturnType<AlocacaoRecurso['paraLinhaDeDados']>[];
-}
-
-// interfaces enxutas pra poder trocar os DAOs por dublês nos testes
-export interface IEventoDAOParaAlocacao {
-  inserir(evento: Evento): Promise<Evento>;
-}
-export interface IAlocacaoRecursoDAOParaAlocacao {
-  inserir(alocacao: AlocacaoRecurso): Promise<AlocacaoRecurso>;
-}
-// baixa no estoque (RF_F1): devolve false se não há saldo suficiente
-export interface IEstoqueParaAlocacao {
-  registrarSaida(produtoId: number, quantidade: number, origem: string): Promise<boolean>;
-}
-
-const globalParaSingleton = globalThis as unknown as { alocarRecursosController?: AlocarRecursosController };
 
 export class AlocarRecursosController {
-  constructor(
-    private readonly database: Pick<Database, 'comTransacao'> = Database.getInstancia(),
-    private readonly criarEventoDAO: (executor: ExecutorSQL) => IEventoDAOParaAlocacao = (executor) => new EventoDAO(executor),
-    private readonly criarAlocacaoDAO: (executor: ExecutorSQL) => IAlocacaoRecursoDAOParaAlocacao = (executor) =>
-      new AlocacaoRecursoDAO(executor),
-    private readonly criarEstoque: (executor: ExecutorSQL) => IEstoqueParaAlocacao = (executor) => ({
-      registrarSaida: (produtoId, quantidade, origem) =>
-        MovimentacaoEstoque.registrarSaida(executor, produtoId, quantidade, origem),
-    })
-  ) {}
+  private static instancia: AlocarRecursosController | undefined;
+
+  // conexão com o banco, aberta e mantida pelo Controller
+  private readonly conexao: Database;
+
+  private constructor() {
+    this.conexao = Database.getInstancia();
+  }
 
   static getInstancia(): AlocarRecursosController {
-    if (!globalParaSingleton.alocarRecursosController) {
-      globalParaSingleton.alocarRecursosController = new AlocarRecursosController();
+    if (!AlocarRecursosController.instancia) {
+      AlocarRecursosController.instancia = new AlocarRecursosController();
     }
-    return globalParaSingleton.alocarRecursosController;
+    return AlocarRecursosController.instancia;
   }
 
-  async alocarRecursosParaEvento(
-    dadosEvento: DadosNovoEvento,
-    recursos: DadosRecursoAlocado[]
-  ): Promise<ResultadoAlocacao> {
-    if (!recursos || recursos.length === 0) {
-      throw new ErroValidacao('É necessário incluir ao menos um recurso para o evento.');
-    }
-
-    const evento = new Evento(dadosEvento);
-    evento.validar();
-
-    const modelosRecurso = recursos.map((dadosRecurso) => {
-      const recurso = new AlocacaoRecurso(dadosRecurso);
-      recurso.validar();
-      return recurso;
-    });
-
-    return this.database.comTransacao(async (client) => {
-      const eventoDAO = this.criarEventoDAO(client as unknown as ExecutorSQL);
-      const alocacaoDAO = this.criarAlocacaoDAO(client as unknown as ExecutorSQL);
-      const estoque = this.criarEstoque(client as unknown as ExecutorSQL);
-
-      const eventoSalvo = await eventoDAO.inserir(evento);
-
-      const recursosSalvos: AlocacaoRecurso[] = [];
-      for (const recurso of modelosRecurso) {
-        if (recurso.getTipo() === 'PRODUTO') {
-          const produtoId = recurso.getProdutoId()!;
-          const quantidade = recurso.getQuantidade()!;
-
-          const atualizado = await estoque.registrarSaida(produtoId, quantidade, `Alocação para evento "${evento.getNome()}"`);
-          if (!atualizado) {
-            throw new ErroRegraDeNegocio(
-              `Estoque insuficiente para o produto ${produtoId}: não é possível alocar ${quantidade} unidade(s).`
-            );
-          }
-        }
-
-        recurso.setEventoId(eventoSalvo.getId()!);
-        recursosSalvos.push(await alocacaoDAO.inserir(recurso));
-      }
-
-      return {
-        evento: eventoSalvo.paraLinhaDeDados(),
-        recursos: recursosSalvos.map((r) => r.paraLinhaDeDados()),
-      };
-    });
+  /** Consulta com 2 filtros: nome do evento e período da data. */
+  async consultar(dadosFiltro: FiltroEventoAtributos = {}): Promise<EventoRegistro[]> {
+    const filtro = new FiltroEvento(dadosFiltro);
+    lancarSeTiverErros(filtro.validar());
+    return Evento.consultar(this.conexao, filtro);
   }
 
-  async listarEventosComRecursos(): Promise<ResultadoAlocacao[]> {
-    const eventoDAO = new EventoDAO();
-    const alocacaoDAO = new AlocacaoRecursoDAO();
-    const eventos = await eventoDAO.listarTodos();
-
-    const resultado: ResultadoAlocacao[] = [];
-    for (const evento of eventos) {
-      const recursos = await alocacaoDAO.listarPorEvento(evento.getId()!);
-      resultado.push({
-        evento: evento.paraLinhaDeDados(),
-        recursos: recursos.map((r) => r.paraLinhaDeDados()),
-      });
-    }
-    return resultado;
-  }
-
-  async buscarEventoOuFalhar(eventoId: number) {
-    const eventoDAO = new EventoDAO();
-    const evento = await eventoDAO.buscarPorId(eventoId);
-    if (!evento) {
-      throw new ErroNaoEncontrado('Evento não encontrado.');
-    }
+  /** Valida tudo e só então cria o evento e aloca os recursos (desconta estoque quando é produto). */
+  async alocarRecursosParaEvento(dados: unknown): Promise<Evento> {
+    const evento = new Evento(comoObjeto(dados));
+    lancarSeTiverErros(evento.validar());
+    await this.conexao.comTransacao((cliente) => evento.incluir(cliente));
     return evento;
+  }
+
+  /** Estorna o estoque dos recursos antigos e aloca os novos na mesma transação. */
+  async alterar(id: number, dados: unknown): Promise<Evento> {
+    const evento = new Evento(comoObjeto(dados));
+    lancarSeTiverErros(evento.validar());
+    await this.conexao.comTransacao((cliente) => evento.alterar(cliente, id));
+    return evento;
+  }
+
+  /** Estorna o estoque alocado e exclui o evento. */
+  async excluir(id: number): Promise<void> {
+    await this.conexao.comTransacao((cliente) => Evento.excluir(cliente, id));
   }
 }

@@ -13,13 +13,14 @@ import { ErroRegraDeNegocio } from '../erros';
 export interface ProdutoLinha {
   id: number;
   nome: string;
+  categoria: string;
   unidade_medida: string;
   quantidade_estoque: number;
   estoque_minimo: number;
+  data_validade: string | null; // aaaa-mm-dd
 }
 
-interface ProdutoLinhaCompleta extends ProdutoLinha {
-  categoria: string;
+interface ProdutoLinhaCompleta extends Omit<ProdutoLinha, 'data_validade'> {
   data_validade: string | Date | null;
   numero_lote: string | null;
 }
@@ -40,11 +41,22 @@ function linhaParaProduto(linha: ProdutoLinhaCompleta): Produto {
 }
 
 export class ProdutoDAO {
+  private static instancia: ProdutoDAO | undefined;
+
   constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
+
+  static getInstancia(): ProdutoDAO {
+    if (!ProdutoDAO.instancia) {
+      ProdutoDAO.instancia = new ProdutoDAO();
+    }
+    return ProdutoDAO.instancia;
+  }
 
   async listarTodos(): Promise<ProdutoLinha[]> {
     const resultado = await this.executor.query<ProdutoLinha>(
-      'SELECT id, nome, unidade_medida, quantidade_estoque, estoque_minimo FROM produto ORDER BY nome'
+      `SELECT id, nome, categoria, unidade_medida, quantidade_estoque, estoque_minimo,
+              to_char(data_validade, 'YYYY-MM-DD') AS data_validade
+         FROM produto ORDER BY nome`
     );
     return resultado.rows;
   }

@@ -1,53 +1,164 @@
-// DAO - Evento (RF_F9)
+// DAO - Evento (RF_F9). Só executa SQL, sempre com parâmetros.
 import type { ExecutorSQL } from './tipos';
 import { Database } from '../db/Database';
-import { Evento } from '../model/Evento';
-import { paraDataSimples } from './datas';
+import type { AlocacaoRecurso } from '../model/AlocacaoRecurso';
+import type { FiltroEvento } from '../model/FiltroEvento';
+import { MovimentacaoEstoque } from '../model/MovimentacaoEstoque';
 
-interface EventoLinha {
+export interface EventoRegistro {
   id: number;
   nome: string;
-  data: string | Date;
+  data: string; // aaaa-mm-dd
   descricao: string | null;
-  criado_por: number | null;
+  recursos: {
+    id: number;
+    tipo: 'PRODUTO' | 'FINANCEIRO';
+    produtoId: number | null;
+    produto: string | null;
+    quantidade: number | null;
+    valor: number | null;
+  }[];
 }
 
-function linhaParaEvento(linha: EventoLinha): Evento {
-  return new Evento({
-    id: linha.id,
-    nome: linha.nome,
-    data: paraDataSimples(linha.data),
-    descricao: linha.descricao,
-    criadoPor: linha.criado_por,
-  });
+interface LinhaConsulta {
+  id: number;
+  nome: string;
+  data: string;
+  descricao: string | null;
+  recurso_id: number | null;
+  tipo: 'PRODUTO' | 'FINANCEIRO' | null;
+  produto_id: number | null;
+  produto: string | null;
+  quantidade: number | null;
+  valor: string | null; // numeric vem como string no node-postgres
 }
 
 export class EventoDAO {
+  private static instancia: EventoDAO | undefined;
+
   constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
 
-  async listarTodos(): Promise<Evento[]> {
-    const resultado = await this.executor.query<EventoLinha>(
-      'SELECT id, nome, data, descricao, criado_por FROM evento ORDER BY data DESC, id DESC'
-    );
-    return resultado.rows.map(linhaParaEvento);
+  static getInstancia(): EventoDAO {
+    if (!EventoDAO.instancia) {
+      EventoDAO.instancia = new EventoDAO();
+    }
+    return EventoDAO.instancia;
   }
 
-  async buscarPorId(id: number): Promise<Evento | null> {
-    const resultado = await this.executor.query<EventoLinha>(
-      'SELECT id, nome, data, descricao, criado_por FROM evento WHERE id = $1',
-      [id]
+  async inserirEvento(nome: string, dataIso: string, descricao: string | null): Promise<number> {
+    const resultado = await this.executor.query<{ id: number }>(
+      'INSERT INTO evento (nome, data, descricao) VALUES ($1, $2, $3) RETURNING id',
+      [nome, dataIso, descricao]
     );
-    return resultado.rows[0] ? linhaParaEvento(resultado.rows[0]) : null;
+    return resultado.rows[0].id;
   }
 
-  async inserir(evento: Evento): Promise<Evento> {
-    const dados = evento.paraLinhaDeDados();
-    const resultado = await this.executor.query<EventoLinha>(
-      `INSERT INTO evento (nome, data, descricao, criado_por)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, nome, data, descricao, criado_por`,
-      [dados.nome, dados.data, dados.descricao, dados.criadoPor]
+  /**
+   * Aloca o recurso: se for produto, desconta do estoque através do RF_F1 (MovimentacaoEstoque) -
+   * devolve false se não houver estoque suficiente ou o produto não existir (nada é gravado).
+   */
+  async registrarRecurso(eventoId: number, recurso: AlocacaoRecurso, origem: string): Promise<boolean> {
+    const dados = recurso.paraLinhaDeDados();
+
+    if (dados.tipo === 'PRODUTO') {
+      const baixado = await MovimentacaoEstoque.registrarSaida(this.executor, dados.produtoId!, dados.quantidade!, origem);
+      if (!baixado) return false;
+    }
+
+    await this.executor.query(
+      'INSERT INTO alocacao_recurso (evento_id, tipo, produto_id, quantidade, valor) VALUES ($1, $2, $3, $4, $5)',
+      [eventoId, dados.tipo, dados.produtoId, dados.quantidade, dados.valor]
     );
-    return linhaParaEvento(resultado.rows[0]);
+    return true;
+  }
+
+  async existe(id: number): Promise<boolean> {
+    const resultado = await this.executor.query('SELECT id FROM evento WHERE id = $1', [id]);
+    return resultado.rows.length > 0;
+  }
+
+  async atualizarEvento(id: number, nome: string, dataIso: string, descricao: string | null): Promise<void> {
+    await this.executor.query('UPDATE evento SET nome = $1, data = $2, descricao = $3 WHERE id = $4', [
+      nome,
+      dataIso,
+      descricao,
+      id,
+    ]);
+  }
+
+  /**
+   * Devolve ao estoque os produtos alocados no evento (estorno), antes de apagar os recursos
+   * antigos - usado tanto na alteração (recria os recursos) quanto na exclusão do evento.
+   */
+  async restaurarEstoqueRecursos(eventoId: number): Promise<void> {
+    const recursos = await this.executor.query<{ produto_id: number; quantidade: number }>(
+      "SELECT produto_id, quantidade FROM alocacao_recurso WHERE evento_id = $1 AND tipo = 'PRODUTO'",
+      [eventoId]
+    );
+    for (const r of recursos.rows) {
+      await MovimentacaoEstoque.registrarEntrada(this.executor, r.produto_id, r.quantidade, `Estorno: evento #${eventoId}`);
+    }
+  }
+
+  async excluirRecursos(eventoId: number): Promise<void> {
+    await this.executor.query('DELETE FROM alocacao_recurso WHERE evento_id = $1', [eventoId]);
+  }
+
+  async excluirEvento(id: number): Promise<boolean> {
+    const resultado = await this.executor.query('DELETE FROM evento WHERE id = $1', [id]);
+    return (resultado.rowCount ?? 0) > 0;
+  }
+
+  // filtros (nome e período) se combinam com AND; filtro vazio traz todos os eventos
+  async consultar(filtro: FiltroEvento): Promise<EventoRegistro[]> {
+    const condicoes: string[] = [];
+    const parametros: unknown[] = [];
+
+    if (filtro.getNome() !== '') {
+      parametros.push(`%${filtro.getNome().toLowerCase()}%`);
+      condicoes.push(`lower(e.nome) LIKE $${parametros.length}`);
+    }
+    const de = filtro.getDataInicial();
+    if (de !== null) {
+      parametros.push(de);
+      condicoes.push(`e.data >= $${parametros.length}`);
+    }
+    const ate = filtro.getDataFinal();
+    if (ate !== null) {
+      parametros.push(ate);
+      condicoes.push(`e.data <= $${parametros.length}`);
+    }
+    const where = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
+
+    const resultado = await this.executor.query<LinhaConsulta>(
+      `SELECT e.id, e.nome, to_char(e.data, 'YYYY-MM-DD') AS data, e.descricao,
+              a.id AS recurso_id, a.tipo, a.produto_id, p.nome AS produto, a.quantidade, a.valor
+         FROM evento e
+         LEFT JOIN alocacao_recurso a ON a.evento_id = e.id
+         LEFT JOIN produto p ON p.id = a.produto_id
+         ${where}
+        ORDER BY e.data DESC, e.id DESC, a.id`,
+      parametros
+    );
+
+    const porId = new Map<number, EventoRegistro>();
+    for (const l of resultado.rows) {
+      let evento = porId.get(l.id);
+      if (!evento) {
+        evento = { id: l.id, nome: l.nome, data: l.data, descricao: l.descricao, recursos: [] };
+        porId.set(l.id, evento);
+      }
+      if (l.recurso_id !== null && l.tipo !== null) {
+        evento.recursos.push({
+          id: l.recurso_id,
+          tipo: l.tipo,
+          produtoId: l.produto_id,
+          produto: l.produto,
+          quantidade: l.quantidade,
+          valor: l.valor !== null ? Number(l.valor) : null,
+        });
+      }
+    }
+    return [...porId.values()];
   }
 }

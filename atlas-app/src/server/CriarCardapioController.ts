@@ -1,129 +1,73 @@
-// Control - CriarCardapioController (RF_F10)
+// Control - CriarCardapioController (RF_F10 - Criar Cardápio Diário)
+//
+// - Singleton: uma única instância, guardada na propriedade estática `instancia`.
+// - Façade: a View (via rota /api/cardapios) só conhece estes métodos.
+// - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model CardapioDiario,
+//   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
+//   Quem cria o CardapioDiarioDAO é o Model.
 import { Database } from './db/Database';
-import { CardapioDiario, type TipoRefeicao } from './model/CardapioDiario';
-import { ItemCardapio } from './model/ItemCardapio';
-import { CardapioDiarioDAO } from './dao/CardapioDiarioDAO';
-import { ItemCardapioDAO } from './dao/ItemCardapioDAO';
-import { MovimentacaoEstoque } from './model/MovimentacaoEstoque';
-import { ErroRegraDeNegocio, ErroValidacao } from './erros';
-import type { ExecutorSQL } from './dao/tipos';
+import { CardapioDiario, type CardapioDiarioAtributos } from './model/CardapioDiario';
+import { FiltroCardapio, type FiltroCardapioAtributos } from './model/FiltroCardapio';
+import type { CardapioRegistro } from './dao/CardapioDiarioDAO';
+import { ErroValidacao, type ErrosDeCampo } from './erros';
 
-export interface DadosNovoCardapio {
-  data: string;
-  tipoRefeicao: TipoRefeicao;
-  criadoPor?: number | null;
-}
+const MENSAGEM_CAMPOS_INVALIDOS = 'Corrija os campos destacados.';
 
-export interface DadosItemCardapio {
-  produtoId: number;
-  quantidadeUtilizada: number;
+function lancarSeTiverErros(erros: ErrosDeCampo): void {
+  if (Object.keys(erros).length > 0) {
+    throw new ErroValidacao(MENSAGEM_CAMPOS_INVALIDOS, erros);
+  }
 }
 
-export interface ResultadoCardapio {
-  cardapio: ReturnType<CardapioDiario['paraLinhaDeDados']>;
-  itens: ReturnType<ItemCardapio['paraLinhaDeDados']>[];
+function comoObjeto(dados: unknown): Partial<CardapioDiarioAtributos> {
+  if (typeof dados !== 'object' || dados === null || Array.isArray(dados)) {
+    throw new ErroValidacao('Dados inválidos.');
+  }
+  return dados as Partial<CardapioDiarioAtributos>;
 }
-
-export interface ICardapioDAOParaCriacao {
-  inserir(cardapio: CardapioDiario): Promise<CardapioDiario>;
-}
-
-export interface IConsultaDuplicidadeCardapio {
-  existeParaDataETipo(data: string, tipoRefeicao: TipoRefeicao): Promise<boolean>;
-}
-export interface IItemCardapioDAOParaCriacao {
-  inserir(item: ItemCardapio): Promise<ItemCardapio>;
-}
-// baixa no estoque (RF_F1): devolve false se não há saldo suficiente
-export interface IEstoqueParaCardapio {
-  registrarSaida(produtoId: number, quantidade: number, origem: string): Promise<boolean>;
-}
-
-const globalParaSingleton = globalThis as unknown as { criarCardapioController?: CriarCardapioController };
 
 export class CriarCardapioController {
-  constructor(
-    private readonly database: Pick<Database, 'comTransacao'> = Database.getInstancia(),
-    private readonly criarCardapioDAO: (executor: ExecutorSQL) => ICardapioDAOParaCriacao = (executor) =>
-      new CardapioDiarioDAO(executor),
-    private readonly criarItemCardapioDAO: (executor: ExecutorSQL) => IItemCardapioDAOParaCriacao = (executor) =>
-      new ItemCardapioDAO(executor),
-    private readonly criarEstoque: (executor: ExecutorSQL) => IEstoqueParaCardapio = (executor) => ({
-      registrarSaida: (produtoId, quantidade, origem) =>
-        MovimentacaoEstoque.registrarSaida(executor, produtoId, quantidade, origem),
-    }),
-    private readonly cardapioDAOSomenteLeitura: IConsultaDuplicidadeCardapio = new CardapioDiarioDAO()
-  ) {}
+  private static instancia: CriarCardapioController | undefined;
+
+  // conexão com o banco, aberta e mantida pelo Controller
+  private readonly conexao: Database;
+
+  private constructor() {
+    this.conexao = Database.getInstancia();
+  }
 
   static getInstancia(): CriarCardapioController {
-    if (!globalParaSingleton.criarCardapioController) {
-      globalParaSingleton.criarCardapioController = new CriarCardapioController();
+    if (!CriarCardapioController.instancia) {
+      CriarCardapioController.instancia = new CriarCardapioController();
     }
-    return globalParaSingleton.criarCardapioController;
+    return CriarCardapioController.instancia;
   }
 
-  async criarCardapioDiario(dadosCardapio: DadosNovoCardapio, itens: DadosItemCardapio[]): Promise<ResultadoCardapio> {
-    if (!itens || itens.length === 0) {
-      throw new ErroValidacao('É necessário incluir ao menos um alimento no cardápio.');
-    }
-
-    const cardapio = new CardapioDiario(dadosCardapio);
-    cardapio.validar();
-
-    if (await this.cardapioDAOSomenteLeitura.existeParaDataETipo(cardapio.getData(), cardapio.getTipoRefeicao())) {
-      throw new ErroValidacao('Já existe um cardápio cadastrado para esta data e tipo de refeição.');
-    }
-
-    const modelosItem = itens.map((dadosItem) => {
-      const item = new ItemCardapio(dadosItem);
-      item.validar();
-      return item;
-    });
-
-    return this.database.comTransacao(async (client) => {
-      const cardapioDAO = this.criarCardapioDAO(client as unknown as ExecutorSQL);
-      const itemCardapioDAO = this.criarItemCardapioDAO(client as unknown as ExecutorSQL);
-      const estoque = this.criarEstoque(client as unknown as ExecutorSQL);
-
-      const cardapioSalvo = await cardapioDAO.inserir(cardapio);
-
-      const itensSalvos: ItemCardapio[] = [];
-      for (const item of modelosItem) {
-        const atualizado = await estoque.registrarSaida(
-          item.getProdutoId(),
-          item.getQuantidadeUtilizada(),
-          `Cardápio diário de ${cardapio.getData()} (${cardapio.getTipoRefeicao()})`
-        );
-        if (!atualizado) {
-          throw new ErroRegraDeNegocio(
-            `Estoque insuficiente para o alimento ${item.getProdutoId()}: não é possível usar ${item.getQuantidadeUtilizada()} unidade(s).`
-          );
-        }
-
-        item.setCardapioId(cardapioSalvo.getId()!);
-        itensSalvos.push(await itemCardapioDAO.inserir(item));
-      }
-
-      return {
-        cardapio: cardapioSalvo.paraLinhaDeDados(),
-        itens: itensSalvos.map((i) => i.paraLinhaDeDados()),
-      };
-    });
+  /** Consulta com 2 filtros: período da data e tipo de refeição. */
+  async consultar(dadosFiltro: FiltroCardapioAtributos = {}): Promise<CardapioRegistro[]> {
+    const filtro = new FiltroCardapio(dadosFiltro);
+    lancarSeTiverErros(filtro.validar());
+    return CardapioDiario.consultar(this.conexao, filtro);
   }
 
-  async listarCardapiosComItens(): Promise<ResultadoCardapio[]> {
-    const cardapioDAO = new CardapioDiarioDAO();
-    const itemCardapioDAO = new ItemCardapioDAO();
-    const cardapios = await cardapioDAO.listarTodos();
+  /** Valida tudo e só então cria o cardápio e dá saída no estoque dos alimentos usados. */
+  async criarCardapioDiario(dados: unknown): Promise<CardapioDiario> {
+    const cardapio = new CardapioDiario(comoObjeto(dados));
+    lancarSeTiverErros(cardapio.validar());
+    await this.conexao.comTransacao((cliente) => cardapio.incluir(cliente));
+    return cardapio;
+  }
 
-    const resultado: ResultadoCardapio[] = [];
-    for (const cardapio of cardapios) {
-      const itens = await itemCardapioDAO.listarPorCardapio(cardapio.getId()!);
-      resultado.push({
-        cardapio: cardapio.paraLinhaDeDados(),
-        itens: itens.map((i) => i.paraLinhaDeDados()),
-      });
-    }
-    return resultado;
+  /** Estorna o estoque dos itens antigos e registra os novos na mesma transação. */
+  async alterar(id: number, dados: unknown): Promise<CardapioDiario> {
+    const cardapio = new CardapioDiario(comoObjeto(dados));
+    lancarSeTiverErros(cardapio.validar());
+    await this.conexao.comTransacao((cliente) => cardapio.alterar(cliente, id));
+    return cardapio;
+  }
+
+  /** Estorna o estoque dos alimentos usados e exclui o cardápio. */
+  async excluir(id: number): Promise<void> {
+    await this.conexao.comTransacao((cliente) => CardapioDiario.excluir(cliente, id));
   }
 }

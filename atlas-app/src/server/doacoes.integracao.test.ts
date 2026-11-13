@@ -40,7 +40,7 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Doações - integração (PostgreSQL)', ()
     };
     arroz = (await sql<{ id: number }>("INSERT INTO produto (nome,categoria,unidade_medida,quantidade_estoque) VALUES ('Arroz','Alimento','kg',10) RETURNING id"))[0].id;
     feijao = (await sql<{ id: number }>("INSERT INTO produto (nome,categoria,unidade_medida) VALUES ('Feijão','Alimento','kg') RETURNING id"))[0].id;
-    doador = (await sql<{ id: number }>("INSERT INTO doador (nome,contato) VALUES ('Carlos Doador','18 99999-0000') RETURNING id"))[0].id;
+    doador = (await sql<{ id: number }>("INSERT INTO doador (nome,telefone) VALUES ('Carlos Doador','18 99999-0000') RETURNING id"))[0].id;
     anonimo = (await sql<{ id: number }>("INSERT INTO doador (nome,anonimo) VALUES ('Anônimo',true) RETURNING id"))[0].id;
   });
   afterAll(async () => {

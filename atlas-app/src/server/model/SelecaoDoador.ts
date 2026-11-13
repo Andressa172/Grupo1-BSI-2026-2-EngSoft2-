@@ -68,12 +68,8 @@ export class SelecaoDoador {
     }
 
     if (this.tipo === 'novo') {
-      if (await dao.existeComNome(this.nome)) {
-        throw new ErroValidacao('Já existe um doador com esse nome.', {
-          'doador.nome': 'Já existe um doador cadastrado com esse nome: selecione-o na lista.',
-        });
-      }
-      const criado = await dao.inserir(new Doador({ nome: this.nome, contato: this.contato }));
+      // nome duplicado é permitido (duas pessoas podem ter o mesmo nome): quem identifica o doador é o CPF/CNPJ
+      const criado = await dao.inserir(new Doador({ nome: this.nome, telefone: this.contato }));
       return criado.getId() as number;
     }
 
