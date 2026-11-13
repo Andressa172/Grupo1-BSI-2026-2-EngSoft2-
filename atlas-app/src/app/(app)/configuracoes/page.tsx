@@ -1,11 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Save, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, Field, Input } from '@/components/app/ui';
+import { Card, Field, Input, Select } from '@/components/app/ui';
 import { validarCNPJ } from '@/lib/cnpj';
 import { mascaraCEP, mascaraCNPJ, mascaraTelefone, mascaraUF } from '@/view/mascaras';
+
+const UFS_BRASIL = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO',
+  'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI',
+  'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+] as const;
 
 interface EnderecoSeparado {
   cep: string;
@@ -166,6 +172,8 @@ export default function ConfiguracoesPage() {
   const [erros, setErros] = useState<ErrosOrganizacao>({});
 
   const [carregando, setCarregando] = useState(true);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const ultimoCepConsultado = useRef<string>('');
   const [logoArquivo, setLogoArquivo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -206,6 +214,54 @@ export default function ConfiguracoesPage() {
     }
     carregarDados();
   }, []);
+
+  async function consultarViaCep(cepFormatado: string) {
+    const digitos = cepFormatado.replace(/\D/g, '');
+    if (digitos.length !== 8 || digitos === ultimoCepConsultado.current) {
+      return;
+    }
+
+    ultimoCepConsultado.current = digitos;
+    setBuscandoCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digitos}/json/`);
+      if (!res.ok) {
+        throw new Error('Falha ao consultar o CEP.');
+      }
+      const dados = (await res.json()) as {
+        erro?: boolean;
+        logradouro?: string;
+        complemento?: string;
+        bairro?: string;
+        localidade?: string;
+        uf?: string;
+      };
+
+      if (dados.erro) {
+        setErros((prev) => ({ ...prev, cep: 'CEP não encontrado.' }));
+        return;
+      }
+
+      setForm((prev) => ({
+        ...prev,
+        logradouro: dados.logradouro || prev.logradouro,
+        complemento: dados.complemento || prev.complemento,
+        bairro: dados.bairro || prev.bairro,
+        cidade: dados.localidade || prev.cidade,
+        uf: dados.uf ? mascaraUF(dados.uf) : prev.uf,
+      }));
+      setErros((prev) => ({
+        ...prev,
+        cep: null,
+        logradouro: null,
+        uf: null,
+      }));
+    } catch {
+      setErros((prev) => ({ ...prev, cep: 'Não foi possível consultar o CEP no momento.' }));
+    } finally {
+      setBuscandoCep(false);
+    }
+  }
 
   function aoAlterarLogo(arquivo: File | null) {
     if (!arquivo) {
@@ -415,11 +471,25 @@ export default function ConfiguracoesPage() {
                     const valor = mascaraCEP(e.target.value);
                     setForm({ ...form, cep: valor });
                     setErros((prev) => ({ ...prev, cep: validarCampoOrganizacao('cep', valor) }));
+                    if (valor.replace(/\D/g, '').length === 8) {
+                      void consultarViaCep(valor);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const valor = mascaraCEP(e.target.value);
+                    setErros((prev) => ({ ...prev, cep: validarCampoOrganizacao('cep', valor) }));
+                    if (valor.replace(/\D/g, '').length === 8) {
+                      void consultarViaCep(valor);
+                    }
                   }}
                   placeholder="00000-000"
                   className={classeBordaCampo(erros.cep, form.cep)}
                 />
-                {erros.cep && <p className="text-xs text-danger">{erros.cep}</p>}
+                {buscandoCep ? (
+                  <span className="text-xs text-foreground/50">Buscando endereço...</span>
+                ) : (
+                  erros.cep && <p className="text-xs text-danger">{erros.cep}</p>
+                )}
               </Field>
 
               <div className="md:col-span-2">
@@ -476,17 +546,22 @@ export default function ConfiguracoesPage() {
               </Field>
 
               <Field label="UF">
-                <Input
-                  maxLength={2}
+                <Select
                   value={form.uf}
                   onChange={(e) => {
                     const valor = mascaraUF(e.target.value);
                     setForm({ ...form, uf: valor });
                     setErros((prev) => ({ ...prev, uf: validarCampoOrganizacao('uf', valor) }));
                   }}
-                  placeholder="SP"
                   className={classeBordaCampo(erros.uf, form.uf)}
-                />
+                >
+                  <option value="">Selecione</option>
+                  {UFS_BRASIL.map((uf) => (
+                    <option key={uf} value={uf}>
+                      {uf}
+                    </option>
+                  ))}
+                </Select>
                 {erros.uf && <p className="text-xs text-danger">{erros.uf}</p>}
               </Field>
             </div>
