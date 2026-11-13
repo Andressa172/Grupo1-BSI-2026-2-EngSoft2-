@@ -41,6 +41,22 @@ const MENSAGEM_CPF_DUPLICADO = 'Já existe um funcionário cadastrado com este C
 const MENSAGEM_ULTIMO_ADM =
   'Não é permitido excluir, inativar ou alterar o cargo do único Gerente (ADM) ativo do sistema.';
 
+// o id vem da URL: só aceita inteiro positivo que caiba na coluna SERIAL (int4)
+const ID_MAXIMO = 2_147_483_647;
+function validarId(id: number): void {
+  if (!Number.isInteger(id) || id <= 0 || id > ID_MAXIMO) {
+    throw new ErroNaoEncontrado('Funcionário não encontrado.');
+  }
+}
+
+// o corpo da requisição precisa ser um objeto JSON
+function comoObjeto<T>(dados: unknown): T {
+  if (typeof dados !== 'object' || dados === null || Array.isArray(dados)) {
+    throw new ErroValidacao('Dados inválidos.');
+  }
+  return dados as T;
+}
+
 function lancarSeTiverErros(erros: ErrosDeCampo): void {
   if (Object.keys(erros).length > 0) {
     throw new ErroValidacao(MENSAGEM_CAMPOS_INVALIDOS, erros);
@@ -64,24 +80,24 @@ export class UsuarioController {
     return UsuarioController.instancia;
   }
 
-  async autenticar(login: string, senha: string): Promise<Usuario> {
-    const loginLimpo = login?.trim() ?? '';
-    const senhaLimpa = senha ?? '';
+  async autenticar(login: unknown, senha: unknown): Promise<Usuario> {
+    const loginLimpo = typeof login === 'string' ? login.trim() : '';
+    const senhaLimpa = typeof senha === 'string' ? senha : '';
 
     const erros: ErrosDeCampo = {};
     if (!loginLimpo) {
-      erros.login = 'Informe o usuário.';
+      erros.login = 'Campo obrigatório: por favor, informe o usuário.';
     }
     if (!senhaLimpa) {
-      erros.senha = 'Informe a senha.';
+      erros.senha = 'Campo obrigatório: por favor, informe a senha.';
     }
     if (Object.keys(erros).length > 0) {
-      throw new ErroValidacao('Informe o usuário e a senha.', erros);
+      throw new ErroValidacao('Preencha os campos obrigatórios.', erros);
     }
 
     const usuario = await Usuario.buscarPorLogin(this.conexao, loginLimpo);
     if (!usuario || usuario.getSenhaHash() !== senhaLimpa) {
-      throw new ErroAutenticacao('Credenciais inválidas.');
+      throw new ErroAutenticacao('Usuário não encontrado.');
     }
 
     if (!usuario.isAtivo()) {
@@ -104,6 +120,7 @@ export class UsuarioController {
   }
 
   async buscarPorId(id: number): Promise<Usuario> {
+    validarId(id);
     const usuario = await Usuario.buscarPorId(this.conexao, id);
     if (!usuario) {
       throw new ErroNaoEncontrado('Funcionário não encontrado.');
@@ -111,7 +128,8 @@ export class UsuarioController {
     return usuario;
   }
 
-  async cadastrar(dados: DadosCadastroUsuario): Promise<Usuario> {
+  async cadastrar(entrada: unknown): Promise<Usuario> {
+    const dados = comoObjeto<DadosCadastroUsuario>(entrada);
     const usuario = new Usuario({
       nome: dados.nome,
       login: dados.login,
@@ -138,8 +156,9 @@ export class UsuarioController {
     return usuario;
   }
 
-  async editar(id: number, dados: DadosEdicaoUsuario): Promise<Usuario> {
+  async editar(id: number, entrada: unknown): Promise<Usuario> {
     const existente = await this.buscarPorId(id);
+    const dados = comoObjeto<DadosEdicaoUsuario>(entrada);
 
     const novaSenhaInformada = Boolean(dados.senha && dados.senha.trim().length > 0);
     const senhaHashFinal = novaSenhaInformada ? dados.senha!.trim() : existente.getSenhaHash();

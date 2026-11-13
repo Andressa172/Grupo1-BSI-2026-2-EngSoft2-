@@ -6,6 +6,7 @@
 
 import { UsuarioController } from '@/server/UsuarioController';
 import { respostaDeErro } from '@/server/http';
+import { lerJson } from '@/server/lerJson';
 
 export async function GET(request: Request) {
   try {
@@ -23,7 +24,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const dados = await request.json();
+    const dados = await lerJson(request);
     const usuario = await UsuarioController.getInstancia().cadastrar(dados);
     return Response.json(usuario.paraDadosPublicos(), { status: 201 });
   } catch (erro) {

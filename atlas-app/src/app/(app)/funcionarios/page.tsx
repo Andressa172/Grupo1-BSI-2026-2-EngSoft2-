@@ -9,11 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus, Pencil, Trash2, UserCheck, UserX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-<<<<<<< Updated upstream
-import { Card, Field, Input, Select, Table, THead, EmptyRow, LoadingRows } from '@/components/app/ui';
-=======
-import { Card, Field, Input, Select, Modal, Table, THead, EmptyRow } from '@/components/app/ui';
->>>>>>> Stashed changes
+import { Card, Field, Input, Select, Modal, Table, THead, EmptyRow, LoadingRows, IconAction, RowActions } from '@/components/app/ui';
 import type { PerfilUsuario } from '@/lib/types';
 
 interface Funcionario {
@@ -62,26 +58,20 @@ const FORM_VAZIO: FormFuncionario = {
   ativo: true,
 };
 
-<<<<<<< Updated upstream
-// login e CPF somem em telas estreitas
+const FILTRO_VAZIO = {
+  nome: '',
+  perfil: '',
+  status: '',
+};
+
 const COLUNAS = [
   'Nome',
   { label: 'Login', className: 'hidden sm:table-cell' },
   { label: 'CPF', className: 'hidden md:table-cell' },
   'Cargo',
+  'Status',
+  { label: 'Ações', className: 'text-right', srOnly: true },
 ];
-
-const LABEL_PERFIL: Record<PerfilUsuario, string> = {
-  GERENTE: 'Gerente',
-  SECRETARIO: 'Secretário',
-  FUNCIONARIO: 'Funcionário',
-=======
-const FILTRO_VAZIO = {
-  nome: '',
-  perfil: '',
-  status: '',
->>>>>>> Stashed changes
-};
 
 function aplicarMascaraCPF(valor: string): string {
   const digitos = valor.replace(/\D/g, '').slice(0, 11);
@@ -94,9 +84,9 @@ function aplicarMascaraCPF(valor: string): string {
 function MensagemErro({ id, texto }: { id?: string; texto?: string }) {
   if (!texto) return null;
   return (
-    <span id={id} className="text-xs text-primary mt-1 block">
+    <div id={id} className="invalid-feedback text-xs text-primary mt-1 block">
       {texto}
-    </span>
+    </div>
   );
 }
 
@@ -106,7 +96,7 @@ function invalido(campo: string, erros: Erros) {
   return {
     'aria-invalid': erro ? true : undefined,
     'aria-describedby': erro ? `erro-${campo}` : undefined,
-    className: erro ? 'border-primary! focus:ring-primary/30' : '',
+    className: erro ? 'is-invalid border-primary! focus:ring-primary/30' : '',
   };
 }
 
@@ -121,23 +111,7 @@ function montarUrlConsulta(filtro: typeof FILTRO_VAZIO) {
 
 export default function FuncionariosPage() {
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
-<<<<<<< Updated upstream
-  const [form, setForm] = useState<FormFuncionario>(FORM_VAZIO);
-  const [erro, setErro] = useState('');
-  const [sucesso, setSucesso] = useState('');
-  const [carregando, setCarregando] = useState(false);
   const [estadoLista, setEstadoLista] = useState<'carregando' | 'pronto' | 'erro'>('carregando');
-
-  // falha no servidor vira estado de erro, não "nenhum funcionário"
-  async function carregarFuncionarios() {
-    try {
-      const resposta = await fetch('/api/usuarios');
-      if (!resposta.ok) throw new Error();
-      setFuncionarios(await resposta.json());
-      setEstadoLista('pronto');
-    } catch {
-      setEstadoLista('erro');
-=======
 
   // consulta: filtro digitado x filtro aplicado
   const [filtro, setFiltro] = useState(FILTRO_VAZIO);
@@ -162,29 +136,41 @@ export default function FuncionariosPage() {
 
   async function carregarFuncionarios(filtroUsado = filtroAplicado) {
     const numero = ++ultimaConsulta.current;
-    const resposta = await fetch(montarUrlConsulta(filtroUsado));
-    const corpo = await resposta.json();
-    if (numero !== ultimaConsulta.current) return;
-    if (resposta.ok) {
-      setFuncionarios(corpo);
-      setErroConsulta('');
-    } else {
-      setErroConsulta(corpo.erro ?? 'Erro ao consultar funcionários.');
->>>>>>> Stashed changes
+    try {
+      const resposta = await fetch(montarUrlConsulta(filtroUsado));
+      const corpo = await resposta.json();
+      if (numero !== ultimaConsulta.current) return;
+      if (resposta.ok) {
+        setFuncionarios(corpo);
+        setErroConsulta('');
+        setEstadoLista('pronto');
+      } else {
+        setErroConsulta(corpo.erro ?? 'Erro ao consultar funcionários.');
+        setEstadoLista('erro');
+      }
+    } catch {
+      if (numero !== ultimaConsulta.current) return;
+      setErroConsulta('Não foi possível carregar os funcionários.');
+      setEstadoLista('erro');
     }
   }
 
   useEffect(() => {
+    const numero = ++ultimaConsulta.current;
     fetch('/api/usuarios')
       .then((resposta) => {
         if (!resposta.ok) throw new Error();
         return resposta.json();
       })
       .then((dados) => {
+        if (numero !== ultimaConsulta.current) return;
         setFuncionarios(dados);
         setEstadoLista('pronto');
       })
-      .catch(() => setEstadoLista('erro'));
+      .catch(() => {
+        if (numero !== ultimaConsulta.current) return;
+        setEstadoLista('erro');
+      });
   }, []);
 
   function aplicarFiltro(novoFiltro: typeof FILTRO_VAZIO) {
@@ -332,13 +318,6 @@ export default function FuncionariosPage() {
 
   return (
     <div className="flex flex-col gap-6">
-<<<<<<< Updated upstream
-      <Card className="p-6">
-        <h2 className="text-base font-medium tracking-tight mb-5">Novo funcionário</h2>
-        <form onSubmit={cadastrar} className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Nome">
-=======
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <p className="text-sm text-foreground/50 max-w-xl">
           Gerenciamento de funcionários (RF_B2): cadastre, consulte, edite, inative ou exclua usuários com acesso ao sistema ATLAS.
@@ -397,62 +376,69 @@ export default function FuncionariosPage() {
 
       <Card className="p-0">
         <Table>
-          <THead cols={['Nome', 'Login', 'CPF', 'Cargo', 'Status', 'Ações']} />
+          <THead cols={COLUNAS} />
           <tbody>
-            {funcionarios.length === 0 && <EmptyRow colSpan={6} label="Nenhum funcionário encontrado." />}
-            {funcionarios.map((f) => (
-              <tr key={f.id} className="border-b border-border-line/10 last:border-0">
-                <td className="px-4 py-3 font-medium">{f.nome}</td>
-                <td className="px-4 py-3 text-foreground/60">{f.login}</td>
-                <td className="px-4 py-3 text-foreground/60 whitespace-nowrap">{f.cpf || '—'}</td>
-                <td className="px-4 py-3 text-foreground/60">{LABEL_PERFIL[f.perfil] ?? f.perfil}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                      f.ativo
-                        ? 'bg-green-100 text-green-700 border-green-200'
-                        : 'bg-foreground/5 text-foreground/50 border-border-line/20'
-                    }`}
-                  >
-                    {f.ativo ? 'Ativo' : 'Inativo'}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => abrirEdicao(f)}
-                      className="p-2 text-foreground/50 hover:text-foreground cursor-pointer"
-                      title={`Alterar ${f.nome}`}
-                      aria-label={`Alterar ${f.nome}`}
+            {estadoLista === 'carregando' && <LoadingRows colSpan={COLUNAS.length} />}
+            {estadoLista === 'erro' && (
+              <EmptyRow colSpan={COLUNAS.length}>
+                Não foi possível carregar os funcionários.{' '}
+                <button
+                  type="button"
+                  onClick={() => carregarFuncionarios()}
+                  className="font-medium text-foreground underline underline-offset-2 cursor-pointer hover:text-primary"
+                >
+                  Tentar de novo
+                </button>
+              </EmptyRow>
+            )}
+            {estadoLista === 'pronto' && funcionarios.length === 0 && (
+              <EmptyRow colSpan={COLUNAS.length} label="Nenhum funcionário encontrado." />
+            )}
+            {estadoLista === 'pronto' &&
+              funcionarios.map((f) => (
+                <tr key={f.id} className="border-b border-border-line/10 last:border-0">
+                  <td className="px-4 py-3 font-medium">{f.nome}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-foreground/70">{f.login}</td>
+                  <td className="hidden md:table-cell px-4 py-3 text-foreground/70 tabular-nums whitespace-nowrap">
+                    {f.cpf || '—'}
+                  </td>
+                  <td className="px-4 py-3 text-foreground/70">{LABEL_PERFIL[f.perfil] ?? f.perfil}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                        f.ativo
+                          ? 'bg-green-100 text-green-700 border-green-200'
+                          : 'bg-foreground/5 text-foreground/50 border-border-line/20'
+                      }`}
                     >
-                      <Pencil size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => alternarStatusAtivo(f)}
-                      className="p-2 text-foreground/50 hover:text-foreground cursor-pointer"
-                      title={f.ativo ? `Inativar ${f.nome}` : `Ativar ${f.nome}`}
-                      aria-label={f.ativo ? `Inativar ${f.nome}` : `Ativar ${f.nome}`}
-                    >
-                      {f.ativo ? <UserX size={16} /> : <UserCheck size={16} />}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setErroExclusao('');
-                        setExcluindo(f);
-                      }}
-                      className="p-2 text-foreground/50 hover:text-primary cursor-pointer"
-                      title={`Excluir ${f.nome}`}
-                      aria-label={`Excluir ${f.nome}`}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      {f.ativo ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </td>
+                  <td className="px-2 py-2 sm:px-4">
+                    <RowActions>
+                      <IconAction label={`Alterar ${f.nome}`} onClick={() => abrirEdicao(f)}>
+                        <Pencil size={16} />
+                      </IconAction>
+                      <IconAction
+                        label={f.ativo ? `Inativar ${f.nome}` : `Ativar ${f.nome}`}
+                        onClick={() => alternarStatusAtivo(f)}
+                      >
+                        {f.ativo ? <UserX size={16} /> : <UserCheck size={16} />}
+                      </IconAction>
+                      <IconAction
+                        label={`Excluir ${f.nome}`}
+                        danger
+                        onClick={() => {
+                          setErroExclusao('');
+                          setExcluindo(f);
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </IconAction>
+                    </RowActions>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </Table>
       </Card>
@@ -463,15 +449,13 @@ export default function FuncionariosPage() {
         title={funcionarioEditando ? 'Alterar Funcionário' : 'Cadastrar Funcionário'}
         onClose={() => setModalAberto(false)}
       >
-        {/* noValidate: quem valida é o Model; a tela só destaca o que voltou com erro */}
-        <form onSubmit={salvar} noValidate className="flex flex-col gap-4">
+        <form onSubmit={salvar} noValidate className="needs-validation flex flex-col gap-4">
           <p className="text-xs text-foreground/50">
             Campos com <span className="text-primary font-semibold">*</span> são obrigatórios.
           </p>
 
           <div>
             <Field label="Nome *">
->>>>>>> Stashed changes
               <Input
                 placeholder="Nome completo do funcionário"
                 value={form.nome}
@@ -564,14 +548,6 @@ export default function FuncionariosPage() {
             </Field>
           </div>
 
-<<<<<<< Updated upstream
-          {erro && <p className="text-sm text-primary">{erro}</p>}
-          {sucesso && <p className="text-sm text-success">{sucesso}</p>}
-
-          <div className="flex justify-end mt-4">
-            <Button type="submit" variant="primary" size="md" isLoading={carregando}>
-              Cadastrar
-=======
           <MensagemErro texto={erroGeral} />
 
           <div className="flex gap-2 justify-end mt-2">
@@ -580,40 +556,11 @@ export default function FuncionariosPage() {
             </Button>
             <Button type="submit" variant="primary" size="md" isLoading={salvando}>
               {funcionarioEditando ? 'Salvar alterações' : 'Cadastrar'}
->>>>>>> Stashed changes
             </Button>
           </div>
         </form>
       </Modal>
 
-<<<<<<< Updated upstream
-      <Table>
-        <THead cols={COLUNAS} />
-        <tbody>
-          {estadoLista === 'carregando' && <LoadingRows colSpan={COLUNAS.length} />}
-          {estadoLista === 'erro' && (
-            <EmptyRow colSpan={COLUNAS.length}>
-              Não foi possível carregar os funcionários.{' '}
-              <button type="button" onClick={carregarFuncionarios} className="font-medium text-foreground underline underline-offset-2 cursor-pointer hover:text-primary">
-                Tentar de novo
-              </button>
-            </EmptyRow>
-          )}
-          {estadoLista === 'pronto' && funcionarios.length === 0 && (
-            <EmptyRow colSpan={COLUNAS.length} label="Nenhum funcionário cadastrado ainda." />
-          )}
-          {estadoLista === 'pronto' &&
-            funcionarios.map((f) => (
-              <tr key={f.id} className="border-b border-border-line/10 last:border-0">
-                <td className="px-4 py-3 font-medium">{f.nome}</td>
-                <td className="hidden sm:table-cell px-4 py-3 text-foreground/70">{f.login}</td>
-                <td className="hidden md:table-cell px-4 py-3 text-foreground/70 tabular-nums whitespace-nowrap">{f.cpf || '—'}</td>
-                <td className="px-4 py-3 text-foreground/70">{LABEL_PERFIL[f.perfil] ?? f.perfil}</td>
-              </tr>
-            ))}
-        </tbody>
-      </Table>
-=======
       {/* Confirmação de exclusão */}
       <Modal open={excluindo !== null} title="Excluir funcionário" onClose={() => setExcluindo(null)}>
         <p className="text-sm text-foreground/70 mb-5">
@@ -629,7 +576,6 @@ export default function FuncionariosPage() {
           </Button>
         </div>
       </Modal>
->>>>>>> Stashed changes
     </div>
   );
 }

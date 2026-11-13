@@ -155,10 +155,17 @@ CREATE TABLE IF NOT EXISTS cotacao (
     id SERIAL PRIMARY KEY,
     descricao VARCHAR(255) NOT NULL,
     data_abertura TIMESTAMP NOT NULL DEFAULT now(),
+    data_limite DATE,
+    data_avaliacao TIMESTAMP,
     status VARCHAR(12) NOT NULL DEFAULT 'PENDENTE' CHECK (status IN ('PENDENTE', 'APROVADA', 'REPROVADA')),
     aberta_por INTEGER REFERENCES usuario(id),
+    avaliada_por INTEGER REFERENCES usuario(id),
     justificativa VARCHAR(500)
 );
+
+ALTER TABLE cotacao ADD COLUMN IF NOT EXISTS data_limite DATE;
+ALTER TABLE cotacao ADD COLUMN IF NOT EXISTS data_avaliacao TIMESTAMP;
+ALTER TABLE cotacao ADD COLUMN IF NOT EXISTS avaliada_por INTEGER REFERENCES usuario(id);
 
 CREATE TABLE IF NOT EXISTS item_cotacao (
     id SERIAL PRIMARY KEY,
