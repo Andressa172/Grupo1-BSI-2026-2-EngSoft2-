@@ -55,7 +55,14 @@ describe('MovimentacaoEstoque - validação (passo 1: produto, quantidade e tipo
         origem: 'x',
       })
     ).rejects.toThrow(ErroValidacao);
-    await expect(MovimentacaoEstoque.registrarSaida(conexaoQueNaoPodeSerUsada, 1, -5, 'x')).rejects.toThrow(ErroValidacao);
+    await expect(
+      AtualizarEstoqueController.getInstancia().atualizarEstoque(conexaoQueNaoPodeSerUsada, {
+        produtoId: 1,
+        tipo: 'SAIDA',
+        quantidade: -5,
+        origem: 'x',
+      })
+    ).rejects.toThrow(ErroValidacao);
   });
 });
 

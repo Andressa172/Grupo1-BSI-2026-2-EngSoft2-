@@ -3,13 +3,12 @@
 // criando o DAO com a conexão que recebe (dentro da transação de quem chamou).
 //
 // RF_F1 é uma função oculta (ERS 2.2): o ator é o Sistema, sem tela própria. Quem aciona são os
-// casos de uso solicitantes, pelo AtualizarEstoqueController.atualizarEstoque, que executa o
-// fluxo básico. registrarEntrada / registrarSaida são atalhos para esse mesmo método.
+// Controllers dos casos de uso solicitantes, chamando AtualizarEstoqueController.atualizarEstoque,
+// que executa o fluxo básico. O Model nunca chama um Controller (fluxo C -> M -> DAO).
 import type { ErrosDeCampo } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
 import { MovimentacaoEstoqueDAO, type MovimentacaoEstoqueRegistro } from '../dao/MovimentacaoEstoqueDAO';
 import type { FiltroMovimentacao } from './FiltroMovimentacao';
-import { AtualizarEstoqueController } from '../AtualizarEstoqueController';
 import { dataValida, paraIso, parseData, textoSeguro } from './datasBR';
 
 export type TipoMovimentacao = 'ENTRADA' | 'SAIDA';
@@ -109,35 +108,6 @@ export class MovimentacaoEstoque {
       this.origem,
       this.getDataValidadeIso()
     );
-  }
-
-  /** Atalho para os casos de uso solicitantes. Devolve false se o produto não existe. */
-  static async registrarEntrada(
-    conexao: ExecutorSQL,
-    produtoId: number,
-    quantidade: number,
-    origem: string,
-    dataValidade: Date | null = null
-  ): Promise<boolean> {
-    const resultado = await AtualizarEstoqueController.getInstancia().atualizarEstoque(conexao, {
-      produtoId,
-      tipo: 'ENTRADA',
-      quantidade,
-      origem,
-      dataValidade,
-    });
-    return resultado === 'APLICADA';
-  }
-
-  /** Atalho para os casos de uso solicitantes. Devolve false se não há saldo suficiente ou o produto não existe. */
-  static async registrarSaida(conexao: ExecutorSQL, produtoId: number, quantidade: number, origem: string): Promise<boolean> {
-    const resultado = await AtualizarEstoqueController.getInstancia().atualizarEstoque(conexao, {
-      produtoId,
-      tipo: 'SAIDA',
-      quantidade,
-      origem,
-    });
-    return resultado === 'APLICADA';
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroMovimentacao): Promise<MovimentacaoEstoqueRegistro[]> {

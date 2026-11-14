@@ -150,3 +150,34 @@ describe('Singleton em tempo de execução (Controllers)', () => {
     expect(AprovarCotacaoController.getInstancia()).toBe(AprovarCotacaoController.getInstancia());
   });
 });
+
+// RF_F1 - Atualizar estoque: só o Controller de estoque é acionado, e só pelos Controllers dos casos de uso
+// solicitantes. Model e DAO nunca chamam o AtualizarEstoqueController (fluxo C -> M -> DAO).
+describe('RF_F1 - ninguém abaixo do Controller aciona o estoque', () => {
+  const listar = (pasta: string, filtro: (nome: string) => boolean) =>
+    fs
+      .readdirSync(path.join(SRC, pasta))
+      .filter((nome) => nome.endsWith('.ts') && !nome.endsWith('.test.ts') && filtro(nome))
+      .map((nome) => `${pasta}/${nome}`);
+
+  it.each(listar('server/model', () => true))('%s (Model) não importa o AtualizarEstoqueController', (arquivo) => {
+    expect(importa(ler(arquivo), /AtualizarEstoqueController/)).toBe(false);
+  });
+
+  it.each(listar('server/dao', (n) => n.endsWith('DAO.ts')))('%s (DAO) não aciona o estoque', (arquivo) => {
+    const codigo = ler(arquivo);
+    expect(importa(codigo, /AtualizarEstoqueController/)).toBe(false);
+    expect(importa(codigo, /model\/MovimentacaoEstoque/)).toBe(false);
+  });
+
+  it('o Model MovimentacaoEstoque não tem os atalhos que chamavam o Controller', () => {
+    const codigo = ler('server/model/MovimentacaoEstoque.ts');
+    expect(codigo).not.toMatch(/registrarEntrada|registrarSaida/);
+  });
+
+  it('o AtualizarEstoqueController cria os Models (MovimentacaoEstoque e Produto)', () => {
+    const codigo = ler('server/AtualizarEstoqueController.ts');
+    expect(codigo).toMatch(/new\s+MovimentacaoEstoque\s*\(/);
+    expect(codigo).toMatch(/new\s+Produto\s*\(/);
+  });
+});

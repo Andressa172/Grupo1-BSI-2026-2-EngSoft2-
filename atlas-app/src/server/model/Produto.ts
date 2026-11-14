@@ -243,10 +243,21 @@ export class Produto {
     await new ProdutoDAO(conexao).atualizarEstoque(this.id, this.quantidadeEstoque, this.dataValidade);
   }
 
-  // RF_F1, passo 2: busca o produto e trava a linha até o fim da transação de quem chamou,
-  // para duas movimentações ao mesmo tempo não calcularem em cima do mesmo saldo
-  static async buscarParaAtualizarEstoque(conexao: ExecutorSQL, id: number): Promise<Produto | null> {
-    return new ProdutoDAO(conexao).buscarPorIdParaAtualizar(id);
+  // RF_F1, passo 2: o Controller cria o Produto só com o id e o próprio Model se carrega do banco,
+  // travando a linha até o fim da transação de quem chamou, para duas movimentações ao mesmo tempo
+  // não calcularem em cima do mesmo saldo. Devolve false se o produto não está cadastrado.
+  async carregarParaAtualizarEstoque(conexao: ExecutorSQL): Promise<boolean> {
+    if (this.id === undefined) return false;
+    const atual = await new ProdutoDAO(conexao).buscarPorIdParaAtualizar(this.id);
+    if (!atual) return false;
+    this.nome = atual.nome;
+    this.categoria = atual.categoria;
+    this.unidadeMedida = atual.unidadeMedida;
+    this.numeroLote = atual.numeroLote;
+    this.quantidadeEstoque = atual.quantidadeEstoque;
+    this.estoqueMinimo = atual.estoqueMinimo;
+    this.dataValidade = atual.dataValidade;
+    return true;
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroProduto): Promise<Produto[]> {

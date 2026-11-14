@@ -1,10 +1,8 @@
 // DAO - CardapioDiario (RF_F10). Só executa SQL, sempre com parâmetros.
 import type { ExecutorSQL } from './tipos';
 import { Database } from '../db/Database';
-import type { ItemCardapio } from '../model/ItemCardapio';
 import type { TipoRefeicao } from '../model/CardapioDiario';
 import type { FiltroCardapio } from '../model/FiltroCardapio';
-import { MovimentacaoEstoque } from '../model/MovimentacaoEstoque';
 
 export interface CardapioRegistro {
   id: number;
@@ -23,7 +21,10 @@ interface LinhaConsulta {
   quantidade_utilizada: number | null;
 }
 
-export type ResultadoRegistrarItem = 'ok' | 'categoria' | 'estoque' | 'produto';
+export interface ItemCardapioRegistrado {
+  produtoId: number;
+  quantidadeUtilizada: number;
+}
 
 export class CardapioDiarioDAO {
   private static instancia: CardapioDiarioDAO | undefined;
@@ -66,39 +67,27 @@ export class CardapioDiarioDAO {
     ]);
   }
 
-  /**
-   * Dá saída no estoque através do RF_F1 (MovimentacaoEstoque) e grava o item - só permite
-   * alimentos (categoria 'Alimento'). Devolve o motivo quando não for possível gravar.
-   */
-  async registrarItem(cardapioId: number, item: ItemCardapio, origem: string): Promise<ResultadoRegistrarItem> {
-    const produto = await this.executor.query<{ categoria: string }>('SELECT categoria FROM produto WHERE id = $1', [
-      item.getProdutoId(),
+  /** Categoria do produto, ou null se ele não existe (o cardápio só aceita alimentos). */
+  async buscarCategoriaProduto(produtoId: number): Promise<string | null> {
+    const resultado = await this.executor.query<{ categoria: string }>('SELECT categoria FROM produto WHERE id = $1', [
+      produtoId,
     ]);
-    if (produto.rows.length === 0) return 'produto';
-    if (produto.rows[0].categoria !== 'Alimento') return 'categoria';
-
-    const baixado = await MovimentacaoEstoque.registrarSaida(this.executor, item.getProdutoId(), item.getQuantidadeUtilizada(), origem);
-    if (!baixado) return 'estoque';
-
-    await this.executor.query(
-      'INSERT INTO item_cardapio (cardapio_id, produto_id, quantidade_utilizada) VALUES ($1, $2, $3)',
-      [cardapioId, item.getProdutoId(), item.getQuantidadeUtilizada()]
-    );
-    return 'ok';
+    return resultado.rows[0]?.categoria ?? null;
   }
 
-  /**
-   * Devolve ao estoque os alimentos usados no cardápio (estorno), antes de apagar os itens
-   * antigos - usado tanto na alteração (recria os itens) quanto na exclusão do cardápio.
-   */
-  async restaurarEstoqueItens(cardapioId: number): Promise<void> {
-    const itens = await this.executor.query<{ produto_id: number; quantidade_utilizada: number }>(
+  async inserirItem(cardapioId: number, produtoId: number, quantidadeUtilizada: number): Promise<void> {
+    await this.executor.query(
+      'INSERT INTO item_cardapio (cardapio_id, produto_id, quantidade_utilizada) VALUES ($1, $2, $3)',
+      [cardapioId, produtoId, quantidadeUtilizada]
+    );
+  }
+
+  async listarItens(cardapioId: number): Promise<ItemCardapioRegistrado[]> {
+    const resultado = await this.executor.query<{ produto_id: number; quantidade_utilizada: number }>(
       'SELECT produto_id, quantidade_utilizada FROM item_cardapio WHERE cardapio_id = $1',
       [cardapioId]
     );
-    for (const i of itens.rows) {
-      await MovimentacaoEstoque.registrarEntrada(this.executor, i.produto_id, i.quantidade_utilizada, `Estorno: cardápio #${cardapioId}`);
-    }
+    return resultado.rows.map((i) => ({ produtoId: i.produto_id, quantidadeUtilizada: i.quantidade_utilizada }));
   }
 
   async excluirItens(cardapioId: number): Promise<void> {
