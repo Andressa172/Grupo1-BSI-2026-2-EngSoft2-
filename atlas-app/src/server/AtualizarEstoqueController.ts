@@ -78,7 +78,9 @@ export class AtualizarEstoqueController {
 
   /** Passo 1.1: devolve o produto se ele está cadastrado, ou null (fluxo alternativo 2.1). */
   async verifProduto(conexao: ExecutorSQL, produtoId: number): Promise<Produto | null> {
-    return Produto.buscarParaAtualizarEstoque(conexao, produtoId);
+    // o Controller cria o Model (só com o id) e o Model se carrega do banco, via DAO
+    const produto = new Produto({ id: produtoId, nome: '', categoria: '', unidadeMedida: '' });
+    return (await produto.carregarParaAtualizarEstoque(conexao)) ? produto : null;
   }
 
   /** Histórico de movimentações com 3 filtros: produto, tipo e período. */

@@ -10,7 +10,6 @@
 import { CriarCardapioController } from '@/server/CriarCardapioController';
 import { respostaDeErro } from '@/server/http';
 import { lerJson } from '@/server/lerJson';
-import { ProdutoDAO } from '@/server/dao/ProdutoDAO';
 
 export async function GET(request: Request) {
   try {
@@ -21,7 +20,7 @@ export async function GET(request: Request) {
         dataFinal: parametros.get('dataFinal'),
         tipoRefeicao: parametros.get('tipoRefeicao'),
       }),
-      ProdutoDAO.getInstancia().listarTodos(),
+      CriarCardapioController.getInstancia().listarProdutos(),
     ]);
     return Response.json({ cardapios, produtos });
   } catch (erro) {

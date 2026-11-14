@@ -4,8 +4,10 @@
 // - Façade: a View (via rotas /api/doacoes/produto) só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model DoacaoProduto,
 //   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
-//   Quem cria o DAO é o Model.
+//   Quem cria o DAO é o Model; a entrada no estoque (RF_F1) é pedida por este Controller ao
+//   AtualizarEstoqueController, item a item, dentro da mesma transação.
 import { Database } from './db/Database';
+import { AtualizarEstoqueController } from './AtualizarEstoqueController';
 import { DoacaoProduto, type DoacaoProdutoAtributos } from './model/DoacaoProduto';
 import { FiltroDoacao, type FiltroDoacaoAtributos } from './model/FiltroDoacao';
 import type { DoacaoProdutoRegistro } from './dao/DoacaoProdutoDAO';
@@ -54,7 +56,25 @@ export class ReceberDoacaoProdutoController {
   async registrar(dados: unknown): Promise<DoacaoProduto> {
     const doacao = new DoacaoProduto(comoObjeto(dados));
     lancarSeTiverErros(doacao.validar());
-    await this.conexao.comTransacao((cliente) => doacao.incluir(cliente));
+    await this.conexao.comTransacao(async (cliente) => {
+      await doacao.incluir(cliente);
+
+      const itens = doacao.getItens();
+      for (let i = 0; i < itens.length; i++) {
+        const item = itens[i];
+        const resultado = await AtualizarEstoqueController.getInstancia().atualizarEstoque(cliente, {
+          produtoId: item.getProdutoId(),
+          tipo: 'ENTRADA',
+          quantidade: item.getQuantidade(),
+          origem: `Doação de produto #${doacao.getId()}`,
+          dataValidade: item.getDataValidade(),
+        });
+        if (resultado !== 'APLICADA') {
+          throw new ErroValidacao('Produto inválido.', { [`item.${i}.produto`]: 'Produto inválido: não cadastrado.' });
+        }
+        await doacao.incluirItem(cliente, item);
+      }
+    });
     return doacao;
   }
 }

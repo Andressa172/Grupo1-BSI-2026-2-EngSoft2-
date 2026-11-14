@@ -1,6 +1,5 @@
 // Model - DoacaoDinheiro (RF_F11 - Receber doação em dinheiro)
-import { CaixaController } from '../CaixaController';
-import { ErroCaixaFechado, type ErrosDeCampo } from '../erros';
+import type { ErrosDeCampo } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
 import { DoacaoDinheiroDAO, type DoacaoDinheiroRegistro } from '../dao/DoacaoDinheiroDAO';
 import type { FiltroDoacao } from './FiltroDoacao';
@@ -41,8 +40,17 @@ export class DoacaoDinheiro {
     return this.valor;
   }
 
+  getFormaRecebimento(): string {
+    return this.formaRecebimento;
+  }
+
   isCaixaAtualizado(): boolean {
     return this.caixaAtualizado;
+  }
+
+  // o Controller informa se a entrada foi lançada no caixa (RF_F6)
+  setCaixaAtualizado(atualizado: boolean): void {
+    this.caixaAtualizado = atualizado;
   }
 
   /** RF_F11 fluxos 3.1 (valor), 3.2 (forma de recebimento) e 3.3 (data). */
@@ -67,29 +75,11 @@ export class DoacaoDinheiro {
 
   // ------------------------------ persistência ------------------------------
 
-  /** Grava a doação e lança a entrada no caixa aberto (RF_F6), se houver. Chamar dentro de uma transação. */
+  /** Grava a doação (a entrada no caixa, RF_F6, fica a cargo do Controller). Chamar dentro de uma transação. */
   async incluir(conexao: ExecutorSQL): Promise<void> {
     const doadorId = await this.doador.obterId(conexao);
     const dao = new DoacaoDinheiroDAO(conexao);
     this.id = await dao.inserir(doadorId, this.valor, this.formaRecebimento, paraIso(this.dataRecebimento));
-    try {
-      await CaixaController.getInstancia().atualizarCaixa(
-        {
-          valor: this.valor,
-          tipoMovimentacao: 'ENTRADA',
-          formaPag: this.formaRecebimento === 'Dinheiro' ? 'FISICO' : 'DIGITAL',
-          origem: `Doação em dinheiro #${this.id}`,
-        },
-        conexao
-      );
-      this.caixaAtualizado = true;
-    } catch (erro) {
-      if (erro instanceof ErroCaixaFechado) {
-        this.caixaAtualizado = false;
-        return;
-      }
-      throw erro;
-    }
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroDoacao): Promise<DoacaoDinheiroRegistro[]> {

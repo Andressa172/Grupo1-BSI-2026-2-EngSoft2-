@@ -3,7 +3,7 @@
 // criando o ProdutoDAO com a conexão que recebe do Controller.
 import type { ErrosDeCampo } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
-import { ProdutoDAO } from '../dao/ProdutoDAO';
+import { ProdutoDAO, type ProdutoLinha } from '../dao/ProdutoDAO';
 import type { FiltroProduto } from './FiltroProduto';
 
 export const CATEGORIAS_PRODUTO = ['Alimento', 'Material', 'Higiene', 'Outro'] as const;
@@ -243,10 +243,26 @@ export class Produto {
     await new ProdutoDAO(conexao).atualizarEstoque(this.id, this.quantidadeEstoque, this.dataValidade);
   }
 
-  // RF_F1, passo 2: busca o produto e trava a linha até o fim da transação de quem chamou,
-  // para duas movimentações ao mesmo tempo não calcularem em cima do mesmo saldo
-  static async buscarParaAtualizarEstoque(conexao: ExecutorSQL, id: number): Promise<Produto | null> {
-    return new ProdutoDAO(conexao).buscarPorIdParaAtualizar(id);
+  // RF_F1, passo 2: o Controller cria o Produto só com o id e o próprio Model se carrega do banco,
+  // travando a linha até o fim da transação de quem chamou, para duas movimentações ao mesmo tempo
+  // não calcularem em cima do mesmo saldo. Devolve false se o produto não está cadastrado.
+  async carregarParaAtualizarEstoque(conexao: ExecutorSQL): Promise<boolean> {
+    if (this.id === undefined) return false;
+    const atual = await new ProdutoDAO(conexao).buscarPorIdParaAtualizar(this.id);
+    if (!atual) return false;
+    this.nome = atual.nome;
+    this.categoria = atual.categoria;
+    this.unidadeMedida = atual.unidadeMedida;
+    this.numeroLote = atual.numeroLote;
+    this.quantidadeEstoque = atual.quantidadeEstoque;
+    this.estoqueMinimo = atual.estoqueMinimo;
+    this.dataValidade = atual.dataValidade;
+    return true;
+  }
+
+  // lista simples para as telas de cardápio (RF_F10) e eventos (RF_F9)
+  static async listarTodos(conexao: ExecutorSQL): Promise<ProdutoLinha[]> {
+    return new ProdutoDAO(conexao).listarTodos();
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroProduto): Promise<Produto[]> {

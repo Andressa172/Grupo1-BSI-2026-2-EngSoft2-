@@ -1,6 +1,7 @@
 // Control - ParametrizarOrganizacaoController (RF_Parametrizacao)
 import { Organizacao } from './model/Organizacao';
-import { OrganizacaoDAO } from './dao/OrganizacaoDAO';
+import { Database } from './db/Database';
+import type { ExecutorSQL } from './dao/tipos';
 
 export interface DadosAtualizacaoOrganizacao {
   nomeFantasia: string;
@@ -13,27 +14,25 @@ export interface DadosAtualizacaoOrganizacao {
 
 export type ResultadoOrganizacao = ReturnType<Organizacao['paraLinhaDeDados']>;
 
-const globalParaSingleton = globalThis as unknown as {
-  parametrizarOrganizacaoController?: ParametrizarOrganizacaoController;
-};
-
 export class ParametrizarOrganizacaoController {
-  private constructor(private readonly organizacaoDAO: OrganizacaoDAO = new OrganizacaoDAO()) {}
+  private static instancia: ParametrizarOrganizacaoController | undefined;
+
+  private constructor(private readonly conexao: ExecutorSQL = Database.getInstancia()) {}
 
   static getInstancia(): ParametrizarOrganizacaoController {
-    if (!globalParaSingleton.parametrizarOrganizacaoController) {
-      globalParaSingleton.parametrizarOrganizacaoController = new ParametrizarOrganizacaoController();
+    if (!ParametrizarOrganizacaoController.instancia) {
+      ParametrizarOrganizacaoController.instancia = new ParametrizarOrganizacaoController();
     }
-    return globalParaSingleton.parametrizarOrganizacaoController;
+    return ParametrizarOrganizacaoController.instancia;
   }
 
   static getInstance(): ParametrizarOrganizacaoController {
     return ParametrizarOrganizacaoController.getInstancia();
   }
 
-  /** Fábrica auxiliar para injeção de DAO falso em testes unitários. */
-  static criarParaTeste(organizacaoDAO: OrganizacaoDAO): ParametrizarOrganizacaoController {
-    return new ParametrizarOrganizacaoController(organizacaoDAO);
+  /** Fábrica auxiliar para injeção de uma conexão falsa em testes unitários. */
+  static criarParaTeste(conexao: ExecutorSQL): ParametrizarOrganizacaoController {
+    return new ParametrizarOrganizacaoController(conexao);
   }
 
   /**
@@ -41,7 +40,7 @@ export class ParametrizarOrganizacaoController {
    * Caso a tabela esteja vazia, retorna um valor padrão em memória.
    */
   async obterParametros(): Promise<ResultadoOrganizacao> {
-    const org = await this.organizacaoDAO.obter();
+    const org = await Organizacao.obter(this.conexao);
 
     if (!org) {
       const orgPadrao = new Organizacao({
@@ -71,7 +70,7 @@ export class ParametrizarOrganizacaoController {
 
     org.validar();
 
-    const orgSalva = await this.organizacaoDAO.salvar(org);
+    const orgSalva = await org.salvar(this.conexao);
 
     return orgSalva.paraLinhaDeDados();
   }

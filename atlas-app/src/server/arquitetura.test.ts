@@ -150,3 +150,50 @@ describe('Singleton em tempo de execução (Controllers)', () => {
     expect(AprovarCotacaoController.getInstancia()).toBe(AprovarCotacaoController.getInstancia());
   });
 });
+
+// Regra de dependência do projeto inteiro: o fluxo é sempre Controller -> Model -> DAO.
+// Quem fica embaixo nunca chama quem fica em cima, e ninguém pula camada.
+describe('Direção das dependências (todos os módulos)', () => {
+  const listar = (pasta: string, filtro: (nome: string) => boolean) =>
+    fs
+      .readdirSync(path.join(SRC, pasta))
+      .filter((nome) => nome.endsWith('.ts') && !nome.endsWith('.test.ts') && filtro(nome))
+      .map((nome) => `${pasta}/${nome}`);
+  // import "de valor" (os `import type` não criam dependência em tempo de execução)
+  const importaValor = (codigo: string, modulo: RegExp) =>
+    new RegExp(`import\\s+(?!type\\s)[^;]*from\\s+['"][^'"]*${modulo.source}['"]`).test(codigo);
+
+  const models = listar('server/model', () => true);
+  const daos = listar('server/dao', (n) => n.endsWith('DAO.ts'));
+  const controllers = listar('server', (n) => n.endsWith('Controller.ts'));
+  const rotas = (dir: string): string[] =>
+    fs.readdirSync(path.join(SRC, dir), { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? rotas(`${dir}/${e.name}`) : e.name === 'route.ts' ? [`${dir}/${e.name}`] : []
+    );
+
+  it.each(models)('%s (Model) não importa Controller', (arquivo) => {
+    expect(importaValor(ler(arquivo), /Controller/)).toBe(false);
+  });
+
+  it.each(daos)('%s (DAO) não importa Controller nem chama outro DAO', (arquivo) => {
+    const codigo = ler(arquivo);
+    expect(importa(codigo, /Controller/)).toBe(false);
+    expect(codigo).not.toMatch(/new\s+\w*DAO\s*\(/);
+  });
+
+  it.each(daos)('%s (DAO) não chama métodos do Model de estoque', (arquivo) => {
+    expect(importaValor(ler(arquivo), /model\/MovimentacaoEstoque/)).toBe(false);
+  });
+
+  it.each(controllers)('%s (Controller) não importa nem instancia DAO', (arquivo) => {
+    const codigo = ler(arquivo);
+    expect(importaValor(codigo, /\/dao\/(?!tipos)[^'"]*/)).toBe(false);
+    expect(codigo).not.toMatch(/new\s+\w*DAO\s*\(/);
+  });
+
+  it.each([...rotas('app/api'), 'server/auth.ts'])('%s (View/API) não importa DAO', (arquivo) => {
+    const codigo = ler(arquivo);
+    expect(importa(codigo, /\/dao\/(?!tipos)[^'"]*/)).toBe(false);
+    expect(codigo).not.toMatch(/new\s+\w*DAO\s*\(/);
+  });
+});

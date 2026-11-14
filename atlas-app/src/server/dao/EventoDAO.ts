@@ -3,7 +3,6 @@ import type { ExecutorSQL } from './tipos';
 import { Database } from '../db/Database';
 import type { AlocacaoRecurso } from '../model/AlocacaoRecurso';
 import type { FiltroEvento } from '../model/FiltroEvento';
-import { MovimentacaoEstoque } from '../model/MovimentacaoEstoque';
 
 export interface EventoRegistro {
   id: number;
@@ -33,17 +32,13 @@ interface LinhaConsulta {
   valor: string | null; // numeric vem como string no node-postgres
 }
 
+export interface ProdutoAlocado {
+  produtoId: number;
+  quantidade: number;
+}
+
 export class EventoDAO {
-  private static instancia: EventoDAO | undefined;
-
   constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
-
-  static getInstancia(): EventoDAO {
-    if (!EventoDAO.instancia) {
-      EventoDAO.instancia = new EventoDAO();
-    }
-    return EventoDAO.instancia;
-  }
 
   async inserirEvento(nome: string, dataIso: string, descricao: string | null): Promise<number> {
     const resultado = await this.executor.query<{ id: number }>(
@@ -53,23 +48,12 @@ export class EventoDAO {
     return resultado.rows[0].id;
   }
 
-  /**
-   * Aloca o recurso: se for produto, desconta do estoque através do RF_F1 (MovimentacaoEstoque) -
-   * devolve false se não houver estoque suficiente ou o produto não existir (nada é gravado).
-   */
-  async registrarRecurso(eventoId: number, recurso: AlocacaoRecurso, origem: string): Promise<boolean> {
+  async inserirRecurso(eventoId: number, recurso: AlocacaoRecurso): Promise<void> {
     const dados = recurso.paraLinhaDeDados();
-
-    if (dados.tipo === 'PRODUTO') {
-      const baixado = await MovimentacaoEstoque.registrarSaida(this.executor, dados.produtoId!, dados.quantidade!, origem);
-      if (!baixado) return false;
-    }
-
     await this.executor.query(
       'INSERT INTO alocacao_recurso (evento_id, tipo, produto_id, quantidade, valor) VALUES ($1, $2, $3, $4, $5)',
       [eventoId, dados.tipo, dados.produtoId, dados.quantidade, dados.valor]
     );
-    return true;
   }
 
   async existe(id: number): Promise<boolean> {
@@ -86,18 +70,13 @@ export class EventoDAO {
     ]);
   }
 
-  /**
-   * Devolve ao estoque os produtos alocados no evento (estorno), antes de apagar os recursos
-   * antigos - usado tanto na alteração (recria os recursos) quanto na exclusão do evento.
-   */
-  async restaurarEstoqueRecursos(eventoId: number): Promise<void> {
+  /** Produtos alocados ao evento (recursos do tipo PRODUTO), para o Controller estornar o estoque. */
+  async listarProdutosAlocados(eventoId: number): Promise<ProdutoAlocado[]> {
     const recursos = await this.executor.query<{ produto_id: number; quantidade: number }>(
       "SELECT produto_id, quantidade FROM alocacao_recurso WHERE evento_id = $1 AND tipo = 'PRODUTO'",
       [eventoId]
     );
-    for (const r of recursos.rows) {
-      await MovimentacaoEstoque.registrarEntrada(this.executor, r.produto_id, r.quantidade, `Estorno: evento #${eventoId}`);
-    }
+    return recursos.rows.map((r) => ({ produtoId: r.produto_id, quantidade: r.quantidade }));
   }
 
   async excluirRecursos(eventoId: number): Promise<void> {

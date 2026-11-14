@@ -2,12 +2,10 @@
 // Mantém a lista de itens, valida os próprios atributos e persiste criando o DAO
 // com a conexão que recebe do Controller (dentro de uma transação).
 import type { ErrosDeCampo } from '../erros';
-import { ErroValidacao } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
 import { DoacaoProdutoDAO, type DoacaoProdutoRegistro } from '../dao/DoacaoProdutoDAO';
 import type { FiltroDoacao } from './FiltroDoacao';
 import { ItemDoacao } from './ItemDoacao';
-import { MovimentacaoEstoque } from './MovimentacaoEstoque';
 import { SelecaoDoador } from './SelecaoDoador';
 import { dataValida, hoje, paraIso, parseData } from './datasBR';
 
@@ -70,28 +68,18 @@ export class DoacaoProduto {
   // ------------------------------ persistência ------------------------------
 
   /**
-   * Grava a doação e dá entrada no estoque (RF_F1). Deve ser chamado dentro de uma transação:
-   * se qualquer passo falhar, nada fica gravado.
+   * Grava a doação (os itens e a entrada no estoque, RF_F1, ficam a cargo do Controller).
+   * Deve ser chamado dentro de uma transação: se qualquer passo falhar, nada fica gravado.
    */
   async incluir(conexao: ExecutorSQL): Promise<void> {
     const doadorId = await this.doador.obterId(conexao);
     const dao = new DoacaoProdutoDAO(conexao);
     this.id = await dao.inserirDoacao(doadorId, paraIso(this.dataRecebimento));
+  }
 
-    for (let i = 0; i < this.itens.length; i++) {
-      const item = this.itens[i];
-      const registrado = await MovimentacaoEstoque.registrarEntrada(
-        conexao,
-        item.getProdutoId(),
-        item.getQuantidade(),
-        `Doação de produto #${this.id}`,
-        item.getDataValidade()
-      );
-      if (!registrado) {
-        throw new ErroValidacao('Produto inválido.', { [`item.${i}.produto`]: 'Produto inválido: não cadastrado.' });
-      }
-      await dao.inserirItem(this.id, item);
-    }
+  /** Grava um item da doação. Chamado pelo Controller, item a item, depois da entrada no estoque. */
+  async incluirItem(conexao: ExecutorSQL, item: ItemDoacao): Promise<void> {
+    await new DoacaoProdutoDAO(conexao).inserirItem(this.id!, item);
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroDoacao): Promise<DoacaoProdutoRegistro[]> {
