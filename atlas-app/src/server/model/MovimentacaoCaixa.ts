@@ -1,5 +1,7 @@
 // Model - MovimentacaoCaixa (RF_F6)
 import { ErroValidacao } from '../erros';
+import type { ExecutorSQL } from '../dao/tipos';
+import { CaixaDAO } from '../dao/CaixaDAO';
 
 export type TipoMovimentacaoCaixa = 'ENTRADA' | 'SAIDA';
 export type FormaPagamentoCaixa = 'FISICO' | 'DIGITAL';
@@ -59,6 +61,11 @@ export class MovimentacaoCaixa {
 
   getData(): string | undefined {
     return this.data;
+  }
+
+  /** Grava a movimentação (o Model cria o CaixaDAO com a conexão do Controller) e devolve a salva. */
+  async incluir(conexao: ExecutorSQL): Promise<MovimentacaoCaixa> {
+    return new CaixaDAO(conexao).inserirMovimentacao(this);
   }
 
   validar(): void {

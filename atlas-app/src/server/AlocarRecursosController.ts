@@ -12,6 +12,8 @@ import type { ExecutorSQL } from './dao/tipos';
 import { Evento, type EventoAtributos } from './model/Evento';
 import { FiltroEvento, type FiltroEventoAtributos } from './model/FiltroEvento';
 import type { EventoRegistro } from './dao/EventoDAO';
+import { Produto } from './model/Produto';
+import type { ProdutoLinha } from './dao/ProdutoDAO';
 import { ErroValidacao, type ErrosDeCampo } from './erros';
 
 const MENSAGEM_CAMPOS_INVALIDOS = 'Corrija os campos destacados.';
@@ -44,6 +46,11 @@ export class AlocarRecursosController {
       AlocarRecursosController.instancia = new AlocarRecursosController();
     }
     return AlocarRecursosController.instancia;
+  }
+
+  /** Produtos para o select da tela. */
+  async listarProdutos(): Promise<ProdutoLinha[]> {
+    return Produto.listarTodos(this.conexao);
   }
 
   /** Consulta com 2 filtros: nome do evento e período da data. */

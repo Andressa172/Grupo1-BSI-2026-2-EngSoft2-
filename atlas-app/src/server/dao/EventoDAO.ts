@@ -38,16 +38,7 @@ export interface ProdutoAlocado {
 }
 
 export class EventoDAO {
-  private static instancia: EventoDAO | undefined;
-
   constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
-
-  static getInstancia(): EventoDAO {
-    if (!EventoDAO.instancia) {
-      EventoDAO.instancia = new EventoDAO();
-    }
-    return EventoDAO.instancia;
-  }
 
   async inserirEvento(nome: string, dataIso: string, descricao: string | null): Promise<number> {
     const resultado = await this.executor.query<{ id: number }>(
