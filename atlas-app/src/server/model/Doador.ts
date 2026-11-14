@@ -1,5 +1,9 @@
 // Model - Doador (RF_B4)
+// Valida e persiste criando o DoadorDAO com a conexão que recebe do Controller.
 import type { ErrosDeCampo } from '../erros';
+import type { ExecutorSQL } from '../dao/tipos';
+import { DoadorDAO } from '../dao/DoadorDAO';
+import type { FiltroDoador } from './FiltroDoador';
 import { cpfOuCnpjValido } from './documentos';
 
 export type TipoPessoa = 'FISICA' | 'JURIDICA';
@@ -146,5 +150,47 @@ export class Doador {
       tipoPessoa: this.tipoPessoa,
       anonimo: this.anonimo,
     };
+  }
+
+  // ------------------------------ persistência ------------------------------
+
+  async incluir(conexao: ExecutorSQL): Promise<void> {
+    const salvo = await new DoadorDAO(conexao).inserir(this);
+    this.id = salvo.getId();
+  }
+
+  async alterar(conexao: ExecutorSQL): Promise<boolean> {
+    const salvo = await new DoadorDAO(conexao).atualizar(this);
+    return salvo !== null;
+  }
+
+  async excluir(conexao: ExecutorSQL): Promise<boolean> {
+    if (this.id === undefined) return false;
+    return new DoadorDAO(conexao).excluir(this.id);
+  }
+
+  // regra: não pode haver dois doadores com o mesmo CPF/CNPJ (ignora o próprio id, útil na edição)
+  async existeComMesmoCpfCnpj(conexao: ExecutorSQL): Promise<boolean> {
+    if (!this.cpfCnpj) return false;
+    return new DoadorDAO(conexao).existeComCpfCnpj(this.cpfCnpj, this.id);
+  }
+
+  // regra: só pode existir 1 doador anônimo cadastrado
+  async existeOutroAnonimo(conexao: ExecutorSQL): Promise<boolean> {
+    return new DoadorDAO(conexao).existeAnonimo(this.id);
+  }
+
+  // regra: não deixa excluir doador que já possui doação registrada (FK)
+  async possuiDoacoesVinculadas(conexao: ExecutorSQL): Promise<boolean> {
+    if (this.id === undefined) return false;
+    return new DoadorDAO(conexao).possuiDoacoesVinculadas(this.id);
+  }
+
+  static async buscarPorId(conexao: ExecutorSQL, id: number): Promise<Doador | null> {
+    return new DoadorDAO(conexao).buscarPorId(id);
+  }
+
+  static async consultar(conexao: ExecutorSQL, filtro: FiltroDoador): Promise<Doador[]> {
+    return new DoadorDAO(conexao).consultar(filtro);
   }
 }
