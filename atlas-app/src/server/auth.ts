@@ -1,6 +1,6 @@
 // Helper de autenticação e autorização para rotas administrativas (Gerente)
-import { UsuarioDAO } from './dao/UsuarioDAO';
-import { ErroAutenticacao, ErroAutorizacao } from './erros';
+import { UsuarioController } from './UsuarioController';
+import { ErroAutenticacao, ErroAutorizacao, ErroNaoEncontrado } from './erros';
 import type { Usuario } from './model/Usuario';
 
 function extrairUsuarioId(request: Request, corpo?: Record<string, unknown>): number | null {
@@ -34,17 +34,19 @@ function extrairUsuarioId(request: Request, corpo?: Record<string, unknown>): nu
 /**
  * Valida que a requisição pertence a um usuário ativo com perfil GERENTE.
  */
-export async function exigirGerente(
-  request: Request,
-  corpo?: Record<string, unknown>,
-  usuarioDAO: Pick<UsuarioDAO, 'buscarPorId'> = new UsuarioDAO()
-): Promise<Usuario> {
+export async function exigirGerente(request: Request, corpo?: Record<string, unknown>): Promise<Usuario> {
   const usuarioId = extrairUsuarioId(request, corpo);
   if (!usuarioId) {
     throw new ErroAutenticacao('Usuário não autenticado.');
   }
 
-  const usuario = await usuarioDAO.buscarPorId(usuarioId);
+  // a consulta passa pelo Controller (C -> M -> DAO); usuário inexistente vira erro de autenticação
+  const usuario = await UsuarioController.getInstancia()
+    .buscarPorId(usuarioId)
+    .catch((erro: unknown) => {
+      if (erro instanceof ErroNaoEncontrado) return null;
+      throw erro;
+    });
   if (!usuario || !usuario.isAtivo()) {
     throw new ErroAutenticacao('Usuário inválido ou inativo.');
   }

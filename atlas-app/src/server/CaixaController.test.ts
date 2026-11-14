@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { CaixaController, type ICaixaDAO } from './CaixaController';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CaixaController } from './CaixaController';
 import { Caixa } from './model/Caixa';
 import { MovimentacaoCaixa } from './model/MovimentacaoCaixa';
 import {
@@ -13,13 +13,37 @@ import {
 import type { ExecutorSQL } from './dao/tipos';
 import type { Database } from './db/Database';
 
+// O Controller não conhece o DAO (quem cria o CaixaDAO é o Model), então o DAO falso entra
+// substituindo o módulo do DAO: cada teste monta o seu ambiente em memória e o registra na ponte.
+interface CaixaDAOFalso {
+  buscarCaixaAberto(paraAtualizacao?: boolean): Promise<Caixa | null>;
+  listarTodos(): Promise<Caixa[]>;
+  inserir(caixa: Caixa): Promise<Caixa>;
+  fechar(id: number, saldoFisicoFinal: number, saldoDigitalFinal: number): Promise<Caixa | null>;
+  inserirMovimentacao(movimentacao: MovimentacaoCaixa): Promise<MovimentacaoCaixa>;
+  listarMovimentacoesPorCaixa(caixaId: number): Promise<MovimentacaoCaixa[]>;
+}
+
+const ponte = vi.hoisted(() => ({ dao: undefined as unknown as CaixaDAOFalso }));
+
+vi.mock('./dao/CaixaDAO', () => ({
+  CaixaDAO: class {
+    buscarCaixaAberto = (...args: [boolean?]) => ponte.dao.buscarCaixaAberto(...args);
+    listarTodos = () => ponte.dao.listarTodos();
+    inserir = (caixa: Caixa) => ponte.dao.inserir(caixa);
+    fechar = (id: number, fisico: number, digital: number) => ponte.dao.fechar(id, fisico, digital);
+    inserirMovimentacao = (mov: MovimentacaoCaixa) => ponte.dao.inserirMovimentacao(mov);
+    listarMovimentacoesPorCaixa = (caixaId: number) => ponte.dao.listarMovimentacoesPorCaixa(caixaId);
+  },
+}));
+
 function criarAmbienteCaixaFalso() {
   let proximoCaixaId = 1;
   let proximoMovId = 1;
   const caixas: Caixa[] = [];
   const movimentacoes: MovimentacaoCaixa[] = [];
 
-  const dao: ICaixaDAO = {
+  const dao: CaixaDAOFalso = {
     async buscarCaixaAberto() {
       return caixas.find((c) => c.getStatus() === 'ABERTO') ?? null;
     },
@@ -83,7 +107,8 @@ function criarAmbienteCaixaFalso() {
     },
   } as unknown as Pick<Database, 'comTransacao' | 'query'>;
 
-  const controller = CaixaController.criarParaTeste(database, () => dao);
+  ponte.dao = dao;
+  const controller = CaixaController.criarParaTeste(database);
   return { controller, caixas, movimentacoes };
 }
 

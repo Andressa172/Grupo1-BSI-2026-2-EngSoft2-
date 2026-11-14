@@ -10,7 +10,6 @@
 import { AlocarRecursosController } from '@/server/AlocarRecursosController';
 import { respostaDeErro } from '@/server/http';
 import { lerJson } from '@/server/lerJson';
-import { ProdutoDAO } from '@/server/dao/ProdutoDAO';
 
 export async function GET(request: Request) {
   try {
@@ -21,7 +20,7 @@ export async function GET(request: Request) {
         dataInicial: parametros.get('dataInicial'),
         dataFinal: parametros.get('dataFinal'),
       }),
-      ProdutoDAO.getInstancia().listarTodos(),
+      AlocarRecursosController.getInstancia().listarProdutos(),
     ]);
     return Response.json({ eventos, produtos });
   } catch (erro) {
