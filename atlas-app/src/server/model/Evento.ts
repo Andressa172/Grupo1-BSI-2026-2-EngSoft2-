@@ -2,9 +2,9 @@
 // Guarda o evento e os recursos alocados, valida tudo e persiste criando o EventoDAO
 // com a conexão que recebe do Controller (dentro de uma transação).
 import type { ErrosDeCampo } from '../erros';
-import { ErroNaoEncontrado, ErroValidacao } from '../erros';
+import { ErroNaoEncontrado } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
-import { EventoDAO, type EventoRegistro } from '../dao/EventoDAO';
+import { EventoDAO, type EventoRegistro, type ProdutoAlocado } from '../dao/EventoDAO';
 import type { FiltroEvento } from './FiltroEvento';
 import { AlocacaoRecurso } from './AlocacaoRecurso';
 import { dataValida, parseData, paraIso, textoSeguro } from './datasBR';
@@ -82,16 +82,14 @@ export class Evento {
 
   // ------------------------------ persistência ------------------------------
 
-  /** Grava o evento e aloca os recursos (RF_F1). Deve rodar dentro de uma transação. */
+  /** Grava o evento (os recursos e a saída no estoque, RF_F1, ficam a cargo do Controller). Dentro de uma transação. */
   async incluir(conexao: ExecutorSQL): Promise<void> {
-    const dao = new EventoDAO(conexao);
-    this.id = await dao.inserirEvento(this.nome, paraIso(this.data), this.descricao);
-    await this.alocarRecursos(dao, this.id);
+    this.id = await new EventoDAO(conexao).inserirEvento(this.nome, paraIso(this.data), this.descricao);
   }
 
   /**
-   * Substitui o evento e os recursos alocados: estorna o estoque dos recursos antigos,
-   * apaga-os e aloca os novos na mesma transação. Deve rodar dentro de uma transação.
+   * Atualiza o evento e apaga os recursos antigos. O Controller já estornou o estoque dos
+   * recursos antigos e aloca os novos depois. Deve rodar dentro de uma transação.
    */
   async alterar(conexao: ExecutorSQL, id: number): Promise<void> {
     const dao = new EventoDAO(conexao);
@@ -99,33 +97,31 @@ export class Evento {
       throw new ErroNaoEncontrado('Evento não encontrado.');
     }
 
-    await dao.restaurarEstoqueRecursos(id);
     await dao.excluirRecursos(id);
     await dao.atualizarEvento(id, this.nome, paraIso(this.data), this.descricao);
     this.id = id;
-    await this.alocarRecursos(dao, id);
   }
 
-  /** Estorna o estoque alocado e exclui o evento (cascata remove os recursos). */
+  /** Exclui o evento (cascata remove os recursos). O Controller já estornou o estoque. */
   static async excluir(conexao: ExecutorSQL, id: number): Promise<void> {
-    const dao = new EventoDAO(conexao);
-    await dao.restaurarEstoqueRecursos(id);
-    if (!(await dao.excluirEvento(id))) {
+    if (!(await new EventoDAO(conexao).excluirEvento(id))) {
       throw new ErroNaoEncontrado('Evento não encontrado.');
     }
   }
 
-  private async alocarRecursos(dao: EventoDAO, eventoId: number): Promise<void> {
-    const origem = `Alocação para evento "${this.nome}"`;
-    for (let i = 0; i < this.recursos.length; i++) {
-      const recurso = this.recursos[i];
-      const alocado = await dao.registrarRecurso(eventoId, recurso, origem);
-      if (!alocado) {
-        throw new ErroValidacao('Estoque insuficiente.', {
-          [`recurso.${i}.quantidade`]: 'Estoque insuficiente para a quantidade informada.',
-        });
-      }
-    }
+  /** Produtos já alocados ao evento, para o Controller estornar o estoque. */
+  static async listarProdutosAlocados(conexao: ExecutorSQL, eventoId: number): Promise<ProdutoAlocado[]> {
+    return new EventoDAO(conexao).listarProdutosAlocados(eventoId);
+  }
+
+  /** Origem registrada no histórico de estoque para as saídas deste evento. */
+  getOrigemEstoque(): string {
+    return `Alocação para evento "${this.nome}"`;
+  }
+
+  /** Grava um recurso alocado. Chamado pelo Controller, recurso a recurso, depois da saída no estoque (se for produto). */
+  async incluirRecurso(conexao: ExecutorSQL, recurso: AlocacaoRecurso): Promise<void> {
+    await new EventoDAO(conexao).inserirRecurso(this.id!, recurso);
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroEvento): Promise<EventoRegistro[]> {

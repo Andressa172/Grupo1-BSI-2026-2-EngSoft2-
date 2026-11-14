@@ -4,8 +4,10 @@
 // - Façade: a View (via rotas /api/compras) só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model Compra,
 //   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
-//   Quem cria o DAO é o Model; a entrada no estoque é feita pelo Model MovimentacaoEstoque (RF_F1).
+//   Quem cria o DAO é o Model; a entrada no estoque (RF_F1) é pedida por este Controller ao
+//   AtualizarEstoqueController, item a item, dentro da mesma transação.
 import { Database } from './db/Database';
+import { AtualizarEstoqueController } from './AtualizarEstoqueController';
 import { Compra, MENSAGEM_NF_DUPLICADA, type CompraAtributos } from './model/Compra';
 import { FiltroCompra, type FiltroCompraAtributos } from './model/FiltroCompra';
 import type { CompraRegistro } from './dao/CompraDAO';
@@ -63,7 +65,28 @@ export class LancarEntradaCompraController {
       throw new ErroValidacao(MENSAGEM_NF_DUPLICADA, { numeroNF: MENSAGEM_NF_DUPLICADA });
     }
 
-    await this.conexao.comTransacao((cliente) => compra.incluir(cliente));
+    await this.conexao.comTransacao(async (cliente) => {
+      await compra.incluir(cliente);
+
+      const itens = compra.getItens();
+      for (let i = 0; i < itens.length; i++) {
+        const item = itens[i];
+        const resultado = await AtualizarEstoqueController.getInstancia().atualizarEstoque(cliente, {
+          produtoId: item.getProdutoId(),
+          tipo: 'ENTRADA',
+          quantidade: item.getQuantidade(),
+          origem: `Compra #${compra.getId()} - NF ${compra.getNumeroNF()}`,
+          dataValidade: item.getDataValidade(),
+        });
+        // fluxo 3.1: produto não cadastrado
+        if (resultado !== 'APLICADA') {
+          throw new ErroValidacao('Produto não cadastrado.', {
+            [`item.${i}.produto`]: 'Produto não cadastrado: cadastre-o em Produtos antes de lançar a compra.',
+          });
+        }
+        await compra.incluirItem(cliente, item);
+      }
+    });
     return compra;
   }
 }

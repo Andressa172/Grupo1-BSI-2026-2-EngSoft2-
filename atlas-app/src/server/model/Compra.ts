@@ -7,7 +7,6 @@ import type { ExecutorSQL } from '../dao/tipos';
 import { CompraDAO, type CompraRegistro } from '../dao/CompraDAO';
 import type { FiltroCompra } from './FiltroCompra';
 import { ItemCompra } from './ItemCompra';
-import { MovimentacaoEstoque } from './MovimentacaoEstoque';
 import { dataValida, hoje, paraIso, parseData, textoSeguro } from './datasBR';
 
 export interface CompraAtributos {
@@ -47,6 +46,10 @@ export class Compra {
 
   getId(): number | undefined {
     return this.id;
+  }
+
+  getNumeroNF(): string {
+    return this.numeroNF;
   }
 
   getItens(): readonly ItemCompra[] {
@@ -107,7 +110,7 @@ export class Compra {
   // ------------------------------ persistência ------------------------------
 
   /**
-   * Passos 9 e 10: grava a compra e os itens e dá entrada no estoque (RF_F1).
+   * Passo 9: grava a compra (os itens e a entrada no estoque, RF_F1, ficam a cargo do Controller).
    * Deve ser chamado dentro de uma transação: se qualquer passo falhar, nada fica gravado (fluxo 9.1).
    */
   async incluir(conexao: ExecutorSQL): Promise<void> {
@@ -122,24 +125,11 @@ export class Compra {
       }
       throw erro;
     }
+  }
 
-    for (let i = 0; i < this.itens.length; i++) {
-      const item = this.itens[i];
-      const registrado = await MovimentacaoEstoque.registrarEntrada(
-        conexao,
-        item.getProdutoId(),
-        item.getQuantidade(),
-        `Compra #${this.id} - NF ${this.numeroNF}`,
-        item.getDataValidade()
-      );
-      // fluxo 3.1: produto não cadastrado
-      if (!registrado) {
-        throw new ErroValidacao('Produto não cadastrado.', {
-          [`item.${i}.produto`]: 'Produto não cadastrado: cadastre-o em Produtos antes de lançar a compra.',
-        });
-      }
-      await dao.inserirItem(this.id, item);
-    }
+  /** Grava um item da compra. Chamado pelo Controller, item a item, depois da entrada no estoque. */
+  async incluirItem(conexao: ExecutorSQL, item: ItemCompra): Promise<void> {
+    await new CompraDAO(conexao).inserirItem(this.id!, item);
   }
 
   /** Fluxo 2.1: já existe compra com esta nota fiscal? Quem decide o que fazer é o Controller. */
