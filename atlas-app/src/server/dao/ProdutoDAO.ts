@@ -41,16 +41,7 @@ function linhaParaProduto(linha: ProdutoLinhaCompleta): Produto {
 }
 
 export class ProdutoDAO {
-  private static instancia: ProdutoDAO | undefined;
-
   constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
-
-  static getInstancia(): ProdutoDAO {
-    if (!ProdutoDAO.instancia) {
-      ProdutoDAO.instancia = new ProdutoDAO();
-    }
-    return ProdutoDAO.instancia;
-  }
 
   async listarTodos(): Promise<ProdutoLinha[]> {
     const resultado = await this.executor.query<ProdutoLinha>(

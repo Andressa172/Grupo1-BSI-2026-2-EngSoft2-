@@ -1,5 +1,7 @@
 // Model - Caixa (RF_F4, RF_F5, RF_F6)
 import { ErroValidacao } from '../erros';
+import type { ExecutorSQL } from '../dao/tipos';
+import { CaixaDAO } from '../dao/CaixaDAO';
 import type { MovimentacaoCaixa } from './MovimentacaoCaixa';
 
 export type StatusCaixa = 'ABERTO' | 'FECHADO';
@@ -92,6 +94,33 @@ export class Caixa {
 
   getAbertoPor(): number {
     return this.abertoPor;
+  }
+
+  // ------------------------------ persistência ------------------------------
+  // O Model cria o CaixaDAO com a conexão que recebe do Controller.
+
+  static async buscarAberto(conexao: ExecutorSQL, paraAtualizacao = false): Promise<Caixa | null> {
+    return new CaixaDAO(conexao).buscarCaixaAberto(paraAtualizacao);
+  }
+
+  static async listarTodos(conexao: ExecutorSQL): Promise<Caixa[]> {
+    return new CaixaDAO(conexao).listarTodos();
+  }
+
+  /** Grava a abertura e devolve o caixa salvo (com id e data). */
+  async incluir(conexao: ExecutorSQL): Promise<Caixa> {
+    return new CaixaDAO(conexao).inserir(this);
+  }
+
+  /** Grava o fechamento e devolve o caixa fechado, ou null se ele não estava mais aberto. */
+  async fechar(conexao: ExecutorSQL, saldoFisicoFinal: number, saldoDigitalFinal: number): Promise<Caixa | null> {
+    if (this.id === undefined) return null;
+    return new CaixaDAO(conexao).fechar(this.id, saldoFisicoFinal, saldoDigitalFinal);
+  }
+
+  async listarMovimentacoes(conexao: ExecutorSQL): Promise<MovimentacaoCaixa[]> {
+    if (this.id === undefined) return [];
+    return new CaixaDAO(conexao).listarMovimentacoesPorCaixa(this.id);
   }
 
   validarAbertura(): void {

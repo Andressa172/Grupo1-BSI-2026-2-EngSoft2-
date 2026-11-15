@@ -2,10 +2,11 @@
 // Singleton + Façade, com a conexão e a transação sob responsabilidade do Controller
 // (mesmo padrão do ReceberDoacaoProdutoController).
 import { Database } from './db/Database';
+import { CaixaController } from './CaixaController';
 import { DoacaoDinheiro, type DoacaoDinheiroAtributos } from './model/DoacaoDinheiro';
 import { FiltroDoacao, type FiltroDoacaoAtributos } from './model/FiltroDoacao';
 import type { DoacaoDinheiroRegistro } from './dao/DoacaoDinheiroDAO';
-import { ErroValidacao, type ErrosDeCampo } from './erros';
+import { ErroCaixaFechado, ErroValidacao, type ErrosDeCampo } from './erros';
 
 const MENSAGEM_CAMPOS_INVALIDOS = 'Corrija os campos destacados.';
 
@@ -27,8 +28,12 @@ export class ReceberDoacaoDinheiroController {
 
   private readonly conexao: Database;
 
+  // Controller do RF_F6, chamado para lançar a entrada no caixa
+  private readonly caixa: CaixaController;
+
   private constructor() {
     this.conexao = Database.getInstancia();
+    this.caixa = CaixaController.getInstancia();
   }
 
   static getInstancia(): ReceberDoacaoDinheiroController {
@@ -49,7 +54,25 @@ export class ReceberDoacaoDinheiroController {
   async registrar(dados: unknown): Promise<DoacaoDinheiro> {
     const doacao = new DoacaoDinheiro(comoObjeto(dados));
     lancarSeTiverErros(doacao.validar());
-    await this.conexao.comTransacao((cliente) => doacao.incluir(cliente));
+    await this.conexao.comTransacao(async (cliente) => {
+      await doacao.incluir(cliente);
+      try {
+        await this.caixa.atualizarCaixa(
+          {
+            valor: doacao.getValor(),
+            tipoMovimentacao: 'ENTRADA',
+            formaPag: doacao.getFormaRecebimento() === 'Dinheiro' ? 'FISICO' : 'DIGITAL',
+            origem: `Doação em dinheiro #${doacao.getId()}`,
+          },
+          cliente
+        );
+        doacao.setCaixaAtualizado(true);
+      } catch (erro) {
+        // sem caixa aberto a doação continua registrada, só não há onde lançar a entrada
+        if (!(erro instanceof ErroCaixaFechado)) throw erro;
+        doacao.setCaixaAtualizado(false);
+      }
+    });
     return doacao;
   }
 }

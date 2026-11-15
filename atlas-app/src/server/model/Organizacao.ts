@@ -1,5 +1,7 @@
 import { validarCNPJ } from '@/lib/cnpj';
 import { ErroValidacao } from '../erros';
+import type { ExecutorSQL } from '../dao/tipos';
+import { OrganizacaoDAO } from '../dao/OrganizacaoDAO';
 
 export interface OrganizacaoAtributos {
   id?: number;
@@ -63,6 +65,19 @@ export class Organizacao {
     if (this.endereco && this.endereco.length > 255) {
       throw new ErroValidacao('O endereço completo deve ter no máximo 255 caracteres.');
     }
+  }
+
+  // ------------------------------ persistência ------------------------------
+  // O Model cria o OrganizacaoDAO com a conexão que recebe do Controller.
+
+  /** Organização cadastrada (registro id = 1), ou null se a tabela está vazia. */
+  static async obter(conexao: ExecutorSQL): Promise<Organizacao | null> {
+    return new OrganizacaoDAO(conexao).obter();
+  }
+
+  /** Grava (insere ou atualiza) e devolve a organização salva. */
+  async salvar(conexao: ExecutorSQL): Promise<Organizacao> {
+    return new OrganizacaoDAO(conexao).salvar(this);
   }
 
   paraLinhaDeDados() {

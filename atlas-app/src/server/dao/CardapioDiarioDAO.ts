@@ -27,16 +27,7 @@ export interface ItemCardapioRegistrado {
 }
 
 export class CardapioDiarioDAO {
-  private static instancia: CardapioDiarioDAO | undefined;
-
   constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
-
-  static getInstancia(): CardapioDiarioDAO {
-    if (!CardapioDiarioDAO.instancia) {
-      CardapioDiarioDAO.instancia = new CardapioDiarioDAO();
-    }
-    return CardapioDiarioDAO.instancia;
-  }
 
   async existeParaDataETipo(dataIso: string, tipoRefeicao: TipoRefeicao, idIgnorado?: number): Promise<boolean> {
     const resultado = await this.executor.query(
