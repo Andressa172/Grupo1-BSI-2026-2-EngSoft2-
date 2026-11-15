@@ -1,5 +1,7 @@
 // Model - MovimentacaoCaixa (RF_F6)
 import { ErroValidacao } from '../erros';
+import { CaixaDAO } from '../dao/CaixaDAO';
+import type { ExecutorSQL } from '../dao/tipos';
 
 export type TipoMovimentacaoCaixa = 'ENTRADA' | 'SAIDA';
 export type FormaPagamentoCaixa = 'FISICO' | 'DIGITAL';
@@ -77,6 +79,14 @@ export class MovimentacaoCaixa {
     if (!this.origem) {
       throw new ErroValidacao('Informe a origem da movimentação.');
     }
+  }
+
+  async inserir(conexao: ExecutorSQL): Promise<MovimentacaoCaixa> {
+    return new CaixaDAO(conexao).inserirMovimentacao(this);
+  }
+
+  static async listarPorCaixa(conexao: ExecutorSQL, caixaId: number): Promise<MovimentacaoCaixa[]> {
+    return new CaixaDAO(conexao).listarMovimentacoesPorCaixa(caixaId);
   }
 
   paraLinhaDeDados() {

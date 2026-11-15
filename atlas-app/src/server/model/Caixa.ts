@@ -1,5 +1,7 @@
 // Model - Caixa (RF_F4, RF_F5, RF_F6)
 import { ErroValidacao } from '../erros';
+import { CaixaDAO } from '../dao/CaixaDAO';
+import type { ExecutorSQL } from '../dao/tipos';
 import type { MovimentacaoCaixa } from './MovimentacaoCaixa';
 
 export type StatusCaixa = 'ABERTO' | 'FECHADO';
@@ -128,6 +130,23 @@ export class Caixa {
       fisico: deCentavos(fisicoCentavos),
       digital: deCentavos(digitalCentavos),
     };
+  }
+
+  static async buscarAberto(conexao: ExecutorSQL, paraAtualizacao = false): Promise<Caixa | null> {
+    return new CaixaDAO(conexao).buscarCaixaAberto(paraAtualizacao);
+  }
+
+  static async listarTodos(conexao: ExecutorSQL): Promise<Caixa[]> {
+    return new CaixaDAO(conexao).listarTodos();
+  }
+
+  async inserir(conexao: ExecutorSQL): Promise<Caixa> {
+    return new CaixaDAO(conexao).inserir(this);
+  }
+
+  async fechar(conexao: ExecutorSQL, saldoFisicoFinal: number, saldoDigitalFinal: number): Promise<Caixa | null> {
+    if (!this.id) return null;
+    return new CaixaDAO(conexao).fechar(this.id, saldoFisicoFinal, saldoDigitalFinal);
   }
 
   paraLinhaDeDados() {
