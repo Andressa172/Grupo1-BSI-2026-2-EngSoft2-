@@ -12,6 +12,8 @@ import type { ExecutorSQL } from './dao/tipos';
 import { CardapioDiario, type CardapioDiarioAtributos } from './model/CardapioDiario';
 import { FiltroCardapio, type FiltroCardapioAtributos } from './model/FiltroCardapio';
 import type { CardapioRegistro } from './dao/CardapioDiarioDAO';
+import { Produto } from './model/Produto';
+import type { ProdutoLinha } from './dao/ProdutoDAO';
 import { ErroValidacao, type ErrosDeCampo } from './erros';
 
 const MENSAGEM_CAMPOS_INVALIDOS = 'Corrija os campos destacados.';
@@ -44,6 +46,11 @@ export class CriarCardapioController {
       CriarCardapioController.instancia = new CriarCardapioController();
     }
     return CriarCardapioController.instancia;
+  }
+
+  /** Produtos para o select da tela. */
+  async listarProdutos(): Promise<ProdutoLinha[]> {
+    return Produto.listarTodos(this.conexao);
   }
 
   /** Consulta com 2 filtros: período da data e tipo de refeição. */

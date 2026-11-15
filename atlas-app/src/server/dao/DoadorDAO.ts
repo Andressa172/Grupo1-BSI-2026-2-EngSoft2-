@@ -30,17 +30,7 @@ function linhaParaDoador(linha: DoadorLinha): Doador {
 }
 
 export class DoadorDAO {
-  // singleton, igual o Database: evita o Control ficar dando "new DoadorDAO()" direto
-  private static instancia: DoadorDAO | undefined;
-
   constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
-
-  static getInstancia(): DoadorDAO {
-    if (!DoadorDAO.instancia) {
-      DoadorDAO.instancia = new DoadorDAO();
-    }
-    return DoadorDAO.instancia;
-  }
 
   async listarTodos(): Promise<Doador[]> {
     const resultado = await this.executor.query<DoadorLinha>(`SELECT ${COLUNAS} FROM doador ORDER BY nome`);

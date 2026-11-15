@@ -1,20 +1,29 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ParametrizarOrganizacaoController } from './ParametrizarOrganizacaoController';
-import { Organizacao } from './model/Organizacao';
 import { ErroValidacao } from './erros';
-import type { OrganizacaoDAO } from './dao/OrganizacaoDAO';
+import type { ExecutorSQL } from './dao/tipos';
+import type { OrganizacaoLinha } from './dao/OrganizacaoDAO';
 
-function criarOrganizacaoDAOFalso(inicial: Organizacao | null = null) {
-  let organizacao = inicial;
+// Conexão falsa que responde às duas consultas do OrganizacaoDAO (o Model é quem cria o DAO).
+function criarConexaoFalsa(): ExecutorSQL {
+  let linha: OrganizacaoLinha | null = null;
   return {
-    async obter() {
-      return organizacao;
+    async query(texto: string, parametros: unknown[] = []) {
+      if (texto.trim().startsWith('INSERT')) {
+        const [nome, cnpj, endereco, telefone, email, logo] = parametros as (string | null)[];
+        linha = {
+          id: 1,
+          nome_fantasia: nome as string,
+          cnpj,
+          endereco,
+          telefone,
+          email,
+          caminho_logo: logo ?? linha?.caminho_logo ?? null,
+        };
+      }
+      return { rows: linha ? [linha] : [] };
     },
-    async salvar(novaOrganizacao: Organizacao) {
-      organizacao = novaOrganizacao;
-      return novaOrganizacao;
-    },
-  } as unknown as OrganizacaoDAO;
+  } as unknown as ExecutorSQL;
 }
 
 const dadosValidos = {
@@ -27,7 +36,7 @@ describe('ParametrizarOrganizacaoController - RF_Parametrizacao', () => {
   let controller: ParametrizarOrganizacaoController;
 
   beforeEach(() => {
-    controller = ParametrizarOrganizacaoController.criarParaTeste(criarOrganizacaoDAOFalso());
+    controller = ParametrizarOrganizacaoController.criarParaTeste(criarConexaoFalsa());
   });
 
   it('retorna parâmetros padrão quando a organização ainda não foi cadastrada', async () => {

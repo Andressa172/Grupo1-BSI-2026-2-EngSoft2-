@@ -38,11 +38,7 @@ export interface DadosAtualizarCaixa {
 export class CaixaController {
   private static instancia: CaixaController | undefined;
 
-  private readonly conexao: Database;
-
-  private constructor() {
-    this.conexao = Database.getInstancia();
-  }
+  private constructor(private readonly database: Pick<Database, 'comTransacao' | 'query'> = Database.getInstancia()) {}
 
   static getInstancia(): CaixaController {
     if (!CaixaController.instancia) {
@@ -53,6 +49,11 @@ export class CaixaController {
 
   static getInstance(): CaixaController {
     return CaixaController.getInstancia();
+  }
+
+  /** Fábrica auxiliar para injeção de uma conexão falsa em testes unitários sem perder o construtor privado. */
+  static criarParaTeste(database: Pick<Database, 'comTransacao' | 'query'>): CaixaController {
+    return new CaixaController(database);
   }
 
   /** RF_F4 - Abrir Caixa (apenas Gerente). */
@@ -68,13 +69,14 @@ export class CaixaController {
     });
     novoCaixa.validarAbertura();
 
-    return this.conexao.comTransacao(async (client) => {
-      const caixaExistente = await Caixa.buscarAberto(client, true);
+    return this.database.comTransacao(async (client) => {
+      const conexao = client as unknown as ExecutorSQL;
+      const caixaExistente = await Caixa.buscarAberto(conexao, true);
       if (caixaExistente) {
         throw new ErroConflito('Já existe um caixa aberto no momento.');
       }
 
-      const caixaSalvo = await novoCaixa.inserir(client);
+      const caixaSalvo = await novoCaixa.incluir(conexao);
       return caixaSalvo.paraLinhaDeDados();
     });
   }
@@ -84,13 +86,14 @@ export class CaixaController {
     const saldoFisicoFinal = parseSaldoValido(dados.saldoFisicoFinal, 'saldoFisicoFinal');
     const saldoDigitalFinal = parseSaldoValido(dados.saldoDigitalFinal, 'saldoDigitalFinal');
 
-    return this.conexao.comTransacao(async (client) => {
-      const caixaAberto = await Caixa.buscarAberto(client, true);
+    return this.database.comTransacao(async (client) => {
+      const conexao = client as unknown as ExecutorSQL;
+      const caixaAberto = await Caixa.buscarAberto(conexao, true);
       if (!caixaAberto || !caixaAberto.getId()) {
         throw new ErroNaoEncontrado('Não há nenhum caixa aberto para fechar.');
       }
 
-      const movimentacoes = await MovimentacaoCaixa.listarPorCaixa(client, caixaAberto.getId()!);
+      const movimentacoes = await caixaAberto.listarMovimentacoes(conexao);
       const esperados = caixaAberto.calcularSaldosEsperados(movimentacoes);
 
       const diferencaFisico = deCentavos(paraCentavos(saldoFisicoFinal) - paraCentavos(esperados.fisico));
@@ -110,7 +113,7 @@ export class CaixaController {
         );
       }
 
-      const caixaFechado = await caixaAberto.fechar(client, saldoFisicoFinal, saldoDigitalFinal);
+      const caixaFechado = await caixaAberto.fechar(conexao, saldoFisicoFinal, saldoDigitalFinal);
       if (!caixaFechado) {
         throw new ErroNaoEncontrado('Não foi possível localizar o caixa aberto para fechamento.');
       }
@@ -161,7 +164,7 @@ export class CaixaController {
       movimentacao.validar();
 
       if (movimentacao.getTipo() === 'SAIDA') {
-        const movimentacoes = await MovimentacaoCaixa.listarPorCaixa(executor, caixaAberto.getId()!);
+        const movimentacoes = await caixaAberto.listarMovimentacoes(executor);
         const saldos = caixaAberto.calcularSaldosEsperados(movimentacoes);
         const saldoDisponivel =
           movimentacao.getFormaPag() === 'FISICO' ? saldos.fisico : saldos.digital;
@@ -173,22 +176,20 @@ export class CaixaController {
         }
       }
 
-      const salva = await movimentacao.inserir(executor);
+      const salva = await movimentacao.incluir(executor);
       return salva.paraLinhaDeDados();
     };
 
     if (dbClient) {
       return executar(dbClient);
     }
-    return this.conexao.comTransacao((client) => executar(client));
+    return this.database.comTransacao((client) => executar(client));
   }
 
   /** Retorna o caixa aberto (com movimentações e saldos) e o histórico de caixas. */
   async obterEstadoAtual() {
-    const [caixaAberto, todos] = await Promise.all([
-      Caixa.buscarAberto(this.conexao, false),
-      Caixa.listarTodos(this.conexao),
-    ]);
+    const conexao = this.database as unknown as ExecutorSQL;
+    const [caixaAberto, todos] = await Promise.all([Caixa.buscarAberto(conexao, false), Caixa.listarTodos(conexao)]);
 
     if (!caixaAberto || !caixaAberto.getId()) {
       return {
@@ -197,7 +198,7 @@ export class CaixaController {
       };
     }
 
-    const movimentacoes = await MovimentacaoCaixa.listarPorCaixa(this.conexao, caixaAberto.getId()!);
+    const movimentacoes = await caixaAberto.listarMovimentacoes(conexao);
     const saldosAtuais = caixaAberto.calcularSaldosEsperados(movimentacoes);
 
     return {

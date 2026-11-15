@@ -1,5 +1,5 @@
 // Model - DoacaoDinheiro (RF_F11 - Receber doação em dinheiro)
-import { type ErrosDeCampo } from '../erros';
+import type { ErrosDeCampo } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
 import { DoacaoDinheiroDAO, type DoacaoDinheiroRegistro } from '../dao/DoacaoDinheiroDAO';
 import type { FiltroDoacao } from './FiltroDoacao';
@@ -48,7 +48,8 @@ export class DoacaoDinheiro {
     return this.caixaAtualizado;
   }
 
-  marcarCaixaAtualizado(atualizado: boolean): void {
+  // o Controller informa se a entrada foi lançada no caixa (RF_F6)
+  setCaixaAtualizado(atualizado: boolean): void {
     this.caixaAtualizado = atualizado;
   }
 
@@ -74,7 +75,7 @@ export class DoacaoDinheiro {
 
   // ------------------------------ persistência ------------------------------
 
-  /** Grava a doação. Chamar dentro de uma transação. */
+  /** Grava a doação (a entrada no caixa, RF_F6, fica a cargo do Controller). Chamar dentro de uma transação. */
   async incluir(conexao: ExecutorSQL): Promise<void> {
     const doadorId = await this.doador.obterId(conexao);
     const dao = new DoacaoDinheiroDAO(conexao);

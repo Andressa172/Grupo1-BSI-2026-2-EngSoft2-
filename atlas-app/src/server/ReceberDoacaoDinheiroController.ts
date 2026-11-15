@@ -28,8 +28,12 @@ export class ReceberDoacaoDinheiroController {
 
   private readonly conexao: Database;
 
+  // Controller do RF_F6, chamado para lançar a entrada no caixa
+  private readonly caixa: CaixaController;
+
   private constructor() {
     this.conexao = Database.getInstancia();
+    this.caixa = CaixaController.getInstancia();
   }
 
   static getInstancia(): ReceberDoacaoDinheiroController {
@@ -53,7 +57,7 @@ export class ReceberDoacaoDinheiroController {
     await this.conexao.comTransacao(async (cliente) => {
       await doacao.incluir(cliente);
       try {
-        await CaixaController.getInstancia().atualizarCaixa(
+        await this.caixa.atualizarCaixa(
           {
             valor: doacao.getValor(),
             tipoMovimentacao: 'ENTRADA',
@@ -62,13 +66,11 @@ export class ReceberDoacaoDinheiroController {
           },
           cliente
         );
-        doacao.marcarCaixaAtualizado(true);
+        doacao.setCaixaAtualizado(true);
       } catch (erro) {
-        if (erro instanceof ErroCaixaFechado) {
-          doacao.marcarCaixaAtualizado(false);
-          return;
-        }
-        throw erro;
+        // sem caixa aberto a doação continua registrada, só não há onde lançar a entrada
+        if (!(erro instanceof ErroCaixaFechado)) throw erro;
+        doacao.setCaixaAtualizado(false);
       }
     });
     return doacao;

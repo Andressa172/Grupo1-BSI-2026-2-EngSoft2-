@@ -1,6 +1,7 @@
 // Control - ParametrizarOrganizacaoController (RF_Parametrizacao)
 import { Database } from './db/Database';
 import { Organizacao } from './model/Organizacao';
+import type { ExecutorSQL } from './dao/tipos';
 
 export interface DadosAtualizacaoOrganizacao {
   nomeFantasia: string;
@@ -16,11 +17,7 @@ export type ResultadoOrganizacao = ReturnType<Organizacao['paraLinhaDeDados']>;
 export class ParametrizarOrganizacaoController {
   private static instancia: ParametrizarOrganizacaoController | undefined;
 
-  private readonly conexao: Database;
-
-  private constructor() {
-    this.conexao = Database.getInstancia();
-  }
+  private constructor(private readonly conexao: ExecutorSQL = Database.getInstancia()) {}
 
   static getInstancia(): ParametrizarOrganizacaoController {
     if (!ParametrizarOrganizacaoController.instancia) {
@@ -31,6 +28,11 @@ export class ParametrizarOrganizacaoController {
 
   static getInstance(): ParametrizarOrganizacaoController {
     return ParametrizarOrganizacaoController.getInstancia();
+  }
+
+  /** Fábrica auxiliar para injeção de uma conexão falsa em testes unitários. */
+  static criarParaTeste(conexao: ExecutorSQL): ParametrizarOrganizacaoController {
+    return new ParametrizarOrganizacaoController(conexao);
   }
 
   /**
