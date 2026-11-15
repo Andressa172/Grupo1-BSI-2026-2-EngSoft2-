@@ -1,4 +1,3 @@
-import { Database } from '../db/Database';
 import { Organizacao } from '../model/Organizacao';
 import type { ExecutorSQL } from './tipos';
 
@@ -25,7 +24,7 @@ function linhaParaOrganizacao(linha: OrganizacaoLinha): Organizacao {
 }
 
 export class OrganizacaoDAO {
-  constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
+  constructor(private readonly executor: ExecutorSQL) {}
 
   async obter(): Promise<Organizacao | null> {
     const resultado = await this.executor.query<OrganizacaoLinha>(

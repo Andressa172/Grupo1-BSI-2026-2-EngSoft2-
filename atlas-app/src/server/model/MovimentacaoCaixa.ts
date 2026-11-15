@@ -86,6 +86,14 @@ export class MovimentacaoCaixa {
     }
   }
 
+  async inserir(conexao: ExecutorSQL): Promise<MovimentacaoCaixa> {
+    return new CaixaDAO(conexao).inserirMovimentacao(this);
+  }
+
+  static async listarPorCaixa(conexao: ExecutorSQL, caixaId: number): Promise<MovimentacaoCaixa[]> {
+    return new CaixaDAO(conexao).listarMovimentacoesPorCaixa(caixaId);
+  }
+
   paraLinhaDeDados() {
     return {
       id: this.id,

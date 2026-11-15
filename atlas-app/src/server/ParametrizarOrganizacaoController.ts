@@ -1,6 +1,6 @@
 // Control - ParametrizarOrganizacaoController (RF_Parametrizacao)
-import { Organizacao } from './model/Organizacao';
 import { Database } from './db/Database';
+import { Organizacao } from './model/Organizacao';
 import type { ExecutorSQL } from './dao/tipos';
 
 export interface DadosAtualizacaoOrganizacao {

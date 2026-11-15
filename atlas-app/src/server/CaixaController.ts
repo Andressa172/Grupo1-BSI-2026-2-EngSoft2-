@@ -183,7 +183,7 @@ export class CaixaController {
     if (dbClient) {
       return executar(dbClient);
     }
-    return this.database.comTransacao((client) => executar(client as unknown as ExecutorSQL));
+    return this.database.comTransacao((client) => executar(client));
   }
 
   /** Retorna o caixa aberto (com movimentações e saldos) e o histórico de caixas. */
