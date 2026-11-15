@@ -3,12 +3,15 @@
  * Uso: tsx scripts/db-run-sql.ts sql/schema.sql
  */
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config } from 'dotenv';
 import { Client } from 'pg';
 
-config({ path: resolve(process.cwd(), '.env.local') });
-config({ path: resolve(process.cwd(), '.env') });
+const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+config({ path: resolve(appRoot, '.env.local') });
+config({ path: resolve(appRoot, '.env') });
 
 const caminho = process.argv[2];
 if (!caminho) {
@@ -17,7 +20,7 @@ if (!caminho) {
 }
 
 const connectionString = process.env.DATABASE_URL ?? 'postgresql://atlas:atlas@localhost:5432/atlas';
-const sql = readFileSync(resolve(process.cwd(), caminho), 'utf-8');
+const sql = readFileSync(resolve(appRoot, caminho), 'utf-8');
 
 async function main() {
   const client = new Client({ connectionString });
