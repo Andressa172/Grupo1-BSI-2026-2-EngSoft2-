@@ -2,10 +2,11 @@
 // Singleton + Façade, com a conexão e a transação sob responsabilidade do Controller
 // (mesmo padrão do ReceberDoacaoProdutoController).
 import { Database } from './db/Database';
+import { CaixaController } from './CaixaController';
 import { DoacaoDinheiro, type DoacaoDinheiroAtributos } from './model/DoacaoDinheiro';
 import { FiltroDoacao, type FiltroDoacaoAtributos } from './model/FiltroDoacao';
 import type { DoacaoDinheiroRegistro } from './dao/DoacaoDinheiroDAO';
-import { ErroValidacao, type ErrosDeCampo } from './erros';
+import { ErroCaixaFechado, ErroValidacao, type ErrosDeCampo } from './erros';
 
 const MENSAGEM_CAMPOS_INVALIDOS = 'Corrija os campos destacados.';
 
@@ -49,7 +50,27 @@ export class ReceberDoacaoDinheiroController {
   async registrar(dados: unknown): Promise<DoacaoDinheiro> {
     const doacao = new DoacaoDinheiro(comoObjeto(dados));
     lancarSeTiverErros(doacao.validar());
-    await this.conexao.comTransacao((cliente) => doacao.incluir(cliente));
+    await this.conexao.comTransacao(async (cliente) => {
+      await doacao.incluir(cliente);
+      try {
+        await CaixaController.getInstancia().atualizarCaixa(
+          {
+            valor: doacao.getValor(),
+            tipoMovimentacao: 'ENTRADA',
+            formaPag: doacao.getFormaRecebimento() === 'Dinheiro' ? 'FISICO' : 'DIGITAL',
+            origem: `Doação em dinheiro #${doacao.getId()}`,
+          },
+          cliente
+        );
+        doacao.marcarCaixaAtualizado(true);
+      } catch (erro) {
+        if (erro instanceof ErroCaixaFechado) {
+          doacao.marcarCaixaAtualizado(false);
+          return;
+        }
+        throw erro;
+      }
+    });
     return doacao;
   }
 }
