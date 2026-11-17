@@ -1,6 +1,6 @@
 // Controller - AbrirCotacaoController (RF_F7 - Abrir cotação / CAbrirCotacao na ERS)
 //
-// - Singleton + Façade: única instância (`instancia` estática privada + construtor privado + `getInstancia()`).
+// - Não se auto-instancia: quem usa o Controller (a rota) cria com `new`. Façade: a View só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database Singleton).
 // - Instancia as entidades Cotacao, ItemCotacao e FiltroCotacao.
 // - Executa as regras de negócio (IF de hierarquia de cargo Secretário), inicia a transação
@@ -13,18 +13,10 @@ import { ItemCotacao } from './model/ItemCotacao';
 import { FiltroCotacao, type FiltroCotacaoAtributos } from './model/FiltroCotacao';
 
 export class AbrirCotacaoController {
-  private static instancia: AbrirCotacaoController | null = null;
   private readonly conexao: Database;
 
-  private constructor() {
+  constructor() {
     this.conexao = Database.getInstancia();
-  }
-
-  static getInstancia(): AbrirCotacaoController {
-    if (!AbrirCotacaoController.instancia) {
-      AbrirCotacaoController.instancia = new AbrirCotacaoController();
-    }
-    return AbrirCotacaoController.instancia;
   }
 
   /**

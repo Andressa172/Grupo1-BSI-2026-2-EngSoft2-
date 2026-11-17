@@ -36,25 +36,7 @@ export interface DadosAtualizarCaixa {
 }
 
 export class CaixaController {
-  private static instancia: CaixaController | undefined;
-
-  private constructor(private readonly database: Pick<Database, 'comTransacao' | 'query'> = Database.getInstancia()) {}
-
-  static getInstancia(): CaixaController {
-    if (!CaixaController.instancia) {
-      CaixaController.instancia = new CaixaController();
-    }
-    return CaixaController.instancia;
-  }
-
-  static getInstance(): CaixaController {
-    return CaixaController.getInstancia();
-  }
-
-  /** Fábrica auxiliar para injeção de uma conexão falsa em testes unitários sem perder o construtor privado. */
-  static criarParaTeste(database: Pick<Database, 'comTransacao' | 'query'>): CaixaController {
-    return new CaixaController(database);
-  }
+  constructor(private readonly database: Pick<Database, 'comTransacao' | 'query'> = Database.getInstancia()) {}
 
   /** RF_F4 - Abrir Caixa (apenas Gerente). */
   async abrirCaixa(dados: DadosAbrirCaixa, idFuncionario: number) {

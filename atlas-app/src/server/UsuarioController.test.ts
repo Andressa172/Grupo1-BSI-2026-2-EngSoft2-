@@ -3,6 +3,7 @@ import { UsuarioController } from './UsuarioController';
 import { Usuario, limparCPF } from './model/Usuario';
 import type { FiltroUsuario } from './model/FiltroUsuario';
 import { Database } from './db/Database';
+import type { UsuarioDados } from './dao/UsuarioDAO';
 import {
   ErroAutenticacao,
   ErroNaoEncontrado,
@@ -36,12 +37,17 @@ vi.mock('./dao/UsuarioDAO', () => ({
       banco.conexoesUsadas.push(conexao);
     }
 
+    // o DAO devolve registros simples; o Model monta o Usuario
+    private registro(usuario?: Usuario) {
+      return usuario ? usuario.paraLinhaDeDados() : null;
+    }
+
     async buscarPorLogin(login: string) {
-      return banco.usuarios.find((u) => u.getLogin().toLowerCase() === login.toLowerCase()) ?? null;
+      return this.registro(banco.usuarios.find((u) => u.getLogin().toLowerCase() === login.toLowerCase()));
     }
 
     async buscarPorId(id: number) {
-      return banco.usuarios.find((u) => u.getId() === id) ?? null;
+      return this.registro(banco.usuarios.find((u) => u.getId() === id));
     }
 
     async consultar(filtro: FiltroUsuario) {
@@ -56,7 +62,7 @@ vi.mock('./dao/UsuarioDAO', () => ({
           !filtro.getStatus() ||
           (filtro.getStatus() === 'ATIVO' ? u.isAtivo() : !u.isAtivo());
         return bateNomeOuLogin && batePerfil && bateStatus;
-      });
+      }).map((u) => u.paraLinhaDeDados());
     }
 
     async existeComLogin(login: string, idIgnorado?: number) {
@@ -76,17 +82,19 @@ vi.mock('./dao/UsuarioDAO', () => ({
       ).length;
     }
 
-    async inserir(usuario: Usuario) {
+    async inserir(dados: UsuarioDados) {
+      const usuario = new Usuario(dados);
       usuario.setId(banco.proximoId++);
       banco.usuarios.push(usuario);
-      return usuario;
+      return usuario.paraLinhaDeDados();
     }
 
-    async atualizar(usuario: Usuario) {
-      const indice = banco.usuarios.findIndex((u) => u.getId() === usuario.getId());
+    async atualizar(dados: UsuarioDados) {
+      const indice = banco.usuarios.findIndex((u) => u.getId() === dados.id);
       if (indice === -1) return null;
+      const usuario = new Usuario(dados);
       banco.usuarios[indice] = usuario;
-      return usuario;
+      return usuario.paraLinhaDeDados();
     }
 
     async excluir(id: number) {
@@ -104,7 +112,7 @@ vi.mock('./dao/UsuarioDAO', () => ({
 }));
 
 describe('UsuarioController - Autenticação e RF_B2 Gerenciar Funcionários', () => {
-  const controller = UsuarioController.getInstancia();
+  const controller = new UsuarioController();
 
   beforeEach(() => {
     banco.usuarios = [
@@ -132,9 +140,9 @@ describe('UsuarioController - Autenticação e RF_B2 Gerenciar Funcionários', (
     banco.conexoesUsadas = [];
   });
 
-  describe('padrões Singleton e camadas (Control -> Model -> DAO)', () => {
-    it('getInstancia devolve sempre a mesma instância', () => {
-      expect(UsuarioController.getInstancia()).toBe(controller);
+  describe('padrões de camadas (Control -> Model -> DAO)', () => {
+    it('o Controller não se auto-instancia: quem o usa cria com new', () => {
+      expect(new UsuarioController()).not.toBe(controller);
     });
 
     it('o Controller obtém a conexão pelo Singleton Database', () => {

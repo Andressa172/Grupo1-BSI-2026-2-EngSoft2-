@@ -1,8 +1,8 @@
 // Model - Caixa (RF_F4, RF_F5, RF_F6)
 import { ErroValidacao } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
-import { CaixaDAO } from '../dao/CaixaDAO';
-import type { MovimentacaoCaixa } from './MovimentacaoCaixa';
+import { CaixaDAO, type CaixaRegistro } from '../dao/CaixaDAO';
+import { MovimentacaoCaixa } from './MovimentacaoCaixa';
 
 export type StatusCaixa = 'ABERTO' | 'FECHADO';
 
@@ -100,27 +100,41 @@ export class Caixa {
   // O Model cria o CaixaDAO com a conexão que recebe do Controller.
 
   static async buscarAberto(conexao: ExecutorSQL, paraAtualizacao = false): Promise<Caixa | null> {
-    return new CaixaDAO(conexao).buscarCaixaAberto(paraAtualizacao);
+    const registro = await new CaixaDAO(conexao).buscarCaixaAberto(paraAtualizacao);
+    return registro ? Caixa.doRegistro(registro) : null;
   }
 
   static async listarTodos(conexao: ExecutorSQL): Promise<Caixa[]> {
-    return new CaixaDAO(conexao).listarTodos();
+    const registros = await new CaixaDAO(conexao).listarTodos();
+    return registros.map((registro) => Caixa.doRegistro(registro));
   }
 
   /** Grava a abertura e devolve o caixa salvo (com id e data). */
   async incluir(conexao: ExecutorSQL): Promise<Caixa> {
-    return new CaixaDAO(conexao).inserir(this);
+    const salvo = await new CaixaDAO(conexao).inserir({
+      saldoFisicoAbertura: this.saldoFisicoAbertura,
+      saldoDigitalAbertura: this.saldoDigitalAbertura,
+      abertoPor: this.abertoPor,
+    });
+    return Caixa.doRegistro(salvo);
   }
 
   /** Grava o fechamento e devolve o caixa fechado, ou null se ele não estava mais aberto. */
   async fechar(conexao: ExecutorSQL, saldoFisicoFinal: number, saldoDigitalFinal: number): Promise<Caixa | null> {
     if (this.id === undefined) return null;
-    return new CaixaDAO(conexao).fechar(this.id, saldoFisicoFinal, saldoDigitalFinal);
+    const fechado = await new CaixaDAO(conexao).fechar(this.id, saldoFisicoFinal, saldoDigitalFinal);
+    return fechado ? Caixa.doRegistro(fechado) : null;
   }
 
   async listarMovimentacoes(conexao: ExecutorSQL): Promise<MovimentacaoCaixa[]> {
     if (this.id === undefined) return [];
-    return new CaixaDAO(conexao).listarMovimentacoesPorCaixa(this.id);
+    const registros = await new CaixaDAO(conexao).listarMovimentacoesPorCaixa(this.id);
+    return registros.map((registro) => new MovimentacaoCaixa(registro));
+  }
+
+  // o DAO devolve registros simples; o Model é quem monta o Caixa
+  private static doRegistro(registro: CaixaRegistro): Caixa {
+    return new Caixa(registro);
   }
 
   validarAbertura(): void {

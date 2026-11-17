@@ -14,7 +14,7 @@ export async function PUT(request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
     const dados = await lerJson(request);
-    const evento = await AlocarRecursosController.getInstancia().alterar(Number(id), dados);
+    const evento = await new AlocarRecursosController().alterar(Number(id), dados);
     return Response.json({ id: evento.getId() });
   } catch (erro) {
     return respostaDeErro(erro);
@@ -24,7 +24,7 @@ export async function PUT(request: Request, { params }: Contexto) {
 export async function DELETE(_request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
-    await AlocarRecursosController.getInstancia().excluir(Number(id));
+    await new AlocarRecursosController().excluir(Number(id));
     return Response.json({ mensagem: 'Evento excluído.' });
   } catch (erro) {
     return respostaDeErro(erro);

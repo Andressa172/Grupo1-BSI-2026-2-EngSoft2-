@@ -11,7 +11,7 @@ import { lerJson } from '@/server/lerJson';
 export async function GET(request: Request) {
   try {
     const parametros = new URL(request.url).searchParams;
-    const usuarios = await UsuarioController.getInstancia().consultar({
+    const usuarios = await new UsuarioController().consultar({
       nome: parametros.get('nome'),
       perfil: parametros.get('perfil'),
       status: parametros.get('status'),
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const dados = await lerJson(request);
-    const usuario = await UsuarioController.getInstancia().cadastrar(dados);
+    const usuario = await new UsuarioController().cadastrar(dados);
     return Response.json(usuario.paraDadosPublicos(), { status: 201 });
   } catch (erro) {
     return respostaDeErro(erro);

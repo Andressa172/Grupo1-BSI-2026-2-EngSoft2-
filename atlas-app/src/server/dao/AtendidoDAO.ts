@@ -1,10 +1,27 @@
 // DAO - Atendido (RF_B1). Só executa SQL; todas as consultas usam parâmetros ($1, $2...)
-// e nunca concatenam texto vindo do usuário no comando SQL.
+// e nunca concatenam texto vindo do usuário no comando SQL. Recebe a conexão no construtor e os
+// dados por parâmetro, e devolve registros simples (AtendidoRegistro): quem monta o Atendido é o Model.
 import type { ExecutorSQL } from './tipos';
-import { Database } from '../db/Database';
-import { Atendido } from '../model/Atendido';
 import type { FiltroAtendido } from '../model/FiltroAtendido';
-import { paraIso } from '../model/datasBR';
+
+// dados que o Model passa para gravar (datas em aaaa-mm-dd)
+export interface AtendidoDados {
+  id?: number;
+  nome: string;
+  dataNascimento: string;
+  sexo: string;
+  responsavelLegal: string;
+}
+
+// registro lido do banco (datas em aaaa-mm-dd)
+export interface AtendidoRegistro {
+  id: number;
+  nome: string;
+  dataNascimento: string;
+  sexo: string;
+  responsavelLegal: string;
+  dataCadastro: string;
+}
 
 interface AtendidoLinha {
   id: number;
@@ -40,46 +57,46 @@ function escaparCuringas(texto: string): string {
   return texto.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
-function linhaParaAtendido(linha: AtendidoLinha): Atendido {
-  return new Atendido({
+function linhaParaRegistro(linha: AtendidoLinha): AtendidoRegistro {
+  return {
     id: linha.id,
     nome: linha.nome,
     dataNascimento: linha.data_nascimento,
     sexo: linha.sexo ?? '',
     responsavelLegal: linha.responsavel_legal ?? '',
     dataCadastro: linha.data_cadastro,
-  });
+  };
 }
 
 export class AtendidoDAO {
-  constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
+  constructor(private readonly executor: ExecutorSQL) {}
 
-  async inserir(atendido: Atendido): Promise<Atendido> {
+  async inserir(atendido: AtendidoDados): Promise<AtendidoRegistro> {
     const resultado = await this.executor.query<AtendidoLinha>(
       `INSERT INTO atendido (nome, data_nascimento, sexo, responsavel_legal)
        VALUES ($1, $2, $3, $4)
        RETURNING ${COLUNAS}`,
-      [atendido.getNome(), paraIso(atendido.getDataNascimento()), atendido.getSexo(), atendido.getResponsavelLegal()]
+      [atendido.nome, atendido.dataNascimento, atendido.sexo, atendido.responsavelLegal]
     );
-    return linhaParaAtendido(resultado.rows[0]);
+    return linhaParaRegistro(resultado.rows[0]);
   }
 
   // a data de cadastro não é alterada
-  async atualizar(atendido: Atendido): Promise<Atendido | null> {
+  async atualizar(atendido: AtendidoDados): Promise<AtendidoRegistro | null> {
     const resultado = await this.executor.query<AtendidoLinha>(
       `UPDATE atendido
           SET nome = $1, data_nascimento = $2, sexo = $3, responsavel_legal = $4
         WHERE id = $5
     RETURNING ${COLUNAS}`,
       [
-        atendido.getNome(),
-        paraIso(atendido.getDataNascimento()),
-        atendido.getSexo(),
-        atendido.getResponsavelLegal(),
-        atendido.getId(),
+        atendido.nome,
+        atendido.dataNascimento,
+        atendido.sexo,
+        atendido.responsavelLegal,
+        atendido.id,
       ]
     );
-    return resultado.rows[0] ? linhaParaAtendido(resultado.rows[0]) : null;
+    return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
   async excluir(id: number): Promise<boolean> {
@@ -87,9 +104,9 @@ export class AtendidoDAO {
     return (resultado.rowCount ?? 0) > 0;
   }
 
-  async buscarPorId(id: number): Promise<Atendido | null> {
+  async buscarPorId(id: number): Promise<AtendidoRegistro | null> {
     const resultado = await this.executor.query<AtendidoLinha>(`SELECT ${COLUNAS} FROM atendido WHERE id = $1`, [id]);
-    return resultado.rows[0] ? linhaParaAtendido(resultado.rows[0]) : null;
+    return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
   async existeIgual(nome: string, dataNascimentoIso: string, idIgnorado?: number): Promise<boolean> {
@@ -102,7 +119,7 @@ export class AtendidoDAO {
   }
 
   // filtro vazio traz todos; os 3 filtros (nome, sexo, idade) se combinam com AND
-  async consultar(filtro: FiltroAtendido): Promise<Atendido[]> {
+  async consultar(filtro: FiltroAtendido): Promise<AtendidoRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];
 
@@ -130,6 +147,6 @@ export class AtendidoDAO {
       `SELECT ${COLUNAS} FROM atendido ${where} ORDER BY nome, id`,
       parametros
     );
-    return resultado.rows.map(linhaParaAtendido);
+    return resultado.rows.map(linhaParaRegistro);
   }
 }

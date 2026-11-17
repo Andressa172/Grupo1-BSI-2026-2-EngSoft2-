@@ -15,12 +15,12 @@ export async function GET(request: Request) {
   try {
     const parametros = new URL(request.url).searchParams;
     const [eventos, produtos] = await Promise.all([
-      AlocarRecursosController.getInstancia().consultar({
+      new AlocarRecursosController().consultar({
         nome: parametros.get('nome'),
         dataInicial: parametros.get('dataInicial'),
         dataFinal: parametros.get('dataFinal'),
       }),
-      AlocarRecursosController.getInstancia().listarProdutos(),
+      new AlocarRecursosController().listarProdutos(),
     ]);
     return Response.json({ eventos, produtos });
   } catch (erro) {
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const dados = await lerJson(request);
-    const evento = await AlocarRecursosController.getInstancia().alocarRecursosParaEvento(dados);
+    const evento = await new AlocarRecursosController().alocarRecursosParaEvento(dados);
     return Response.json({ id: evento.getId() }, { status: 201 });
   } catch (erro) {
     return respostaDeErro(erro);

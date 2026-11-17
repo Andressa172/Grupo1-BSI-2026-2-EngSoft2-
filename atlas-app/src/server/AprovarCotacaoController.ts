@@ -1,6 +1,6 @@
 // Controller - AprovarCotacaoController (RF_F8 - Aprovar cotação / CAprovarCotacao na ERS)
 //
-// - Singleton + Façade: única instância (`instancia` estática privada + construtor privado + `getInstancia()`).
+// - Não se auto-instancia: quem usa o Controller (a rota) cria com `new`. Façade: a View só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database Singleton).
 // - Instancia as entidades Cotacao e FiltroCotacao.
 // - Executa as regras de negócio (IF de hierarquia de cargo Gerente e status PENDENTE)
@@ -27,18 +27,10 @@ function validarIdCotacao(id: unknown): number {
 }
 
 export class AprovarCotacaoController {
-  private static instancia: AprovarCotacaoController | null = null;
   private readonly conexao: Database;
 
-  private constructor() {
+  constructor() {
     this.conexao = Database.getInstancia();
-  }
-
-  static getInstancia(): AprovarCotacaoController {
-    if (!AprovarCotacaoController.instancia) {
-      AprovarCotacaoController.instancia = new AprovarCotacaoController();
-    }
-    return AprovarCotacaoController.instancia;
   }
 
   /**

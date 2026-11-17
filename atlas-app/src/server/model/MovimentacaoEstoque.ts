@@ -5,10 +5,11 @@
 // RF_F1 é uma função oculta (ERS 2.2): o ator é o Sistema, sem tela própria. Quem aciona são os
 // Controllers dos casos de uso solicitantes, chamando AtualizarEstoqueController.atualizarEstoque,
 // que executa o fluxo básico. O Model nunca chama um Controller (fluxo C -> M -> DAO).
-import type { ErrosDeCampo } from '../erros';
+import { ErroValidacao, type ErrosDeCampo } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
 import { MovimentacaoEstoqueDAO, type MovimentacaoEstoqueRegistro } from '../dao/MovimentacaoEstoqueDAO';
 import type { FiltroMovimentacao } from './FiltroMovimentacao';
+import { Produto } from './Produto';
 import { dataValida, paraIso, parseData, textoSeguro } from './datasBR';
 
 export type TipoMovimentacao = 'ENTRADA' | 'SAIDA';
@@ -98,6 +99,28 @@ export class MovimentacaoEstoque {
   }
 
   // ------------------------------ persistência ------------------------------
+
+  /**
+   * Fluxo básico do RF_F1 (diagrama de sequência "Atualizar estoque"), usado pelos Models dos casos
+   * de uso solicitantes (cardápio e eventos), como o RF_F3 e o RF_F2 já fazem.
+   * `conexao` é a da transação do solicitante: se ele desistir por causa do resultado (ou o banco
+   * falhar), o rollback desfaz o estoque e o histórico juntos (fluxo alternativo 4.1).
+   */
+  async aplicar(conexao: ExecutorSQL): Promise<ResultadoMovimentacao> {
+    // passo 1: dados da movimentação (produto, quantidade e tipo)
+    const erros = this.validar();
+    if (Object.keys(erros).length > 0) throw new ErroValidacao('Movimentação de estoque inválida.', erros);
+
+    // passos 2 e 3: o produto está cadastrado? (2.1) há saldo para a saída? (3.1)
+    const produto = new Produto({ id: this.produtoId, nome: '', categoria: '', unidadeMedida: '' });
+    if (!(await produto.carregarParaAtualizarEstoque(conexao))) return 'PRODUTO_INEXISTENTE';
+    if (!produto.atualizQuantidade(this.quantidade, this.getTipo(), this.getDataValidadeIso())) return 'SALDO_INSUFICIENTE';
+
+    // passos 4 e 5: grava o estoque e registra o histórico
+    await produto.salvarEstoque(conexao);
+    await this.registrar(conexao);
+    return 'APLICADA';
+  }
 
   /** RF_F1, passo 5 (1.4 no diagrama de sequência): registra o histórico com data, quantidade e tipo. */
   async registrar(conexao: ExecutorSQL): Promise<void> {

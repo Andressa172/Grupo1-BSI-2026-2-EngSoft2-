@@ -78,14 +78,14 @@ export class SelecaoDoador {
     if (this.tipo === 'existente') {
       const doador = await dao.buscarPorId(this.id);
       if (!doador) throw new ErroValidacao('Doador inválido.', { doador: 'Doador inválido: não cadastrado.' });
-      return doador.getId() as number;
+      return doador.id;
     }
 
     if (this.tipo === 'anonimo') {
-      const anonimo = (await dao.listarTodos()).find((d) => d.isAnonimo());
-      if (anonimo) return anonimo.getId() as number;
-      const criado = await dao.inserir(new Doador({ nome: 'Doador Anônimo', anonimo: true }));
-      return criado.getId() as number;
+      const anonimo = (await dao.listarTodos()).find((d) => d.anonimo);
+      if (anonimo) return anonimo.id;
+      const criado = await dao.inserir(new Doador({ nome: 'Doador Anônimo', anonimo: true }).paraLinhaDeDados());
+      return criado.id;
     }
 
     if (this.tipo === 'novo') {
@@ -96,7 +96,7 @@ export class SelecaoDoador {
       });
       if (await dao.existeComCpfCnpj(novo.getCpfCnpj() as string)) throw erroDuplicado;
       try {
-        return (await dao.inserir(novo)).getId() as number;
+        return (await dao.inserir(novo.paraLinhaDeDados())).id;
       } catch (erro) {
         // duas doações ao mesmo tempo com o mesmo CPF/CNPJ: o índice único do banco barra a segunda
         if ((erro as { code?: string }).code === '23505') throw erroDuplicado;

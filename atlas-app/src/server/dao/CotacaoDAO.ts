@@ -1,7 +1,6 @@
 // DAO - Cotacao (RF_F7 - Abrir cotação / RF_F8 - Aprovar cotação).
 // Só executa SQL parametrizado usando o executor recebido do Model.
 import type { ExecutorSQL } from './tipos';
-import { Database } from '../db/Database';
 import type { FiltroCotacao, StatusCotacaoValor } from '../model/FiltroCotacao';
 import type { ItemCotacao } from '../model/ItemCotacao';
 
@@ -108,7 +107,7 @@ function agruparLinhas(linhas: LinhaConsultaCotacao[]): CotacaoRegistro[] {
 }
 
 export class CotacaoDAO {
-  constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
+  constructor(private readonly executor: ExecutorSQL) {}
 
   async buscarUsuarioPorId(usuarioId: number): Promise<UsuarioResumoCotacao | null> {
     const resultado = await this.executor.query<UsuarioResumoCotacao>(

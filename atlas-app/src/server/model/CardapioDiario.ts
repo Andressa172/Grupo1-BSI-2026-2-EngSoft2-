@@ -7,6 +7,7 @@ import type { ExecutorSQL } from '../dao/tipos';
 import { CardapioDiarioDAO, type CardapioRegistro, type ItemCardapioRegistrado } from '../dao/CardapioDiarioDAO';
 import type { FiltroCardapio } from './FiltroCardapio';
 import { ItemCardapio } from './ItemCardapio';
+import { MovimentacaoEstoque } from './MovimentacaoEstoque';
 import { dataValida, parseData, paraIso, textoSeguro } from './datasBR';
 
 export type TipoRefeicao = 'CAFE_DA_MANHA' | 'ALMOCO' | 'LANCHE' | 'JANTAR';
@@ -132,16 +133,50 @@ export class CardapioDiario {
   }
 
   /** O cardápio só aceita produtos cadastrados da categoria Alimento. */
-  async verificarItem(conexao: ExecutorSQL, item: ItemCardapio): Promise<'ok' | 'categoria' | 'produto'> {
+  private async verificarItem(conexao: ExecutorSQL, item: ItemCardapio): Promise<'ok' | 'categoria' | 'produto'> {
     const categoria = await new CardapioDiarioDAO(conexao).buscarCategoriaProduto(item.getProdutoId());
     if (categoria === null) return 'produto';
     if (categoria !== 'Alimento') return 'categoria';
     return 'ok';
   }
 
-  /** Grava um item do cardápio. Chamado pelo Controller, item a item, depois da saída no estoque. */
-  async incluirItem(conexao: ExecutorSQL, item: ItemCardapio): Promise<void> {
+  /**
+   * Grava um item do cardápio e dá a saída dele no estoque (RF_F1), na mesma transação.
+   * Só permite produtos da categoria Alimento e com saldo suficiente.
+   */
+  async incluirItem(conexao: ExecutorSQL, item: ItemCardapio, indice: number): Promise<void> {
+    let motivo: 'ok' | 'categoria' | 'produto' | 'estoque' = await this.verificarItem(conexao, item);
+    if (motivo === 'ok') {
+      const resultado = await new MovimentacaoEstoque({
+        produtoId: item.getProdutoId(),
+        tipo: 'SAIDA',
+        quantidade: item.getQuantidadeUtilizada(),
+        origem: this.getOrigemEstoque(),
+      }).aplicar(conexao);
+      if (resultado !== 'APLICADA') motivo = 'estoque';
+    }
+    if (motivo !== 'ok') {
+      const mensagens: Record<string, string> = {
+        categoria: 'Só é permitido incluir alimentos no cardápio.',
+        estoque: 'Estoque insuficiente para a quantidade informada.',
+        produto: 'Alimento inválido: não cadastrado.',
+      };
+      throw new ErroValidacao('Não foi possível incluir o item.', { [`item.${indice}.produtoId`]: mensagens[motivo] });
+    }
     await new CardapioDiarioDAO(conexao).inserirItem(this.id!, item.getProdutoId(), item.getQuantidadeUtilizada());
+  }
+
+  /** Devolve ao estoque os alimentos usados no cardápio (estorno), antes de apagar os itens antigos. */
+  static async estornarEstoque(conexao: ExecutorSQL, cardapioId: number): Promise<void> {
+    const itens = await new CardapioDiarioDAO(conexao).listarItens(cardapioId);
+    for (const item of itens) {
+      await new MovimentacaoEstoque({
+        produtoId: item.produtoId,
+        tipo: 'ENTRADA',
+        quantidade: item.quantidadeUtilizada,
+        origem: `Estorno: cardápio #${cardapioId}`,
+      }).aplicar(conexao);
+    }
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroCardapio): Promise<CardapioRegistro[]> {

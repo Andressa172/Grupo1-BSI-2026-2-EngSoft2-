@@ -1,7 +1,7 @@
 import { validarCNPJ } from '@/lib/cnpj';
 import { ErroValidacao } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
-import { OrganizacaoDAO } from '../dao/OrganizacaoDAO';
+import { OrganizacaoDAO, type OrganizacaoRegistro } from '../dao/OrganizacaoDAO';
 
 export interface OrganizacaoAtributos {
   id?: number;
@@ -72,12 +72,20 @@ export class Organizacao {
 
   /** Organização cadastrada (registro id = 1), ou null se a tabela está vazia. */
   static async obter(conexao: ExecutorSQL): Promise<Organizacao | null> {
-    return new OrganizacaoDAO(conexao).obter();
+    const registro = await new OrganizacaoDAO(conexao).obter();
+    return registro ? Organizacao.doRegistro(registro) : null;
   }
 
   /** Grava (insere ou atualiza) e devolve a organização salva. */
   async salvar(conexao: ExecutorSQL): Promise<Organizacao> {
-    return new OrganizacaoDAO(conexao).salvar(this);
+    const { nomeFantasia, cnpj, endereco, telefone, email, caminhoLogo } = this.paraLinhaDeDados();
+    const salvo = await new OrganizacaoDAO(conexao).salvar({ nomeFantasia, cnpj, endereco, telefone, email, caminhoLogo });
+    return Organizacao.doRegistro(salvo);
+  }
+
+  // o DAO devolve registros simples; o Model é quem monta a Organizacao
+  private static doRegistro(registro: OrganizacaoRegistro): Organizacao {
+    return new Organizacao(registro);
   }
 
   paraLinhaDeDados() {
