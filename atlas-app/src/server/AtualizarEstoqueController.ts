@@ -7,7 +7,7 @@
 //   validar. Quem cria o DAO é o Model.
 //
 // RF_F1 é oculto (ERS 2.2): a atualização do estoque não tem tela. Os casos de uso solicitantes
-// (doação de produto, compras, cardápio, eventos) chamam atualizarEstoque dentro da transação
+// (cardápio, eventos) chamam atualizarEstoque dentro da transação
 // deles, passando a conexão dessa transação.
 import { Database } from './db/Database';
 import type { ExecutorSQL } from './dao/tipos';

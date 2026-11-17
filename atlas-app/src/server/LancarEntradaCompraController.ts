@@ -1,13 +1,12 @@
 // Control - LancarEntradaCompraController (RF_F2 - Lançar entrada de compras)
 //
-// - Não se auto-instancia: quem usa o Controller (a rota ou outro caso de uso) cria com `new`.
+// - Não se auto-instancia: quem usa o Controller (a rota) cria com `new`. Também não chama outro
+//   Controller: a entrada no estoque (RF_F1) é feita pelo Model Compra.
 // - Façade: a View (via rotas /api/compras) só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model Compra,
 //   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
-//   Quem cria o DAO é o Model; a entrada no estoque (RF_F1) é pedida por este Controller ao
-//   AtualizarEstoqueController, item a item, dentro da mesma transação.
+//   Quem cria o DAO é o Model.
 import { Database } from './db/Database';
-import { AtualizarEstoqueController } from './AtualizarEstoqueController';
 import { Compra, MENSAGEM_NF_DUPLICADA, type CompraAtributos } from './model/Compra';
 import { FiltroCompra, type FiltroCompraAtributos } from './model/FiltroCompra';
 import type { CompraRegistro } from './dao/CompraDAO';
@@ -61,21 +60,7 @@ export class LancarEntradaCompraController {
 
       const itens = compra.getItens();
       for (let i = 0; i < itens.length; i++) {
-        const item = itens[i];
-        const resultado = await new AtualizarEstoqueController().atualizarEstoque(cliente, {
-          produtoId: item.getProdutoId(),
-          tipo: 'ENTRADA',
-          quantidade: item.getQuantidade(),
-          origem: `Compra #${compra.getId()} - NF ${compra.getNumeroNF()}`,
-          dataValidade: item.getDataValidade(),
-        });
-        // fluxo 3.1: produto não cadastrado
-        if (resultado !== 'APLICADA') {
-          throw new ErroValidacao('Produto não cadastrado.', {
-            [`item.${i}.produto`]: 'Produto não cadastrado: cadastre-o em Produtos antes de lançar a compra.',
-          });
-        }
-        await compra.incluirItem(cliente, item);
+        await compra.incluirItem(cliente, itens[i], i);
       }
     });
     return compra;
