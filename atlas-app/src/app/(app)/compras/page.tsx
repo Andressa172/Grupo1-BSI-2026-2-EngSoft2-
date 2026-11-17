@@ -30,6 +30,16 @@ function obterHeadersUsuario(): Record<string, string> {
   return headers;
 }
 
+// mesma regra do servidor para o número da nota: maiúsculas e só letras, números, espaço, ponto, hífen e barra
+function mascaraNotaFiscal(valor: string) {
+  return valor
+    .toUpperCase()
+    .replace(/[^A-Z0-9 .\-/]/g, '')
+    .replace(/^[^A-Z0-9]+/, '')
+    .replace(/ {2,}/g, ' ')
+    .slice(0, 60);
+}
+
 function formatBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
@@ -316,7 +326,7 @@ export default function ComprasPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Field label="Número da nota fiscal *">
-                  <Input value={numeroNF} maxLength={60} onChange={(e) => setNumeroNF(e.target.value)} className={destaque(erros.numeroNF)} />
+                  <Input value={numeroNF} maxLength={60} onChange={(e) => setNumeroNF(mascaraNotaFiscal(e.target.value))} className={destaque(erros.numeroNF)} />
                 </Field>
                 <MensagemErro texto={erros.numeroNF} />
               </div>
@@ -372,7 +382,7 @@ export default function ComprasPage() {
                         <Input
                           inputMode="numeric"
                           value={item.quantidade}
-                          onChange={(e) => alterarItem(idx, 'quantidade', e.target.value.replace(/\D/g, ''))}
+                          onChange={(e) => alterarItem(idx, 'quantidade', e.target.value.replace(/\D/g, '').slice(0, 7))}
                           className={destaque(erros[`item.${idx}.quantidade`])}
                         />
                       </Field>
