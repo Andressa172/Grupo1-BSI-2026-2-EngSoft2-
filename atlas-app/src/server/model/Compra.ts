@@ -99,7 +99,7 @@ export class Compra {
       erros.itens = `Uma compra pode ter no máximo ${MAXIMO_ITENS} itens.`;
     } else {
       this.itens.forEach((item, i) => {
-        const errosItem = item.validar(this.dataCompra);
+        const errosItem = item.validar();
         for (const campo of Object.keys(errosItem)) erros[`item.${i}.${campo}`] = errosItem[campo];
       });
       if (Object.keys(erros).every((campo) => !campo.startsWith('item.')) && this.getValorTotalEmCentavos() > VALOR_TOTAL_MAXIMO_EM_CENTAVOS) {

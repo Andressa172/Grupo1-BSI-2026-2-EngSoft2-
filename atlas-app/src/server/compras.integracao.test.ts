@@ -151,6 +151,34 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Compras - integração (PostgreSQL)', () =
       expect(await contagens()).toEqual(antes);
     });
 
+    it('4.1 validade já vencida (mesmo em compra com data antiga) → 400 no campo do item, nada é gravado nem entra no estoque', async () => {
+      const diaBR = (dias: number) => {
+        const d = new Date();
+        d.setDate(d.getDate() + dias);
+        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      };
+      const p = await novoProduto('Biscoito', 5);
+      const antes = await contagens();
+      const r = await post({
+        numeroNF: nf(),
+        dataCompra: diaBR(-30),
+        fornecedor: 'Mercado Antigo',
+        itens: [{ produtoId: p, quantidade: 4, valorUnitario: '2,00', dataValidade: diaBR(-20) }],
+      });
+      expect(r.status).toBe(400);
+      expect((await r.json()).erros['item.0.dataValidade']).toMatch(/vencido/i);
+      expect(await contagens()).toEqual(antes);
+      expect((await produto(p)).estoque).toBe(5);
+      // validade de hoje em diante é aceita
+      const ok = await post({
+        numeroNF: nf(),
+        dataCompra: diaBR(-30),
+        fornecedor: 'Mercado Antigo',
+        itens: [{ produtoId: p, quantidade: 4, valorUnitario: '2,00', dataValidade: diaBR(0) }],
+      });
+      expect(ok.status).toBe(201);
+    });
+
     it('2.1 nota fiscal duplicada (mesmo com outra caixa/espaços) → 400 no campo da nota, estoque não muda', async () => {
       const p = await novoProduto('Açúcar');
       const numeroNF = nf();

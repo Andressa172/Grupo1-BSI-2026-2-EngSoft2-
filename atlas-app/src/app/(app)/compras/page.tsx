@@ -30,6 +30,21 @@ function obterHeadersUsuario(): Record<string, string> {
   return headers;
 }
 
+// mesma regra do servidor para o número da nota: maiúsculas e só letras, números, espaço, ponto, hífen e barra
+function mascaraNotaFiscal(valor: string) {
+  return valor
+    .toUpperCase()
+    .replace(/[^A-Z0-9 .\-/]/g, '')
+    .replace(/^[^A-Z0-9]+/, '')
+    .replace(/ {2,}/g, ' ')
+    .slice(0, 60);
+}
+
+// "dd/mm/aaaa" -> "aaaa-mm-dd" (só para comparar datas); vazio se a data ainda está incompleta
+function dataBRparaIso(texto: string): string {
+  return texto.length === 10 ? `${texto.slice(6)}-${texto.slice(3, 5)}-${texto.slice(0, 2)}` : '';
+}
+
 function formatBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
@@ -207,6 +222,11 @@ export default function ComprasPage() {
       if (!item.produtoId) faltando[`item.${i}.produto`] = 'Selecione o produto.';
       if (!item.quantidade) faltando[`item.${i}.quantidade`] = 'Informe a quantidade.';
       if (!item.valorUnitario) faltando[`item.${i}.valorUnitario`] = 'Informe o valor unitário.';
+      // produto vencido não entra no estoque: avisa já aqui, antes da confirmação (o servidor valida de novo)
+      const validade = dataBRparaIso(item.dataValidade);
+      if (validade !== '' && validade < dataBRparaIso(dataHojeBR())) {
+        faltando[`item.${i}.dataValidade`] = 'Data de validade inválida: o produto já está vencido (anterior à data atual).';
+      }
     });
     setErros(faltando);
     if (Object.keys(faltando).length === 0) setEtapa('confirmar');
@@ -316,7 +336,7 @@ export default function ComprasPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Field label="Número da nota fiscal *">
-                  <Input value={numeroNF} maxLength={60} onChange={(e) => setNumeroNF(e.target.value)} className={destaque(erros.numeroNF)} />
+                  <Input value={numeroNF} maxLength={60} onChange={(e) => setNumeroNF(mascaraNotaFiscal(e.target.value))} className={destaque(erros.numeroNF)} />
                 </Field>
                 <MensagemErro texto={erros.numeroNF} />
               </div>
@@ -372,7 +392,7 @@ export default function ComprasPage() {
                         <Input
                           inputMode="numeric"
                           value={item.quantidade}
-                          onChange={(e) => alterarItem(idx, 'quantidade', e.target.value.replace(/\D/g, ''))}
+                          onChange={(e) => alterarItem(idx, 'quantidade', e.target.value.replace(/\D/g, '').slice(0, 7))}
                           className={destaque(erros[`item.${idx}.quantidade`])}
                         />
                       </Field>
