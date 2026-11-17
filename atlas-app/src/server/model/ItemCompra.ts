@@ -1,6 +1,6 @@
 // Model - ItemCompra: um produto comprado, com quantidade, valor unitário e validade (RF_F2).
 import type { ErrosDeCampo } from '../erros';
-import { dataValida, parseData, parseValor, textoSeguro } from './datasBR';
+import { dataValida, hoje, parseData, parseValor, textoSeguro } from './datasBR';
 
 const ID_MAXIMO = 2_147_483_647;
 const QUANTIDADE_MAXIMA = 1_000_000;
@@ -50,7 +50,7 @@ export class ItemCompra {
   }
 
   /** RF_F2 fluxos 3.1 (produto) e 4.1 (dados do produto inválidos). */
-  validar(dataCompra: Date): ErrosDeCampo {
+  validar(): ErrosDeCampo {
     const erros: ErrosDeCampo = {};
     if (!Number.isInteger(this.produtoId) || this.produtoId <= 0 || this.produtoId > ID_MAXIMO) {
       erros.produto = 'Produto inválido: selecione um produto cadastrado.';
@@ -68,8 +68,9 @@ export class ItemCompra {
     if (this.dataValidade !== null) {
       if (!dataValida(this.dataValidade)) {
         erros.dataValidade = 'Data de validade inválida: use o formato dd/mm/aaaa.';
-      } else if (dataValida(dataCompra) && this.dataValidade < dataCompra) {
-        erros.dataValidade = 'Data de validade inválida: o produto já está vencido na data da compra.';
+      } else if (this.dataValidade < hoje()) {
+        // produto vencido não entra no estoque (mesma regra do cadastro de produtos)
+        erros.dataValidade = 'Data de validade inválida: o produto já está vencido (anterior à data atual).';
       }
     }
     return erros;

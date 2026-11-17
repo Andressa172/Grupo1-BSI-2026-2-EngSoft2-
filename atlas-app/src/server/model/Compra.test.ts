@@ -49,11 +49,17 @@ describe('Compra - validação (passos 1 a 5 e fluxos 1.1, 2.1, 3.1, 4.1, 5.1)',
     expect(compra({ itens: [item({ valorUnitario })] }).validar()).toHaveProperty('item.0.valorUnitario');
   });
 
-  it('validade anterior à data da compra = produto já vencido', () => {
-    expect(compra({ dataCompra: '10/11/2026', itens: [item({ dataValidade: '09/11/2026' })] }).validar()).toHaveProperty(
-      'item.0.dataValidade'
-    );
-    expect(compra({ dataCompra: '10/11/2026', itens: [item({ dataValidade: '10/11/2026' })] }).validar()).toEqual({});
+  it('validade anterior a hoje = produto já vencido (mesmo com a compra lançada em data antiga)', () => {
+    const dia = (dias: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() + dias);
+      return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    };
+    const antigaMasValidadeJaPassou = compra({ dataCompra: dia(-30), itens: [item({ dataValidade: dia(-20) })] }).validar();
+    expect(antigaMasValidadeJaPassou).toHaveProperty('item.0.dataValidade');
+    expect(compra({ itens: [item({ dataValidade: dia(-1) })] }).validar()).toHaveProperty('item.0.dataValidade');
+    expect(compra({ itens: [item({ dataValidade: dia(0) })] }).validar()).toEqual({});
+    expect(compra({ itens: [item({ dataValidade: dia(1) })] }).validar()).toEqual({});
   });
 
   it('5.1 nenhum item; itens fora do formato; itens demais', () => {
