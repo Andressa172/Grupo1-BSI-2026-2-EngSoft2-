@@ -40,6 +40,11 @@ function mascaraNotaFiscal(valor: string) {
     .slice(0, 60);
 }
 
+// "dd/mm/aaaa" -> "aaaa-mm-dd" (só para comparar datas); vazio se a data ainda está incompleta
+function dataBRparaIso(texto: string): string {
+  return texto.length === 10 ? `${texto.slice(6)}-${texto.slice(3, 5)}-${texto.slice(0, 2)}` : '';
+}
+
 function formatBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
@@ -217,6 +222,11 @@ export default function ComprasPage() {
       if (!item.produtoId) faltando[`item.${i}.produto`] = 'Selecione o produto.';
       if (!item.quantidade) faltando[`item.${i}.quantidade`] = 'Informe a quantidade.';
       if (!item.valorUnitario) faltando[`item.${i}.valorUnitario`] = 'Informe o valor unitário.';
+      // produto vencido não entra no estoque: avisa já aqui, antes da confirmação (o servidor valida de novo)
+      const validade = dataBRparaIso(item.dataValidade);
+      if (validade !== '' && validade < dataBRparaIso(dataHojeBR())) {
+        faltando[`item.${i}.dataValidade`] = 'Data de validade inválida: o produto já está vencido (anterior à data atual).';
+      }
     });
     setErros(faltando);
     if (Object.keys(faltando).length === 0) setEtapa('confirmar');
