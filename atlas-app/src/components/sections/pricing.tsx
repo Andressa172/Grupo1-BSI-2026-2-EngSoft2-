@@ -160,10 +160,11 @@ export default function PricingSection({ plans = defaultPlans }: { plans?: Prici
             return (
               <div
                 key={plan.id}
-                className={`relative flex flex-col justify-between rounded-2xl bg-background transition-all duration-200 ${
+                // ao passar o mouse o card levanta de leve e a sombra ganha um tom rosado da marca
+                className={`group relative flex flex-col justify-between rounded-2xl bg-background transition-[transform,box-shadow,border-color] duration-300 ease-out will-change-transform hover:-translate-y-1.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${
                   isHighlighted
-                    ? 'border-2 border-primary shadow-lg'
-                    : 'border border-border-line/20 shadow-sm hover:border-border-line/30'
+                    ? 'border-2 border-primary shadow-lg hover:shadow-[0_22px_44px_-18px_rgba(217,64,98,0.45)]'
+                    : 'border border-border-line/20 shadow-sm hover:border-primary/40 hover:shadow-[0_18px_38px_-20px_rgba(217,64,98,0.30)]'
                 }`}
               >
                 {/* Custom Highlight Top Banner */}

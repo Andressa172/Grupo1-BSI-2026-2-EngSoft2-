@@ -21,7 +21,7 @@ export const CTA_CONTENT = {
       },
   },
     ctaImage:{
-       src: "/dashboard.png",
-      alt: "painel-atlas",
+       src: "/prints/compras.png",
+      alt: "Tela de compras do ATLAS com a nota fiscal, o fornecedor e os itens lançados",
     }
 }

@@ -55,8 +55,8 @@ export const HERO_CONTENT = {
    * Main hero illustration or product preview image.
    */
   heroImage: {
-    src: "/dashboard.png",
-    alt: "painel-atlas",
+    src: "/prints/dashboard.png",
+    alt: "Painel do ATLAS com o saldo do caixa, produtos com estoque baixo e cotações em aberto",
   },
 
   /**

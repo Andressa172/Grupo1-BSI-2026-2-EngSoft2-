@@ -24,11 +24,29 @@
   --color-warning: var(--warning);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-   --font-libre: var(--font-libre-baskerville);
+  /* títulos da landing (a variável só existe dentro do layout (marketing)) */
+  --font-display: var(--font-landing-display), Georgia, serif;
 }
 
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+
+/* ---------------------------------------------------------------------------
+ * Landing: fonte do texto e dos títulos (as variáveis vêm de (marketing)/layout.tsx)
+ * ------------------------------------------------------------------------ */
+.landing {
+  --font-geist-sans: var(--font-landing-body);
+  font-family: var(--font-landing-body), system-ui, sans-serif;
+}
+
+.landing :is(h1, h2, h3) {
+  font-family: var(--font-landing-display), Georgia, serif;
+  /* SOFT arredonda as pontas das letras; opsz ajusta o desenho ao tamanho do título */
+  font-variation-settings: "SOFT" 70, "WONK" 0;
+  font-optical-sizing: auto;
+  letter-spacing: -0.015em;
 }

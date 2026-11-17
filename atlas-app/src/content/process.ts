@@ -31,7 +31,7 @@ export const PROCESS_CONTENT = {
       title: 'Cadastre produtos, doadores e atendidos',
       description:
         'Centralize as informações da instituição: estoque, doadores, funcionários e crianças atendidas, tudo em um só lugar.',
-      imageSrc: '/dashboard.png',
+      imageSrc: '/prints/produtos.png',
     },
     {
       id: 'step-2',
@@ -39,7 +39,7 @@ export const PROCESS_CONTENT = {
       title: 'Registre doações, compras e caixa',
       description:
         'A cada doação ou compra registrada, o estoque e o caixa são atualizados automaticamente, sem retrabalho manual.',
-      imageSrc: '/dashboard.png',
+      imageSrc: '/prints/caixa.png',
     },
     {
       id: 'step-3',
@@ -47,7 +47,7 @@ export const PROCESS_CONTENT = {
       title: 'Acompanhe relatórios e tome decisões',
       description:
         'Gere relatórios de estoque, doações e finanças em segundos para apoiar a gestão e a prestação de contas da ONG.',
-      imageSrc: '/dashboard.png',
+      imageSrc: '/prints/estoque.png',
     },
   ],
 };

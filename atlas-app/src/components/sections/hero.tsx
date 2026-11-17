@@ -50,7 +50,7 @@ export default function Hero() {
             {/* Main Headline */}
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-medium tracking-tight text-foreground leading-[1.15]">
               {HERO_CONTENT.heading}{' '}
-              <span className="block text-primary font-libre italic font-normal pt-1">
+              <span className="block text-primary font-display italic font-normal pt-1">
                 {HERO_CONTENT.highlightedHeading}
               </span>
             </h1>
@@ -74,7 +74,7 @@ export default function Hero() {
 
           {/* Right Column */}
           <motion.div
-            className="lg:col-span-6 w-full h-full min-h-80 sm:min-h-105 lg:min-h-130 rounded-2xl
+            className="lg:col-span-6 w-full aspect-16/10 rounded-2xl
                relative overflow-hidden flex items-center justify-center border border-border-line/20"
             initial={{ opacity: 0, x: 60, filter: 'blur(8px)' }}
             whileInView={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
@@ -89,8 +89,8 @@ export default function Hero() {
               src={HERO_CONTENT.heroImage.src}
               alt={HERO_CONTENT.heroImage.alt}
               width={800}
-              height={600}
-              className="object-cover"
+              height={500}
+              className="h-full w-full object-cover object-top"
               priority
             />
           </motion.div>

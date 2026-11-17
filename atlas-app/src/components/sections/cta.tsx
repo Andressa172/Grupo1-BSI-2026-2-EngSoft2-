@@ -72,8 +72,8 @@ export default function CTA() {
                 <Image
                   src={CTA_CONTENT.ctaImage.src}
                   alt={CTA_CONTENT.ctaImage.alt}
-                  width={600}
-                  height={600}
+                  width={800}
+                  height={500}
                   className="w-full h-full object-cover object-top rounded-md"
                 />
               </div>

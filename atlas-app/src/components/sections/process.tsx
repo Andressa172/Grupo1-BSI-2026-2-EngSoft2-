@@ -131,14 +131,14 @@ export default function ProcessSection() {
                 </div>
 
                 {/* Right Step Preview Media Container */}
-                <div className="lg:col-span-7 w-full h-70 sm:h-85 rounded-xl  
-                relative overflow-hidden flex items-center justify-center border border-border-line/20">
+                <div className="lg:col-span-7 w-full aspect-16/10 rounded-xl  
+                relative overflow-hidden flex items-center justify-center border border-border-line/20 shadow-sm">
                   <Image
                     src={currentStep.imageSrc}
                     alt={currentStep.title}
                     width={800}
                     height={500}
-                    className="object-cover"
+                    className="h-full w-full object-cover object-top"
                     priority
                   />
                 </div>
