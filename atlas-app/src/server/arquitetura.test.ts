@@ -308,3 +308,14 @@ describe('Direção das dependências (todos os módulos)', () => {
     expect(codigo).not.toMatch(/new\s+\w*DAO\s*\(/);
   });
 });
+
+describe.each(['ProdutoDAO', 'MovimentacaoEstoqueDAO'])('%s (RF_B3 / RF_F1): conexão e dados só por parâmetro', (nome) => {
+  const dao = ler(`server/dao/${nome}.ts`);
+  it('não importa Database nem usa getInstancia (a conexão vem no construtor)', () => {
+    expect(importa(dao, /db\/Database/)).toBe(false);
+    expect(dao).not.toMatch(/getInstancia/);
+  });
+  it('não importa Model em tempo de execução nem dá new em Model', () => {
+    expect(dao).not.toMatch(/^import\s+(?!type\b)[^;]*from\s+['"][^'"]*\/model\//m);
+  });
+});
