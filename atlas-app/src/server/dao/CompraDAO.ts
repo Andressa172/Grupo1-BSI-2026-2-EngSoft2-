@@ -1,7 +1,6 @@
 // DAO - Compra (RF_F2 - Lançar entrada de compras). Só executa SQL, sempre com parâmetros.
 // A entrada no estoque não é feita aqui: é do model MovimentacaoEstoque (RF_F1).
 import type { ExecutorSQL } from './tipos';
-import { Database } from '../db/Database';
 import type { FiltroCompra } from '../model/FiltroCompra';
 import type { ItemCompra } from '../model/ItemCompra';
 import { paraIso } from '../model/datasBR';
@@ -37,7 +36,7 @@ interface LinhaConsulta {
 }
 
 export class CompraDAO {
-  constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
+  constructor(private readonly executor: ExecutorSQL) {}
 
   // a comparação ignora maiúsculas/minúsculas: "nf-10" e "NF-10" são a mesma nota
   async existeNotaFiscal(numeroNF: string): Promise<boolean> {
@@ -45,10 +44,16 @@ export class CompraDAO {
     return (resultado.rowCount ?? 0) > 0;
   }
 
-  async inserirCompra(numeroNF: string, dataIso: string, fornecedor: string, valorTotal: number): Promise<number> {
+  async inserirCompra(
+    numeroNF: string,
+    dataIso: string,
+    fornecedor: string,
+    valorTotal: number,
+    gerenteId: number
+  ): Promise<number> {
     const resultado = await this.executor.query<{ id: number }>(
-      'INSERT INTO compra (numero_nf, data, fornecedor, valor_total) VALUES ($1, $2, $3, $4) RETURNING id',
-      [numeroNF, dataIso, fornecedor, valorTotal.toFixed(2)]
+      'INSERT INTO compra (numero_nf, data, fornecedor, valor_total, gerente_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [numeroNF, dataIso, fornecedor, valorTotal.toFixed(2), gerenteId]
     );
     return resultado.rows[0].id;
   }

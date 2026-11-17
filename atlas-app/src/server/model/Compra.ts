@@ -112,13 +112,13 @@ export class Compra {
   // ------------------------------ persistência ------------------------------
 
   /**
-   * Passo 9: grava a compra (os itens e a entrada no estoque, RF_F1, ficam em incluirItem).
+   * Passo 9: grava a compra, com o gerente que a lançou (os itens e a entrada no estoque, RF_F1, ficam em incluirItem).
    * Deve ser chamado dentro de uma transação: se qualquer passo falhar, nada fica gravado (fluxo 9.1).
    */
-  async incluir(conexao: ExecutorSQL): Promise<void> {
+  async incluir(conexao: ExecutorSQL, gerenteId: number): Promise<void> {
     const dao = new CompraDAO(conexao);
     try {
-      this.id = await dao.inserirCompra(this.numeroNF, paraIso(this.dataCompra), this.fornecedor, this.getValorTotal());
+      this.id = await dao.inserirCompra(this.numeroNF, paraIso(this.dataCompra), this.fornecedor, this.getValorTotal(), gerenteId);
     } catch (erro) {
       // 23505 = UNIQUE violado: outra pessoa lançou a mesma nota ao mesmo tempo
       // (depois da checagem do Controller e antes desta gravação)

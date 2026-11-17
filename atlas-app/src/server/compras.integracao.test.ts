@@ -7,9 +7,20 @@ import { prepararBancoDeTeste, TEM_BANCO_DE_TESTE } from './test-utils/bancoDeTe
 let rota: typeof import('../app/api/compras/route');
 let limpar: () => Promise<void>;
 
-const post = (corpo: unknown) =>
-  rota.POST(new Request('http://x/api/compras', { method: 'POST', body: typeof corpo === 'string' ? corpo : JSON.stringify(corpo) }));
-const get = (qs = '') => rota.GET(new Request(`http://x/api/compras?${qs}`));
+// só o Gerente autenticado (cabeçalho x-usuario-id) lança e consulta compras; por padrão os testes usam um gerente
+let gerenteId = 0;
+const cabecalhos = (usuarioId: number | null = gerenteId): Record<string, string> =>
+  usuarioId === null ? {} : { 'x-usuario-id': String(usuarioId) };
+const post = (corpo: unknown, usuarioId: number | null = gerenteId) =>
+  rota.POST(
+    new Request('http://x/api/compras', {
+      method: 'POST',
+      headers: cabecalhos(usuarioId),
+      body: typeof corpo === 'string' ? corpo : JSON.stringify(corpo),
+    })
+  );
+const get = (qs = '', usuarioId: number | null = gerenteId) =>
+  rota.GET(new Request(`http://x/api/compras?${qs}`, { headers: cabecalhos(usuarioId) }));
 
 async function sql<T extends Record<string, unknown>>(texto: string, p: unknown[] = []): Promise<T[]> {
   const { Database } = await import('./db/Database');
@@ -31,6 +42,13 @@ async function novoProduto(base: string, quantidade = 0): Promise<number> {
   );
   return p.id;
 }
+async function novoUsuario(perfil: 'GERENTE' | 'SECRETARIO' | 'FUNCIONARIO', ativo = true): Promise<number> {
+  const [u] = await sql<{ id: number }>(
+    'INSERT INTO usuario (nome, login, senha_hash, perfil, ativo) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [`Usuário ${perfil}`, `compras-${perfil}-${++sequencia}`, 'x', perfil, ativo]
+  );
+  return u.id;
+}
 const nf = () => `NF-${Date.now()}-${++sequencia}`;
 const contagens = async () => ({
   compras: await contar('compra'),
@@ -47,6 +65,7 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Compras - integração (PostgreSQL)', () =
   beforeAll(async () => {
     ({ limpar } = await prepararBancoDeTeste());
     rota = await import('../app/api/compras/route');
+    gerenteId = await novoUsuario('GERENTE');
   });
   afterAll(async () => {
     await limpar();
@@ -267,6 +286,64 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Compras - integração (PostgreSQL)', () =
       for (const qs of ['dataInicial=99/99/9999', 'dataInicial=10/11/2026&dataFinal=01/11/2026', `fornecedor=${'x'.repeat(121)}`]) {
         expect((await get(qs)).status).toBe(400);
       }
+    });
+  });
+
+  describe('RF_F2 - ator Gerente (autenticação e autorização)', () => {
+    const corpoValido = async () => ({
+      numeroNF: nf(),
+      dataCompra: hojeBR(),
+      fornecedor: 'Mercado Central',
+      itens: [{ produtoId: await novoProduto('Açúcar'), quantidade: 3, valorUnitario: '5,00' }],
+    });
+
+    it('grava no registro da compra o gerente que a lançou', async () => {
+      const r = await post(await corpoValido());
+      expect(r.status).toBe(201);
+      const { id } = (await r.json()) as { id: number };
+      const [c] = await sql<{ gerente_id: number }>('SELECT gerente_id FROM compra WHERE id=$1', [id]);
+      expect(c.gerente_id).toBe(gerenteId);
+    });
+
+    it('cada compra fica com o gerente que a lançou (dois gerentes)', async () => {
+      const outro = await novoUsuario('GERENTE');
+      const { id } = (await (await post(await corpoValido(), outro)).json()) as { id: number };
+      const [c] = await sql<{ gerente_id: number }>('SELECT gerente_id FROM compra WHERE id=$1', [id]);
+      expect(c.gerente_id).toBe(outro);
+    });
+
+    it('sem usuário autenticado: 401 e nada é gravado nem movimentado', async () => {
+      const antes = await contagens();
+      expect((await post(await corpoValido(), null)).status).toBe(401);
+      expect((await get('', null)).status).toBe(401);
+      expect(await contagens()).toEqual(antes);
+    });
+
+    it('usuário inexistente ou inativo: 401', async () => {
+      const inativo = await novoUsuario('GERENTE', false);
+      expect((await post(await corpoValido(), 999_999)).status).toBe(401);
+      expect((await post(await corpoValido(), inativo)).status).toBe(401);
+    });
+
+    it('perfil que não é Gerente (funcionário ou secretário): 403 e nada é gravado nem movimentado', async () => {
+      const antes = await contagens();
+      for (const perfil of ['FUNCIONARIO', 'SECRETARIO'] as const) {
+        const id = await novoUsuario(perfil);
+        expect((await post(await corpoValido(), id)).status).toBe(403);
+        expect((await get('', id)).status).toBe(403);
+      }
+      expect(await contagens()).toEqual(antes);
+    });
+
+    it('id de usuário malformado no cabeçalho: 401', async () => {
+      const r = await rota.POST(
+        new Request('http://x/api/compras', {
+          method: 'POST',
+          headers: { 'x-usuario-id': '1 OR 1=1' },
+          body: JSON.stringify(await corpoValido()),
+        })
+      );
+      expect(r.status).toBe(401);
     });
   });
 });
