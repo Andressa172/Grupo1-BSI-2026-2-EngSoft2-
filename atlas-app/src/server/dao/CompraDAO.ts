@@ -45,10 +45,16 @@ export class CompraDAO {
     return (resultado.rowCount ?? 0) > 0;
   }
 
-  async inserirCompra(numeroNF: string, dataIso: string, fornecedor: string, valorTotal: number): Promise<number> {
+  async inserirCompra(
+    numeroNF: string,
+    dataIso: string,
+    fornecedor: string,
+    valorTotal: number,
+    gerenteId: number
+  ): Promise<number> {
     const resultado = await this.executor.query<{ id: number }>(
-      'INSERT INTO compra (numero_nf, data, fornecedor, valor_total) VALUES ($1, $2, $3, $4) RETURNING id',
-      [numeroNF, dataIso, fornecedor, valorTotal.toFixed(2)]
+      'INSERT INTO compra (numero_nf, data, fornecedor, valor_total, gerente_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [numeroNF, dataIso, fornecedor, valorTotal.toFixed(2), gerenteId]
     );
     return resultado.rows[0].id;
   }

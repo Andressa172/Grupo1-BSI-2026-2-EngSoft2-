@@ -44,9 +44,10 @@ export class LancarEntradaCompraController {
 
   /**
    * Passos 8 a 11 do fluxo básico: a tela só chama depois que o gerente confirmou (passos 6 e 7).
-   * Valida tudo e só então grava a compra e dá entrada no estoque, numa transação só.
+   * Valida tudo e só então grava a compra (com o gerente que a lançou) e dá entrada no estoque,
+   * numa transação só. `gerenteId` é o gerente autenticado, vindo da rota.
    */
-  async registrar(dados: unknown): Promise<Compra> {
+  async registrar(dados: unknown, gerenteId: number): Promise<Compra> {
     const compra = new Compra(comoObjeto(dados));
     lancarSeTiverErros(compra.validar());
 
@@ -56,7 +57,7 @@ export class LancarEntradaCompraController {
     }
 
     await this.conexao.comTransacao(async (cliente) => {
-      await compra.incluir(cliente);
+      await compra.incluir(cliente, gerenteId);
 
       const itens = compra.getItens();
       for (let i = 0; i < itens.length; i++) {

@@ -15,6 +15,21 @@ import { Field, Input, Select, Modal, Table, THead, EmptyRow } from '@/component
 import { dataHojeBR, mascaraMoeda } from '@/view/mascaras';
 import { CampoData } from '@/view/CampoData';
 
+// o servidor só atende o Gerente autenticado: manda o id do usuário logado (RF_F2)
+function obterHeadersUsuario(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const bruto = localStorage.getItem('atlas-usuario-logado');
+    if (bruto) {
+      const usuario = JSON.parse(bruto) as { id?: number };
+      if (usuario?.id) headers['x-usuario-id'] = String(usuario.id);
+    }
+  } catch {
+    // sem usuário logado: o servidor responde 401
+  }
+  return headers;
+}
+
 function formatBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
@@ -121,7 +136,7 @@ export default function ComprasPage() {
   // compras lançadas, de acordo com o filtro aplicado
   useEffect(() => {
     let cancelado = false;
-    fetch(`/api/compras?${montarParametros(filtroAplicado)}`)
+    fetch(`/api/compras?${montarParametros(filtroAplicado)}`, { headers: obterHeadersUsuario() })
       .then(async (r) => {
         if (!r.ok) throw new Error('falha');
         const c = (await r.json()) as CompraApi[];
@@ -141,7 +156,7 @@ export default function ComprasPage() {
     e.preventDefault();
     // o servidor valida o filtro; se houver erro, mostra ao lado do campo
     try {
-      const resposta = await fetch(`/api/compras?${montarParametros(filtro)}`);
+      const resposta = await fetch(`/api/compras?${montarParametros(filtro)}`, { headers: obterHeadersUsuario() });
       if (!resposta.ok) {
         setErrosFiltro(await lerErros(resposta));
         return;
@@ -203,7 +218,7 @@ export default function ComprasPage() {
     try {
       const resposta = await fetch('/api/compras', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: obterHeadersUsuario(),
         body: JSON.stringify({ numeroNF, dataCompra, fornecedor, itens }),
       });
       if (!resposta.ok) {
