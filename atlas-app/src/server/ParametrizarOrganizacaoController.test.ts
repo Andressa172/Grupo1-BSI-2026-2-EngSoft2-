@@ -36,7 +36,7 @@ describe('ParametrizarOrganizacaoController - RF_Parametrizacao', () => {
   let controller: ParametrizarOrganizacaoController;
 
   beforeEach(() => {
-    controller = ParametrizarOrganizacaoController.criarParaTeste(criarConexaoFalsa());
+    controller = new ParametrizarOrganizacaoController(criarConexaoFalsa());
   });
 
   it('retorna parâmetros padrão quando a organização ainda não foi cadastrada', async () => {

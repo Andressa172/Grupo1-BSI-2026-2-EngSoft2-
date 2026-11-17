@@ -3,9 +3,11 @@
 import type { ErrosDeCampo } from '../erros';
 import { ErroValidacao } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
-import { DoadorDAO } from '../dao/DoadorDAO';
-import { Doador, type TipoPessoa } from './Doador';
+import { DoadorDAO, type DoadorDados } from '../dao/DoadorDAO';
+import { cpfOuCnpjValido, EMAIL_VALIDO } from './documentos';
 import { textoSeguro } from './datasBR';
+
+type TipoPessoa = 'FISICA' | 'JURIDICA';
 
 type Tipo = 'existente' | 'anonimo' | 'novo' | 'nenhum';
 const ID_MAXIMO = 2_147_483_647;
@@ -52,23 +54,34 @@ export class SelecaoDoador {
       if (this.contato.replace(/\D/g, '').length < 10 || this.contato.length > 30 || CARACTERE_DE_CONTROLE.test(this.contato)) {
         erros['doador.contato'] = 'Contato inválido: informe um telefone com DDD.';
       }
-      // CPF/CNPJ, e-mail e tipo de pessoa seguem as mesmas regras do cadastro de doadores (Model Doador)
-      const errosDoador = this.montarDoador().validar();
-      if (errosDoador.cpfCnpj) erros['doador.cpfCnpj'] = errosDoador.cpfCnpj;
-      if (errosDoador.email) erros['doador.email'] = errosDoador.email;
-      if (errosDoador.tipoPessoa) erros['doador.tipoPessoa'] = errosDoador.tipoPessoa;
+      // CPF/CNPJ e e-mail seguem as mesmas regras do cadastro de doadores (RF_B4)
+      const juridica = this.tipoPessoa === 'JURIDICA';
+      const documento = this.cpfCnpj.replace(/\D/g, '');
+      if (!documento) {
+        erros['doador.cpfCnpj'] = juridica ? 'CNPJ inválido: informe o CNPJ.' : 'CPF inválido: informe o CPF.';
+      } else if (!cpfOuCnpjValido(documento, this.tipoPessoa)) {
+        erros['doador.cpfCnpj'] = juridica ? 'CNPJ inválido.' : 'CPF inválido.';
+      }
+      const email = this.email.toLowerCase();
+      if (!email) {
+        erros['doador.email'] = 'E-mail inválido: o e-mail é obrigatório.';
+      } else if (!EMAIL_VALIDO.test(email)) {
+        erros['doador.email'] = 'E-mail inválido.';
+      }
     }
     return erros;
   }
 
-  private montarDoador(): Doador {
-    return new Doador({
+  // dados do doador novo para o DoadorDAO, com a mesma normalização do cadastro de doadores
+  private dadosDoadorNovo(): DoadorDados {
+    return {
       nome: this.nome,
-      telefone: this.contato,
-      email: this.email,
-      cpfCnpj: this.cpfCnpj,
+      telefone: this.contato || null,
+      email: this.email.toLowerCase() || null,
+      cpfCnpj: this.cpfCnpj.replace(/\D/g, '') || null,
       tipoPessoa: this.tipoPessoa,
-    });
+      anonimo: false,
+    };
   }
 
   /** Devolve o id do doador, cadastrando-o (novo ou anônimo) se for preciso. Usa a conexão da transação. */
@@ -84,19 +97,26 @@ export class SelecaoDoador {
     if (this.tipo === 'anonimo') {
       const anonimo = (await dao.listarTodos()).find((d) => d.anonimo);
       if (anonimo) return anonimo.id;
-      const criado = await dao.inserir(new Doador({ nome: 'Doador Anônimo', anonimo: true }).paraLinhaDeDados());
+      const criado = await dao.inserir({
+        nome: 'Doador Anônimo',
+        telefone: null,
+        email: null,
+        cpfCnpj: null,
+        tipoPessoa: 'FISICA',
+        anonimo: true,
+      });
       return criado.id;
     }
 
     if (this.tipo === 'novo') {
       // nome repetido é permitido (duas pessoas podem ter o mesmo nome): quem identifica o doador é o CPF/CNPJ
-      const novo = this.montarDoador();
+      const novo = this.dadosDoadorNovo();
       const erroDuplicado = new ErroValidacao('Doador já cadastrado.', {
         'doador.cpfCnpj': 'CPF/CNPJ já cadastrado: escolha o doador na lista de existentes.',
       });
-      if (await dao.existeComCpfCnpj(novo.getCpfCnpj() as string)) throw erroDuplicado;
+      if (await dao.existeComCpfCnpj(novo.cpfCnpj as string)) throw erroDuplicado;
       try {
-        return (await dao.inserir(novo.paraLinhaDeDados())).id;
+        return (await dao.inserir(novo)).id;
       } catch (erro) {
         // duas doações ao mesmo tempo com o mesmo CPF/CNPJ: o índice único do banco barra a segunda
         if ((erro as { code?: string }).code === '23505') throw erroDuplicado;

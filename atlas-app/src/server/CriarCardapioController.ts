@@ -1,18 +1,18 @@
 // Control - CriarCardapioController (RF_F10 - Criar Cardápio Diário)
 //
-// - Singleton: uma única instância, guardada na propriedade estática `instancia`.
+// - Não se auto-instancia: quem usa o Controller (a rota) cria com `new`.
 // - Façade: a View (via rota /api/cardapios) só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model CardapioDiario,
 //   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
-//   Quem cria o CardapioDiarioDAO é o Model; a saída/estorno no estoque (RF_F1) é feita pelo
-//   Model MovimentacaoEstoque (o Controller não chama outro Controller), na mesma transação.
+//   Quem cria o CardapioDiarioDAO é o Model; a saída/estorno no estoque (RF_F1) é feita por este
+//   Controller com os Models Produto e MovimentacaoEstoque (nenhum Controller chama outro Controller), na mesma transação.
 import { Database } from './db/Database';
-import { MovimentacaoEstoque } from './model/MovimentacaoEstoque';
+import { MovimentacaoEstoque, type MovimentacaoEstoqueAtributos } from './model/MovimentacaoEstoque';
+import { Produto, type ResultadoMovimentacao } from './model/Produto';
 import type { ExecutorSQL } from './dao/tipos';
 import { CardapioDiario, type CardapioDiarioAtributos } from './model/CardapioDiario';
 import { FiltroCardapio, type FiltroCardapioAtributos } from './model/FiltroCardapio';
 import type { CardapioRegistro } from './dao/CardapioDiarioDAO';
-import { Produto } from './model/Produto';
 import type { ProdutoLinha } from './dao/ProdutoDAO';
 import { ErroValidacao, type ErrosDeCampo } from './erros';
 
@@ -32,20 +32,11 @@ function comoObjeto(dados: unknown): Partial<CardapioDiarioAtributos> {
 }
 
 export class CriarCardapioController {
-  private static instancia: CriarCardapioController | undefined;
-
   // conexão com o banco, aberta e mantida pelo Controller
   private readonly conexao: Database;
 
-  private constructor() {
+  constructor() {
     this.conexao = Database.getInstancia();
-  }
-
-  static getInstancia(): CriarCardapioController {
-    if (!CriarCardapioController.instancia) {
-      CriarCardapioController.instancia = new CriarCardapioController();
-    }
-    return CriarCardapioController.instancia;
   }
 
   /** Produtos para o select da tela. */
@@ -98,12 +89,12 @@ export class CriarCardapioController {
       const item = itens[i];
       let motivo: 'ok' | 'categoria' | 'produto' | 'estoque' = await cardapio.verificarItem(cliente, item);
       if (motivo === 'ok') {
-        const resultado = await new MovimentacaoEstoque({
+        const resultado = await this.movimentarEstoque(cliente, {
           produtoId: item.getProdutoId(),
           tipo: 'SAIDA',
           quantidade: item.getQuantidadeUtilizada(),
           origem: cardapio.getOrigemEstoque(),
-        }).aplicar(cliente);
+        });
         if (resultado !== 'APLICADA') motivo = 'estoque';
       }
       if (motivo !== 'ok') {
@@ -122,12 +113,27 @@ export class CriarCardapioController {
   private async estornarItens(cliente: ExecutorSQL, cardapioId: number): Promise<void> {
     const itens = await CardapioDiario.listarItens(cliente, cardapioId);
     for (const item of itens) {
-      await new MovimentacaoEstoque({
+      await this.movimentarEstoque(cliente, {
         produtoId: item.produtoId,
         tipo: 'ENTRADA',
         quantidade: item.quantidadeUtilizada,
         origem: `Estorno: cardápio #${cardapioId}`,
-      }).aplicar(cliente);
+      });
     }
+  }
+
+  /** RF_F1 dentro da transação deste caso de uso: estoque (Produto) e depois o histórico (MovimentacaoEstoque). */
+  private async movimentarEstoque(cliente: ExecutorSQL, dados: MovimentacaoEstoqueAtributos): Promise<ResultadoMovimentacao> {
+    const movimentacao = new MovimentacaoEstoque(dados);
+    const erros = movimentacao.validar();
+    if (Object.keys(erros).length > 0) throw new ErroValidacao('Movimentação de estoque inválida.', erros);
+    const resultado = await Produto.comId(movimentacao.getProdutoId()).aplicarMovimentacao(
+      cliente,
+      movimentacao.getTipo(),
+      movimentacao.getQuantidade(),
+      movimentacao.getDataValidadeIso()
+    );
+    if (resultado === 'APLICADA') await movimentacao.registrar(cliente);
+    return resultado;
   }
 }

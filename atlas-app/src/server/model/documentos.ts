@@ -1,4 +1,7 @@
-// Validação de CPF/CNPJ pelos dígitos verificadores (RF_B4).
+// Validação de CPF/CNPJ pelos dígitos verificadores (RF_B4) e de e-mail. Funções de apoio dos Models.
+
+// bem simples, só pra pegar erro de digitação grosseiro (ex: "maria@" ou "@gmail.com")
+export const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function digitoCPF(d: string, ate: number): number {
   let soma = 0;

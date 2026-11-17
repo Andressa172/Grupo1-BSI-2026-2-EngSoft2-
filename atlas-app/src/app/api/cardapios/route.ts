@@ -15,12 +15,12 @@ export async function GET(request: Request) {
   try {
     const parametros = new URL(request.url).searchParams;
     const [cardapios, produtos] = await Promise.all([
-      CriarCardapioController.getInstancia().consultar({
+      new CriarCardapioController().consultar({
         dataInicial: parametros.get('dataInicial'),
         dataFinal: parametros.get('dataFinal'),
         tipoRefeicao: parametros.get('tipoRefeicao'),
       }),
-      CriarCardapioController.getInstancia().listarProdutos(),
+      new CriarCardapioController().listarProdutos(),
     ]);
     return Response.json({ cardapios, produtos });
   } catch (erro) {
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const dados = await lerJson(request);
-    const cardapio = await CriarCardapioController.getInstancia().criarCardapioDiario(dados);
+    const cardapio = await new CriarCardapioController().criarCardapioDiario(dados);
     return Response.json({ id: cardapio.getId() }, { status: 201 });
   } catch (erro) {
     return respostaDeErro(erro);

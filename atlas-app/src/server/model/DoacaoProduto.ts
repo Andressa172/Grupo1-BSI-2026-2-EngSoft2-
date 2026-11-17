@@ -7,8 +7,6 @@ import { DoacaoProdutoDAO, type DoacaoProdutoRegistro } from '../dao/DoacaoProdu
 import type { FiltroDoacao } from './FiltroDoacao';
 import { ItemDoacao } from './ItemDoacao';
 import { SelecaoDoador } from './SelecaoDoador';
-import { Produto } from './Produto';
-import { MovimentacaoEstoque } from './MovimentacaoEstoque';
 import { dataValida, hoje, paraIso, parseData } from './datasBR';
 
 export type { FiltroDoacaoAtributos } from './FiltroDoacao';
@@ -82,25 +80,8 @@ export class DoacaoProduto {
     this.id = await dao.inserirDoacao(doadorId, paraIso(this.dataRecebimento));
   }
 
-  /**
-   * Grava um item da doação e dá a entrada dele no estoque (RF_F1), na mesma transação:
-   * carrega o produto (travando a linha), soma a quantidade, salva o estoque e registra o histórico.
-   */
-  async incluirItem(conexao: ExecutorSQL, item: ItemDoacao, indice: number): Promise<void> {
-    const movimentacao = new MovimentacaoEstoque({
-      produtoId: item.getProdutoId(),
-      tipo: 'ENTRADA',
-      quantidade: item.getQuantidade(),
-      origem: `Doação de produto #${this.id}`,
-      dataValidade: item.getDataValidade(),
-    });
-    const produto = new Produto({ id: item.getProdutoId(), nome: '', categoria: '', unidadeMedida: '' });
-    if (!(await produto.carregarParaAtualizarEstoque(conexao))) {
-      throw new ErroValidacao('Produto inválido.', { [`item.${indice}.produto`]: 'Produto inválido: não cadastrado.' });
-    }
-    produto.atualizQuantidade(movimentacao.getQuantidade(), 'ENTRADA', movimentacao.getDataValidadeIso());
-    await produto.salvarEstoque(conexao);
-    await movimentacao.registrar(conexao);
+  /** Grava um item da doação. O Controller chama depois de dar a entrada do item no estoque (RF_F1). */
+  async incluirItem(conexao: ExecutorSQL, item: ItemDoacao): Promise<void> {
     await new DoacaoProdutoDAO(conexao).inserirItem(this.id!, item);
   }
 

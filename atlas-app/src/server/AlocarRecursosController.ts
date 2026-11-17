@@ -1,18 +1,18 @@
 // Control - AlocarRecursosController (RF_F9 - Alocar recursos para eventos)
 //
-// - Singleton: uma única instância, guardada na propriedade estática `instancia`.
+// - Não se auto-instancia: quem usa o Controller (a rota) cria com `new`.
 // - Façade: a View (via rota /api/eventos) só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model Evento,
 //   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
-//   Quem cria o EventoDAO é o Model; a saída/estorno no estoque (RF_F1) é feita pelo
-//   Model MovimentacaoEstoque (o Controller não chama outro Controller), na mesma transação.
+//   Quem cria o EventoDAO é o Model; a saída/estorno no estoque (RF_F1) é feita por este
+//   Controller com os Models Produto e MovimentacaoEstoque (nenhum Controller chama outro Controller), na mesma transação.
 import { Database } from './db/Database';
-import { MovimentacaoEstoque } from './model/MovimentacaoEstoque';
+import { MovimentacaoEstoque, type MovimentacaoEstoqueAtributos } from './model/MovimentacaoEstoque';
+import { Produto, type ResultadoMovimentacao } from './model/Produto';
 import type { ExecutorSQL } from './dao/tipos';
 import { Evento, type EventoAtributos } from './model/Evento';
 import { FiltroEvento, type FiltroEventoAtributos } from './model/FiltroEvento';
 import type { EventoRegistro } from './dao/EventoDAO';
-import { Produto } from './model/Produto';
 import type { ProdutoLinha } from './dao/ProdutoDAO';
 import { ErroValidacao, type ErrosDeCampo } from './erros';
 
@@ -32,20 +32,11 @@ function comoObjeto(dados: unknown): Partial<EventoAtributos> {
 }
 
 export class AlocarRecursosController {
-  private static instancia: AlocarRecursosController | undefined;
-
   // conexão com o banco, aberta e mantida pelo Controller
   private readonly conexao: Database;
 
-  private constructor() {
+  constructor() {
     this.conexao = Database.getInstancia();
-  }
-
-  static getInstancia(): AlocarRecursosController {
-    if (!AlocarRecursosController.instancia) {
-      AlocarRecursosController.instancia = new AlocarRecursosController();
-    }
-    return AlocarRecursosController.instancia;
   }
 
   /** Produtos para o select da tela. */
@@ -97,12 +88,12 @@ export class AlocarRecursosController {
     for (let i = 0; i < recursos.length; i++) {
       const recurso = recursos[i];
       if (recurso.getTipo() === 'PRODUTO') {
-        const resultado = await new MovimentacaoEstoque({
+        const resultado = await this.movimentarEstoque(cliente, {
           produtoId: recurso.getProdutoId(),
           tipo: 'SAIDA',
           quantidade: recurso.getQuantidade(),
           origem: evento.getOrigemEstoque(),
-        }).aplicar(cliente);
+        });
         if (resultado !== 'APLICADA') {
           throw new ErroValidacao('Estoque insuficiente.', {
             [`recurso.${i}.quantidade`]: 'Estoque insuficiente para a quantidade informada.',
@@ -117,12 +108,27 @@ export class AlocarRecursosController {
   private async estornarRecursos(cliente: ExecutorSQL, eventoId: number): Promise<void> {
     const produtos = await Evento.listarProdutosAlocados(cliente, eventoId);
     for (const produto of produtos) {
-      await new MovimentacaoEstoque({
+      await this.movimentarEstoque(cliente, {
         produtoId: produto.produtoId,
         tipo: 'ENTRADA',
         quantidade: produto.quantidade,
         origem: `Estorno: evento #${eventoId}`,
-      }).aplicar(cliente);
+      });
     }
+  }
+
+  /** RF_F1 dentro da transação deste caso de uso: estoque (Produto) e depois o histórico (MovimentacaoEstoque). */
+  private async movimentarEstoque(cliente: ExecutorSQL, dados: MovimentacaoEstoqueAtributos): Promise<ResultadoMovimentacao> {
+    const movimentacao = new MovimentacaoEstoque(dados);
+    const erros = movimentacao.validar();
+    if (Object.keys(erros).length > 0) throw new ErroValidacao('Movimentação de estoque inválida.', erros);
+    const resultado = await Produto.comId(movimentacao.getProdutoId()).aplicarMovimentacao(
+      cliente,
+      movimentacao.getTipo(),
+      movimentacao.getQuantidade(),
+      movimentacao.getDataValidadeIso()
+    );
+    if (resultado === 'APLICADA') await movimentacao.registrar(cliente);
+    return resultado;
   }
 }

@@ -4,12 +4,9 @@ import type { ErrosDeCampo } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
 import { DoadorDAO, type DoadorRegistro } from '../dao/DoadorDAO';
 import type { FiltroDoador } from './FiltroDoador';
-import { cpfOuCnpjValido } from './documentos';
+import { cpfOuCnpjValido, EMAIL_VALIDO } from './documentos';
 
 export type TipoPessoa = 'FISICA' | 'JURIDICA';
-
-// bem simples, só pra pegar erro de digitação grosseiro (ex: "maria@" ou "@gmail.com")
-const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export interface DoadorAtributos {
   id?: number;

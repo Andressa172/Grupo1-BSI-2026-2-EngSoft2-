@@ -2,20 +2,18 @@
 // Uma entrada ou saída de um produto. Valida os próprios atributos e grava o histórico
 // criando o DAO com a conexão que recebe (dentro da transação de quem chamou).
 //
-// RF_F1 é uma função oculta (ERS 2.2): o ator é o Sistema, sem tela própria. Os casos de uso
-// solicitantes criam a MovimentacaoEstoque e chamam `aplicar` dentro da transação deles: o fluxo
-// básico do RF_F1 roda neste Model, então nenhum Controller precisa chamar outro Controller
-// (fluxo C -> M -> DAO).
-import { ErroValidacao, type ErrosDeCampo } from '../erros';
+// RF_F1 é uma função oculta (ERS 2.2): o ator é o Sistema, sem tela própria. Cada Controller de um
+// caso de uso solicitante cria este Model e o Produto, e roda o fluxo dentro da transação dele:
+// Produto.aplicarMovimentacao (estoque) e depois `registrar` (histórico). Nenhum Controller chama
+// outro Controller e nenhum Model chama outro Model (fluxo C -> M -> DAO).
+import type { ErrosDeCampo } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
 import { MovimentacaoEstoqueDAO, type MovimentacaoEstoqueRegistro } from '../dao/MovimentacaoEstoqueDAO';
 import type { FiltroMovimentacao } from './FiltroMovimentacao';
-import { Produto } from './Produto';
 import { dataValida, paraIso, parseData, textoSeguro } from './datasBR';
 
 export type TipoMovimentacao = 'ENTRADA' | 'SAIDA';
-// fluxo básico (APLICADA) e fluxos alternativos 2.1 e 3.1 do caso de uso
-export type ResultadoMovimentacao = 'APLICADA' | 'PRODUTO_INEXISTENTE' | 'SALDO_INSUFICIENTE';
+export type { ResultadoMovimentacao } from './Produto';
 
 export interface MovimentacaoEstoqueAtributos {
   produtoId: unknown;
@@ -100,36 +98,6 @@ export class MovimentacaoEstoque {
   }
 
   // ------------------------------ persistência ------------------------------
-
-  /**
-   * Fluxo básico do RF_F1 (diagrama de sequência "Atualizar estoque").
-   * `conexao` é a da transação do solicitante: se ele desistir por causa do resultado (ou o banco
-   * falhar), o rollback desfaz o estoque e o histórico juntos (fluxo alternativo 4.1).
-   */
-  async aplicar(conexao: ExecutorSQL): Promise<ResultadoMovimentacao> {
-    // passo 1: dados da movimentação (produto, quantidade e tipo)
-    const erros = this.validar();
-    if (Object.keys(erros).length > 0) throw new ErroValidacao('Movimentação de estoque inválida.', erros);
-
-    // passo 2: o produto está cadastrado? senão, fluxo alternativo 2.1
-    // (o Produto se carrega do banco e trava a linha até o fim da transação)
-    const produto = new Produto({ id: this.produtoId, nome: '', categoria: '', unidadeMedida: '' });
-    if (!(await produto.carregarParaAtualizarEstoque(conexao))) return 'PRODUTO_INEXISTENTE';
-
-    // passo 3: nova quantidade; saída maior que o estoque é o fluxo alternativo 3.1
-    if (!produto.atualizQuantidade(this.quantidade, this.getTipo(), this.getDataValidadeIso())) {
-      return 'SALDO_INSUFICIENTE';
-    }
-
-    // passo 4: atualiza o estoque do produto no banco
-    await produto.salvarEstoque(conexao);
-
-    // passo 5: registra o histórico da movimentação
-    await this.registrar(conexao);
-
-    // passo 6: confirmação para o solicitante
-    return 'APLICADA';
-  }
 
   /** RF_F1, passo 5 (1.4 no diagrama de sequência): registra o histórico com data, quantidade e tipo. */
   async registrar(conexao: ExecutorSQL): Promise<void> {

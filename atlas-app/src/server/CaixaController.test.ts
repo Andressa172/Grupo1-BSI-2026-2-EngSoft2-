@@ -119,7 +119,7 @@ function criarAmbienteCaixaFalso() {
   } as unknown as Pick<Database, 'comTransacao' | 'query'>;
 
   ponte.dao = dao;
-  const controller = CaixaController.criarParaTeste(database);
+  const controller = new CaixaController(database);
   return { controller, caixas, movimentacoes };
 }
 

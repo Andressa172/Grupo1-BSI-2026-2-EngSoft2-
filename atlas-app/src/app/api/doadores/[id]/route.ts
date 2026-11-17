@@ -14,7 +14,7 @@ type Contexto = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
-    const doador = await DoadorController.getInstancia().buscarPorId(Number(id));
+    const doador = await new DoadorController().buscarPorId(Number(id));
     return Response.json(doador.paraLinhaDeDados());
   } catch (erro) {
     return respostaDeErro(erro);
@@ -25,7 +25,7 @@ export async function PUT(request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
     const dados = (await lerJson(request)) as DadosDoador;
-    const doador = await DoadorController.getInstancia().editar(Number(id), dados);
+    const doador = await new DoadorController().editar(Number(id), dados);
     return Response.json(doador.paraLinhaDeDados());
   } catch (erro) {
     return respostaDeErro(erro);
@@ -35,7 +35,7 @@ export async function PUT(request: Request, { params }: Contexto) {
 export async function DELETE(_request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
-    await DoadorController.getInstancia().excluir(Number(id));
+    await new DoadorController().excluir(Number(id));
     return Response.json({ mensagem: 'Doador excluído.' });
   } catch (erro) {
     return respostaDeErro(erro);

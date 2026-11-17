@@ -14,7 +14,7 @@ const importa = (codigo: string, modulo: RegExp) =>
   new RegExp(`import\\s[^;]*from\\s+['"][^'"]*${modulo.source}['"]`).test(codigo);
 
 const MODULOS = [
-  { nome: 'Atendidos (referência)', controller: 'server/GerenciarAtendidosController.ts', classe: 'GerenciarAtendidosController', model: 'server/model/Atendido.ts', dao: 'server/dao/AtendidoDAO.ts', modelClasse: 'Atendido', daoClasse: 'AtendidoDAO', rotas: ['app/api/atendidos/route.ts', 'app/api/atendidos/[id]/route.ts'], singleton: false },
+  { nome: 'Atendidos (referência)', controller: 'server/GerenciarAtendidosController.ts', classe: 'GerenciarAtendidosController', model: 'server/model/Atendido.ts', dao: 'server/dao/AtendidoDAO.ts', modelClasse: 'Atendido', daoClasse: 'AtendidoDAO', rotas: ['app/api/atendidos/route.ts', 'app/api/atendidos/[id]/route.ts'], },
   { nome: 'Usuários / login', controller: 'server/UsuarioController.ts', classe: 'UsuarioController', model: 'server/model/Usuario.ts', dao: 'server/dao/UsuarioDAO.ts', modelClasse: 'Usuario', daoClasse: 'UsuarioDAO', rotas: ['app/api/usuarios/route.ts', 'app/api/usuarios/[id]/route.ts', 'app/api/auth/route.ts'] },
   { nome: 'RF_F7 - Abrir cotação', controller: 'server/AbrirCotacaoController.ts', classe: 'AbrirCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/route.ts'] },
   { nome: 'RF_F8 - Aprovar cotação', controller: 'server/AprovarCotacaoController.ts', classe: 'AprovarCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/[id]/route.ts'] },
@@ -34,7 +34,8 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
   const model = ler(m.model);
   const dao = ler(m.dao);
 
-  const singleton = (m as { singleton?: boolean }).singleton !== false;
+  // nenhum Controller do sistema é Singleton: a rota cria com `new` (só o Database é Singleton)
+  const singleton = false as boolean;
 
   describe(singleton ? 'Controller: Singleton' : 'Controller: não se auto-instancia', () => {
     it.runIf(singleton)('instância estática privada + construtor privado + getInstancia()', () => {
@@ -191,14 +192,13 @@ describe('Regras dos slides MVC/DAO para Cotações (RF_F7 e RF_F8)', () => {
   });
 });
 
-describe('Singleton em tempo de execução (Controllers)', () => {
-  it('getInstancia() sempre devolve o mesmo objeto em cada Controller', async () => {
-    const { UsuarioController } = await import('./UsuarioController');
-    const { AbrirCotacaoController } = await import('./AbrirCotacaoController');
-    const { AprovarCotacaoController } = await import('./AprovarCotacaoController');
-    expect(UsuarioController.getInstancia()).toBe(UsuarioController.getInstancia());
-    expect(AbrirCotacaoController.getInstancia()).toBe(AbrirCotacaoController.getInstancia());
-    expect(AprovarCotacaoController.getInstancia()).toBe(AprovarCotacaoController.getInstancia());
+describe('Controllers não se auto-instanciam', () => {
+  it.each(CONTROLLERS)('%s: sem instância estática, sem getInstancia e sem construtor privado', (arquivo) => {
+    const codigo = ler(`server/${arquivo}`);
+    expect(codigo).not.toMatch(/static\s+(private\s+)?instancia/);
+    expect(codigo).not.toMatch(/static\s+getInstanc/);
+    expect(codigo).not.toMatch(/private\s+constructor/);
+    expect(codigo).not.toMatch(/globalThis/);
   });
 });
 
@@ -255,11 +255,11 @@ describe('RF_F1 - ninguém abaixo do Controller aciona o estoque', () => {
     expect(codigo).not.toMatch(/registrarEntrada|registrarSaida/);
   });
 
-  it('o AtualizarEstoqueController cria o Model MovimentacaoEstoque, que executa o fluxo (Produto fica no Model)', () => {
+  it('o AtualizarEstoqueController cria os Models MovimentacaoEstoque e Produto (RF_F1)', () => {
     const codigo = ler('server/AtualizarEstoqueController.ts');
     expect(codigo).toMatch(/new\s+MovimentacaoEstoque\s*\(/);
-    expect(codigo).toMatch(/\.aplicar\(/);
-    expect(ler('server/model/MovimentacaoEstoque.ts')).toMatch(/new\s+Produto\s*\(/);
+    expect(codigo).toMatch(/Produto\.comId\(/);
+    expect(codigo).toMatch(/\.aplicarMovimentacao\(/);
   });
 });
 
@@ -332,5 +332,39 @@ describe.each(DAOS)('Regra geral - %s', (arquivo) => {
   });
   it('não importa Model em tempo de execução (só tipos) e não dá new em Model', () => {
     expect(dao).not.toMatch(/^import\s+(?!type\b)[^;]*from\s+['"][^'"]*\/model\/(?!datasBR)/m);
+  });
+});
+
+// Model não chama Model: a única ligação permitida entre Models é a composição (o Model guarda os
+// seus itens ou a sua seleção). Regra de outro Model quem aciona é o Controller.
+const COMPOSICAO: Record<string, string[]> = {
+  'Caixa.ts': ['MovimentacaoCaixa'],
+  'Compra.ts': ['ItemCompra'],
+  'CardapioDiario.ts': ['ItemCardapio'],
+  'Cotacao.ts': ['ItemCotacao'],
+  'DoacaoProduto.ts': ['ItemDoacao', 'SelecaoDoador'],
+  'DoacaoDinheiro.ts': ['SelecaoDoador'],
+  'Evento.ts': ['AlocacaoRecurso'],
+};
+// os Filtro* são só critérios de busca e usam as constantes do próprio Model (ex.: categorias do Produto)
+const MODELOS = arquivos('server/model', /\.ts$/).filter((f) => !f.startsWith('Filtro'));
+
+describe.each(MODELOS)('Regra geral - model/%s', (arquivo) => {
+  const codigo = ler(`server/model/${arquivo}`);
+  it('só importa (em tempo de execução) outro Model se for composição', () => {
+    const permitidos = COMPOSICAO[arquivo] ?? [];
+    const importados = [...codigo.matchAll(/^import\s+(?!type\b)[^;]*?from\s+['"]\.\/(\w+)['"]/gm)]
+      .map((m) => m[1])
+      .filter((nome) => !/^(datasBR|documentos|Filtro\w+)$/.test(nome));
+    expect(importados.filter((nome) => !permitidos.includes(nome))).toEqual([]);
+  });
+  it('não importa Controller', () => {
+    expect(codigo).not.toMatch(/from\s+['"][^'"]*Controller['"]/);
+  });
+});
+
+describe.each(DAOS)('Regra geral - %s não chama outro DAO', (arquivo) => {
+  it('não importa outro DAO', () => {
+    expect(ler(`server/dao/${arquivo}`)).not.toMatch(/from\s+['"]\.\/\w*DAO['"]/);
   });
 });

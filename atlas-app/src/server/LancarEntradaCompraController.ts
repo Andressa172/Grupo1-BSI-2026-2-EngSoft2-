@@ -1,12 +1,17 @@
 // Control - LancarEntradaCompraController (RF_F2 - Lançar entrada de compras)
 //
 // - Não se auto-instancia: quem usa o Controller (a rota) cria com `new`. Também não chama outro
-//   Controller: a entrada no estoque (RF_F1) é feita pelo Model Compra.
+//   Controller: a entrada no estoque (RF_F1) é feita por este Controller com os Models Produto e
+//   MovimentacaoEstoque (nenhum Model chama outro Model).
 // - Façade: a View (via rotas /api/compras) só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model Compra,
 //   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
 //   Quem cria o DAO é o Model.
 import { Database } from './db/Database';
+import type { ExecutorSQL } from './dao/tipos';
+import type { ItemCompra } from './model/ItemCompra';
+import { MovimentacaoEstoque } from './model/MovimentacaoEstoque';
+import { Produto } from './model/Produto';
 import { Compra, MENSAGEM_NF_DUPLICADA, type CompraAtributos } from './model/Compra';
 import { FiltroCompra, type FiltroCompraAtributos } from './model/FiltroCompra';
 import type { CompraRegistro } from './dao/CompraDAO';
@@ -60,9 +65,34 @@ export class LancarEntradaCompraController {
 
       const itens = compra.getItens();
       for (let i = 0; i < itens.length; i++) {
-        await compra.incluirItem(cliente, itens[i], i);
+        await this.darEntradaNoEstoque(cliente, compra, itens[i], i);
+        await compra.incluirItem(cliente, itens[i]);
       }
     });
     return compra;
+  }
+
+  /** Passo 10 (RF_F1): entrada do item no estoque, na mesma transação da compra. */
+  private async darEntradaNoEstoque(cliente: ExecutorSQL, compra: Compra, item: ItemCompra, indice: number): Promise<void> {
+    const movimentacao = new MovimentacaoEstoque({
+      produtoId: item.getProdutoId(),
+      tipo: 'ENTRADA',
+      quantidade: item.getQuantidade(),
+      origem: `Compra #${compra.getId()} - NF ${compra.getNumeroNF()}`,
+      dataValidade: item.getDataValidade(),
+    });
+    const resultado = await Produto.comId(item.getProdutoId()).aplicarMovimentacao(
+      cliente,
+      'ENTRADA',
+      movimentacao.getQuantidade(),
+      movimentacao.getDataValidadeIso()
+    );
+    // fluxo 3.1: produto não cadastrado
+    if (resultado !== 'APLICADA') {
+      throw new ErroValidacao('Produto não cadastrado.', {
+        [`item.${indice}.produto`]: 'Produto não cadastrado: cadastre-o em Produtos antes de lançar a compra.',
+      });
+    }
+    await movimentacao.registrar(cliente);
   }
 }

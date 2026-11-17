@@ -6,6 +6,9 @@ import type { ExecutorSQL } from '../dao/tipos';
 import { ProdutoDAO, type ProdutoLinha, type ProdutoRegistro } from '../dao/ProdutoDAO';
 import type { FiltroProduto } from './FiltroProduto';
 
+// fluxo básico (APLICADA) e fluxos alternativos 2.1 e 3.1 do RF_F1 (Atualizar estoque)
+export type ResultadoMovimentacao = 'APLICADA' | 'PRODUTO_INEXISTENTE' | 'SALDO_INSUFICIENTE';
+
 export const CATEGORIAS_PRODUTO = ['Alimento', 'Material', 'Higiene', 'Outro'] as const;
 
 export interface ProdutoAtributos {
@@ -236,6 +239,29 @@ export class Produto {
   static async buscarPorId(conexao: ExecutorSQL, id: number): Promise<Produto | null> {
     const registro = await new ProdutoDAO(conexao).buscarPorId(id);
     return registro ? Produto.doRegistro(registro) : null;
+  }
+
+  /** Produto só com o id: o Controller cria assim e o próprio Model se carrega do banco (RF_F1). */
+  static comId(id: number): Produto {
+    return new Produto({ id, nome: '', categoria: '', unidadeMedida: '' });
+  }
+
+  /**
+   * RF_F1, passos 2 a 4 (diagrama de sequência "Atualizar estoque"): carrega o produto (travando a
+   * linha até o fim da transação de quem chamou), calcula a nova quantidade e grava o estoque.
+   * Devolve PRODUTO_INEXISTENTE (fluxo 2.1) ou SALDO_INSUFICIENTE (fluxo 3.1) sem gravar nada.
+   * O histórico (passo 5) quem grava é a MovimentacaoEstoque, chamada pelo Controller.
+   */
+  async aplicarMovimentacao(
+    conexao: ExecutorSQL,
+    tipo: 'ENTRADA' | 'SAIDA',
+    quantidade: number,
+    validadeDaEntrada: string | null
+  ): Promise<ResultadoMovimentacao> {
+    if (!(await this.carregarParaAtualizarEstoque(conexao))) return 'PRODUTO_INEXISTENTE';
+    if (!this.atualizQuantidade(quantidade, tipo, validadeDaEntrada)) return 'SALDO_INSUFICIENTE';
+    await this.salvarEstoque(conexao);
+    return 'APLICADA';
   }
 
   // RF_F1, passo 4: grava a quantidade (e a validade) calculadas em atualizQuantidade

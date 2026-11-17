@@ -8,7 +8,7 @@ import { respostaDeErro } from '@/server/http';
 
 export async function GET() {
   try {
-    const estado = await CaixaController.getInstancia().obterEstadoAtual();
+    const estado = await new CaixaController().obterEstadoAtual();
     return Response.json(estado);
   } catch (erro) {
     return respostaDeErro(erro);

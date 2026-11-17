@@ -4,8 +4,6 @@ import type { ExecutorSQL } from '../dao/tipos';
 import { DoacaoDinheiroDAO, type DoacaoDinheiroRegistro } from '../dao/DoacaoDinheiroDAO';
 import type { FiltroDoacao } from './FiltroDoacao';
 import { SelecaoDoador } from './SelecaoDoador';
-import { Caixa, deCentavos, paraCentavos } from './Caixa';
-import { MovimentacaoCaixa } from './MovimentacaoCaixa';
 import { dataValida, hoje, paraIso, parseData, parseValor, textoSeguro } from './datasBR';
 
 export type { FiltroDoacaoAtributos } from './FiltroDoacao';
@@ -26,8 +24,6 @@ export class DoacaoDinheiro {
   private readonly valor: number;
   private readonly formaRecebimento: string;
   private readonly dataRecebimento: Date;
-  // caixa aberto encontrado por validarCaixa (RF_F6): é nele que a entrada será lançada
-  private caixa: Caixa | null = null;
 
   constructor(atributos: Partial<DoacaoDinheiroAtributos>) {
     this.doador = new SelecaoDoador(atributos.doador);
@@ -46,6 +42,11 @@ export class DoacaoDinheiro {
 
   getFormaRecebimento(): string {
     return this.formaRecebimento;
+  }
+
+  /** Data do recebimento em aaaa-mm-dd. */
+  getDataRecebimentoIso(): string {
+    return paraIso(this.dataRecebimento);
   }
 
   /** RF_F11 fluxos 3.1 (valor), 3.2 (forma de recebimento) e 3.3 (data). */
@@ -70,41 +71,11 @@ export class DoacaoDinheiro {
 
   // ------------------------------ persistência ------------------------------
 
-  /**
-   * Exige caixa aberto no momento da doação (RF_F6) e que a data informada não seja anterior à
-   * abertura desse caixa. Trava a linha do caixa até o fim da transação. Chamar dentro de uma transação.
-   */
-  async validarCaixa(conexao: ExecutorSQL): Promise<ErrosDeCampo> {
-    const caixa = await Caixa.buscarAberto(conexao, true);
-    if (!caixa) {
-      return { caixa: 'Não há caixa aberto: abra o caixa antes de registrar a doação em dinheiro.' };
-    }
-    const diaAbertura = (caixa.getDataAbertura() ?? '').slice(0, 10); // aaaa-mm-dd
-    if (diaAbertura !== '' && paraIso(this.dataRecebimento) < diaAbertura) {
-      return { dataRecebimento: 'Data de recebimento anterior à abertura do caixa atual.' };
-    }
-    this.caixa = caixa;
-    return {};
-  }
-
-  /** Grava a doação. Chamar dentro de uma transação, depois de validarCaixa. */
+  /** Grava a doação. Chamar dentro de uma transação, depois que o Controller conferiu o caixa (RF_F6). */
   async incluir(conexao: ExecutorSQL): Promise<void> {
     const doadorId = await this.doador.obterId(conexao);
     const dao = new DoacaoDinheiroDAO(conexao);
     this.id = await dao.inserir(doadorId, this.valor, this.formaRecebimento, paraIso(this.dataRecebimento));
-  }
-
-  /** RF_F6: lança a entrada no caixa aberto encontrado por validarCaixa (mesma transação da doação). */
-  async lancarNoCaixa(conexao: ExecutorSQL): Promise<void> {
-    const movimentacao = new MovimentacaoCaixa({
-      caixaId: this.caixa!.getId() as number,
-      tipo: 'ENTRADA',
-      formaPag: this.formaRecebimento === 'Dinheiro' ? 'FISICO' : 'DIGITAL',
-      valor: deCentavos(paraCentavos(this.valor)),
-      origem: `Doação em dinheiro #${this.id}`,
-    });
-    movimentacao.validar();
-    await movimentacao.incluir(conexao);
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroDoacao): Promise<DoacaoDinheiroRegistro[]> {

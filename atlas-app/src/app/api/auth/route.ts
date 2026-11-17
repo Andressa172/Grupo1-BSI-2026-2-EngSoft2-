@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   try {
     const corpo = await lerJson(request);
     const { login, senha } = (typeof corpo === 'object' && corpo !== null ? corpo : {}) as Record<string, unknown>;
-    const usuario = await UsuarioController.getInstancia().autenticar(login, senha);
+    const usuario = await new UsuarioController().autenticar(login, senha);
     return Response.json(usuario.paraDadosPublicos());
   } catch (erro) {
     return respostaDeErro(erro);
