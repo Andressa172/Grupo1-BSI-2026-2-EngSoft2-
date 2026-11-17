@@ -153,6 +153,28 @@ export class CotacaoDAO {
     return true;
   }
 
+  async atualizarCotacao(
+    idCotacao: number,
+    descricao: string,
+    dataAberturaIso: string,
+    dataLimiteIso: string | null
+  ): Promise<boolean> {
+    const resultado = await this.executor.query<{ id: number }>(
+      `UPDATE cotacao
+          SET descricao = $1,
+              data_abertura = $2::date,
+              data_limite = $3::date
+        WHERE id = $4
+      RETURNING id`,
+      [descricao, dataAberturaIso, dataLimiteIso, idCotacao]
+    );
+    return (resultado.rowCount ?? 0) > 0;
+  }
+
+  async removerItens(cotacaoId: number): Promise<void> {
+    await this.executor.query('DELETE FROM item_cotacao WHERE cotacao_id = $1', [cotacaoId]);
+  }
+
   async atualizarAvaliacao(
     idCotacao: number,
     status: 'APROVADA' | 'REPROVADA',
