@@ -1,5 +1,8 @@
 // Model - ItemCompra: um produto comprado, com quantidade, valor unitário e validade (RF_F2).
+// Valida os próprios atributos e persiste a si mesmo criando o CompraDAO com a conexão recebida do Controller.
 import type { ErrosDeCampo } from '../erros';
+import type { ExecutorSQL } from '../dao/tipos';
+import { CompraDAO } from '../dao/CompraDAO';
 import { dataValida, hoje, parseData, parseValor, textoSeguro } from './datasBR';
 
 const ID_MAXIMO = 2_147_483_647;
@@ -47,6 +50,11 @@ export class ItemCompra {
   /** Passo 4: valor total do item, em centavos inteiros para não errar a soma (0,10 + 0,20). */
   getValorTotalEmCentavos(): number {
     return Math.round(this.valorUnitario * 100) * this.quantidade;
+  }
+
+  /** Grava este item na compra `compraId`, dentro da transação do Controller. */
+  async incluir(conexao: ExecutorSQL, compraId: number): Promise<void> {
+    await new CompraDAO(conexao).inserirItem(compraId, this);
   }
 
   /** RF_F2 fluxos 3.1 (produto) e 4.1 (dados do produto inválidos). */

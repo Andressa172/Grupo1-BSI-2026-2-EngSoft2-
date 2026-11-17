@@ -319,3 +319,35 @@ describe.each(['ProdutoDAO', 'MovimentacaoEstoqueDAO'])('%s (RF_B3 / RF_F1): con
     expect(dao).not.toMatch(/^import\s+(?!type\b)[^;]*from\s+['"][^'"]*\/model\//m);
   });
 });
+
+// View (rotas da API e telas): só conhece o Controller; não importa Model, DAO nem Database,
+// nem mesmo como tipo (slide 10 da Aula 71: a View não instancia nem conhece as Models).
+function arquivosDe(pasta: string, ehAlvo: (nome: string) => boolean): string[] {
+  const saida: string[] = [];
+  for (const entrada of fs.readdirSync(path.join(SRC, pasta), { withFileTypes: true })) {
+    const relativo = `${pasta}/${entrada.name}`;
+    if (entrada.isDirectory()) saida.push(...arquivosDe(relativo, ehAlvo));
+    else if (ehAlvo(entrada.name)) saida.push(relativo);
+  }
+  return saida;
+}
+
+describe.each(arquivosDe('app', (n) => /^(route\.ts|page\.tsx)$/.test(n)))('View - %s', (arquivo) => {
+  it('não importa Model, DAO nem Database (só o Controller)', () => {
+    const codigo = ler(arquivo);
+    expect(codigo).not.toMatch(/from\s+['"][^'"]*\/server\/(model|dao|db)\//);
+  });
+});
+
+describe('RF_F2 - ItemCompra persiste a si mesmo (slide 17: o SQL do item fica na entidade do item)', () => {
+  const item = ler('server/model/ItemCompra.ts');
+  const compra = ler('server/model/Compra.ts');
+  it('o ItemCompra cria o CompraDAO(conexao) e grava o próprio item', () => {
+    expect(importa(item, /dao\/CompraDAO/)).toBe(true);
+    expect(item).toMatch(/new\s+CompraDAO\(conexao\)\.inserirItem\(compraId,\s*this\)/);
+  });
+  it('a Compra manda o item se gravar, sem chamar inserirItem do DAO', () => {
+    expect(compra).toMatch(/item\.incluir\(conexao,/);
+    expect(compra).not.toMatch(/\.inserirItem\(/);
+  });
+});

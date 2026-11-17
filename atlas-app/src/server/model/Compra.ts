@@ -151,7 +151,7 @@ export class Compra {
     produto.atualizQuantidade(movimentacao.getQuantidade(), 'ENTRADA', movimentacao.getDataValidadeIso());
     await produto.salvarEstoque(conexao);
     await movimentacao.registrar(conexao);
-    await new CompraDAO(conexao).inserirItem(this.id!, item);
+    await item.incluir(conexao, this.id!);
   }
 
   /** Fluxo 2.1: já existe compra com esta nota fiscal? Quem decide o que fazer é o Controller. */
