@@ -11,7 +11,7 @@ import { lerJson } from '@/server/lerJson';
 export async function GET(request: Request) {
   try {
     const parametros = new URL(request.url).searchParams;
-    const compras = await LancarEntradaCompraController.getInstancia().consultar({
+    const compras = await new LancarEntradaCompraController().consultar({
       numeroNF: parametros.get('numeroNF'),
       fornecedor: parametros.get('fornecedor'),
       dataInicial: parametros.get('dataInicial'),
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const dados = await lerJson(request);
-    const compra = await LancarEntradaCompraController.getInstancia().registrar(dados);
+    const compra = await new LancarEntradaCompraController().registrar(dados);
     return Response.json(compra.paraLinhaDeDados(), { status: 201 });
   } catch (erro) {
     return respostaDeErro(erro);

@@ -12,7 +12,7 @@ import { respostaDeErro } from '@/server/http';
 export async function GET(request: Request) {
   try {
     const parametros = new URL(request.url).searchParams;
-    const movimentacoes = await AtualizarEstoqueController.getInstancia().consultar({
+    const movimentacoes = await new AtualizarEstoqueController().consultar({
       produtoId: parametros.get('produtoId'),
       tipo: parametros.get('tipo'),
       dataInicial: parametros.get('dataInicial'),

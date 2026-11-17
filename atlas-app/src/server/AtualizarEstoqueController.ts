@@ -1,13 +1,13 @@
 // Control - AtualizarEstoqueController (RF_F1 - Atualizar estoque) - "ControladorEstoque" na ERS
 //
-// - Singleton: uma única instância, guardada na propriedade estática `instancia`.
+// - Não se auto-instancia: quem usa o Controller (a rota ou outro caso de uso) cria com `new`.
 // - Façade: os casos de uso solicitantes chamam atualizarEstoque; a View (via rota
 //   /api/estoque/movimentacoes) só chama consultar.
 // - Abre e mantém a conexão com o banco (Database, Singleton), cria os Models e decide quando
 //   validar. Quem cria o DAO é o Model.
 //
 // RF_F1 é oculto (ERS 2.2): a atualização do estoque não tem tela. Os casos de uso solicitantes
-// (doação de produto, compras, cardápio, eventos) chamam atualizarEstoque dentro da transação
+// (cardápio, eventos) chamam atualizarEstoque dentro da transação
 // deles, passando a conexão dessa transação.
 import { Database } from './db/Database';
 import type { ExecutorSQL } from './dao/tipos';
@@ -30,20 +30,11 @@ function lancarSeTiverErros(erros: ErrosDeCampo): void {
 }
 
 export class AtualizarEstoqueController {
-  private static instancia: AtualizarEstoqueController | undefined;
-
   // conexão com o banco, aberta e mantida pelo Controller
   private readonly conexao: Database;
 
-  private constructor() {
+  constructor() {
     this.conexao = Database.getInstancia();
-  }
-
-  static getInstancia(): AtualizarEstoqueController {
-    if (!AtualizarEstoqueController.instancia) {
-      AtualizarEstoqueController.instancia = new AtualizarEstoqueController();
-    }
-    return AtualizarEstoqueController.instancia;
   }
 
   /**

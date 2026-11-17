@@ -97,7 +97,7 @@ export class AlocarRecursosController {
     for (let i = 0; i < recursos.length; i++) {
       const recurso = recursos[i];
       if (recurso.getTipo() === 'PRODUTO') {
-        const resultado = await AtualizarEstoqueController.getInstancia().atualizarEstoque(cliente, {
+        const resultado = await new AtualizarEstoqueController().atualizarEstoque(cliente, {
           produtoId: recurso.getProdutoId(),
           tipo: 'SAIDA',
           quantidade: recurso.getQuantidade(),
@@ -117,7 +117,7 @@ export class AlocarRecursosController {
   private async estornarRecursos(cliente: ExecutorSQL, eventoId: number): Promise<void> {
     const produtos = await Evento.listarProdutosAlocados(cliente, eventoId);
     for (const produto of produtos) {
-      await AtualizarEstoqueController.getInstancia().atualizarEstoque(cliente, {
+      await new AtualizarEstoqueController().atualizarEstoque(cliente, {
         produtoId: produto.produtoId,
         tipo: 'ENTRADA',
         quantidade: produto.quantidade,

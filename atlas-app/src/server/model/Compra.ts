@@ -7,6 +7,8 @@ import type { ExecutorSQL } from '../dao/tipos';
 import { CompraDAO, type CompraRegistro } from '../dao/CompraDAO';
 import type { FiltroCompra } from './FiltroCompra';
 import { ItemCompra } from './ItemCompra';
+import { MovimentacaoEstoque } from './MovimentacaoEstoque';
+import { Produto } from './Produto';
 import { dataValida, hoje, paraIso, parseData, textoSeguro } from './datasBR';
 
 export interface CompraAtributos {
@@ -110,7 +112,7 @@ export class Compra {
   // ------------------------------ persistência ------------------------------
 
   /**
-   * Passo 9: grava a compra (os itens e a entrada no estoque, RF_F1, ficam a cargo do Controller).
+   * Passo 9: grava a compra (os itens e a entrada no estoque, RF_F1, ficam em incluirItem).
    * Deve ser chamado dentro de uma transação: se qualquer passo falhar, nada fica gravado (fluxo 9.1).
    */
   async incluir(conexao: ExecutorSQL): Promise<void> {
@@ -127,8 +129,28 @@ export class Compra {
     }
   }
 
-  /** Grava um item da compra. Chamado pelo Controller, item a item, depois da entrada no estoque. */
-  async incluirItem(conexao: ExecutorSQL, item: ItemCompra): Promise<void> {
+  /**
+   * Grava um item da compra e dá a entrada dele no estoque (RF_F1), na mesma transação:
+   * carrega o produto (travando a linha), soma a quantidade, salva o estoque e registra o histórico.
+   */
+  async incluirItem(conexao: ExecutorSQL, item: ItemCompra, indice: number): Promise<void> {
+    const movimentacao = new MovimentacaoEstoque({
+      produtoId: item.getProdutoId(),
+      tipo: 'ENTRADA',
+      quantidade: item.getQuantidade(),
+      origem: `Compra #${this.id} - NF ${this.numeroNF}`,
+      dataValidade: item.getDataValidade(),
+    });
+    const produto = new Produto({ id: item.getProdutoId(), nome: '', categoria: '', unidadeMedida: '' });
+    // fluxo 3.1: produto não cadastrado
+    if (!(await produto.carregarParaAtualizarEstoque(conexao))) {
+      throw new ErroValidacao('Produto não cadastrado.', {
+        [`item.${indice}.produto`]: 'Produto não cadastrado: cadastre-o em Produtos antes de lançar a compra.',
+      });
+    }
+    produto.atualizQuantidade(movimentacao.getQuantidade(), 'ENTRADA', movimentacao.getDataValidadeIso());
+    await produto.salvarEstoque(conexao);
+    await movimentacao.registrar(conexao);
     await new CompraDAO(conexao).inserirItem(this.id!, item);
   }
 

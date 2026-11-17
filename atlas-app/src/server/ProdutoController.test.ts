@@ -3,12 +3,13 @@ import { ProdutoController } from './ProdutoController';
 import { Produto } from './model/Produto';
 import type { FiltroProduto } from './model/FiltroProduto';
 import { Database } from './db/Database';
+import type { ProdutoDados, ProdutoRegistro } from './dao/ProdutoDAO';
 import { ErroNaoEncontrado, ErroRegraDeNegocio, ErroValidacao } from './erros';
 
 // ------------------------------------------------------------------------------
 // Dublês: sem banco de verdade.
 // - Database.getInstancia devolve uma conexão falsa (só para conferir quem a usa).
-// - ProdutoDAO vira uma versão em memória; o Model continua dando `new ProdutoDAO(conexao)`.
+// - ProdutoDAO vira uma versão em memória; o Model continua dando `new ProdutoDAO(conexao)`; o DAO devolve registros simples e o Model monta o Produto.
 // ------------------------------------------------------------------------------
 
 const banco = vi.hoisted(() => ({
@@ -30,39 +31,52 @@ vi.mock('./dao/ProdutoDAO', () => ({
       banco.conexoesUsadas.push(conexao);
     }
     private lista() {
-      return banco.produtos as Produto[];
+      return banco.produtos as ProdutoRegistro[];
+    }
+    private paraRegistro(dados: ProdutoDados, id: number, quantidadeEstoque = 0): ProdutoRegistro {
+      return {
+        id,
+        nome: dados.nome,
+        categoria: dados.categoria,
+        unidadeMedida: dados.unidadeMedida,
+        quantidadeEstoque,
+        estoqueMinimo: dados.estoqueMinimo,
+        dataValidade: dados.dataValidade,
+        numeroLote: dados.numeroLote,
+      };
     }
     async consultar(filtro: FiltroProduto) {
       return this.lista().filter(
         (p) =>
-          (!filtro.getNome() || p.getNome().toLowerCase().includes(filtro.getNome().toLowerCase())) &&
-          (!filtro.getCategoria() || p.getCategoria() === filtro.getCategoria()) &&
-          (filtro.getValidade() !== 'SEM_VALIDADE' || p.getDataValidade() === null)
+          (!filtro.getNome() || p.nome.toLowerCase().includes(filtro.getNome().toLowerCase())) &&
+          (!filtro.getCategoria() || p.categoria === filtro.getCategoria()) &&
+          (filtro.getValidade() !== 'SEM_VALIDADE' || p.dataValidade === null)
       );
     }
     async buscarPorId(id: number) {
-      return this.lista().find((p) => p.getId() === id) ?? null;
+      return this.lista().find((p) => p.id === id) ?? null;
     }
     async existeComNome(nome: string, idIgnorado?: number) {
-      return this.lista().some((p) => p.getId() !== idIgnorado && p.getNome().toLowerCase() === nome.toLowerCase());
+      return this.lista().some((p) => p.id !== idIgnorado && p.nome.toLowerCase() === nome.toLowerCase());
     }
-    async inserir(produto: Produto) {
-      produto.setId(banco.proximoId++);
-      banco.produtos.push(produto);
-      return produto;
+    async inserir(dados: ProdutoDados) {
+      const registro = this.paraRegistro(dados, banco.proximoId++);
+      banco.produtos.push(registro);
+      return registro;
     }
-    async atualizar(produto: Produto) {
-      const indice = this.lista().findIndex((p) => p.getId() === produto.getId());
+    async atualizar(dados: ProdutoDados) {
+      const indice = this.lista().findIndex((p) => p.id === dados.id);
       if (indice === -1) return null;
-      banco.produtos[indice] = produto;
-      return produto;
+      const registro = this.paraRegistro(dados, dados.id!, this.lista()[indice].quantidadeEstoque);
+      banco.produtos[indice] = registro;
+      return registro;
     }
     async excluir(id: number) {
       // imita o banco recusando a exclusão de produto que já tem movimentação
       if (banco.idsComMovimentacao.includes(id)) {
         throw new ErroRegraDeNegocio('Este produto já foi usado no sistema e não pode ser excluído.');
       }
-      const indice = this.lista().findIndex((p) => p.getId() === id);
+      const indice = this.lista().findIndex((p) => p.id === id);
       if (indice === -1) return false;
       banco.produtos.splice(indice, 1);
       return true;
@@ -80,7 +94,7 @@ const arroz = {
 };
 
 describe('ProdutoController - RF_B3 Gerenciar produtos', () => {
-  const controller = ProdutoController.getInstancia();
+  const controller = new ProdutoController();
 
   beforeEach(() => {
     banco.produtos = [];
@@ -90,8 +104,8 @@ describe('ProdutoController - RF_B3 Gerenciar produtos', () => {
   });
 
   describe('padrões Singleton e camadas', () => {
-    it('getInstancia devolve sempre a mesma instância', () => {
-      expect(ProdutoController.getInstancia()).toBe(controller);
+    it('o Controller não se auto-instancia: quem o usa cria com new', () => {
+      expect(new ProdutoController()).not.toBe(controller);
     });
 
     it('o Controller obtém a conexão pelo Singleton Database', () => {

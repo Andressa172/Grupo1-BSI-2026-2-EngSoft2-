@@ -46,7 +46,7 @@ async function movimentar(
   const { Database } = await import('./db/Database');
   const { AtualizarEstoqueController } = await import('./AtualizarEstoqueController');
   return Database.getInstancia().comTransacao((cliente) =>
-    AtualizarEstoqueController.getInstancia().atualizarEstoque(cliente, { produtoId, tipo, quantidade, origem, dataValidade })
+    new AtualizarEstoqueController().atualizarEstoque(cliente, { produtoId, tipo, quantidade, origem, dataValidade })
   );
 }
 
@@ -118,7 +118,7 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Estoque - integração (PostgreSQL)', () =
             query: (texto: string, p?: unknown[]) =>
               texto.includes('INSERT INTO movimentacao_estoque') ? Promise.reject(new Error('falha simulada')) : cliente.query(texto, p),
           };
-          return AtualizarEstoqueController.getInstancia().atualizarEstoque(clienteComFalha as never, {
+          return new AtualizarEstoqueController().atualizarEstoque(clienteComFalha as never, {
             produtoId: leite,
             tipo: 'SAIDA',
             quantidade: 3,

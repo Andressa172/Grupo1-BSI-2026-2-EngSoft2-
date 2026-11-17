@@ -1,11 +1,11 @@
 // DAO - Produto
 // - listarTodos: lista simples, usada pelas telas de cardápio (RF_F10) e eventos (RF_F9)
 // - demais métodos: CRUD do RF_B3 (Gerenciar produtos). Quem cria este DAO é o
-//   model Produto, com a conexão que recebe do ProdutoController.
+//   model Produto, que passa a conexão (recebida do ProdutoController) no construtor.
+// - O DAO não abre conexão nem cria Model: recebe a conexão e os dados por parâmetro e devolve
+//   registros simples (ProdutoRegistro); quem monta o Produto é o Model.
 // - buscarPorIdParaAtualizar / atualizarEstoque: usados só pelo RF_F1 (Atualizar estoque), via model Produto.
 import type { ExecutorSQL } from './tipos';
-import { Database } from '../db/Database';
-import { Produto } from '../model/Produto';
 import type { FiltroProduto } from '../model/FiltroProduto';
 import { paraDataSimples } from './datas';
 import { ErroRegraDeNegocio } from '../erros';
@@ -25,10 +25,33 @@ interface ProdutoLinhaCompleta extends Omit<ProdutoLinha, 'data_validade'> {
   numero_lote: string | null;
 }
 
+// dados que o Model passa para gravar (sem a quantidade em estoque, que só muda por movimentação)
+export interface ProdutoDados {
+  id?: number;
+  nome: string;
+  categoria: string;
+  unidadeMedida: string;
+  estoqueMinimo: number;
+  dataValidade: string | null; // aaaa-mm-dd
+  numeroLote: string;
+}
+
+// registro lido do banco; o Model transforma em Produto
+export interface ProdutoRegistro {
+  id: number;
+  nome: string;
+  categoria: string;
+  unidadeMedida: string;
+  quantidadeEstoque: number;
+  estoqueMinimo: number;
+  dataValidade: string | null; // aaaa-mm-dd
+  numeroLote: string | null;
+}
+
 const COLUNAS = 'id, nome, categoria, unidade_medida, quantidade_estoque, estoque_minimo, data_validade, numero_lote';
 
-function linhaParaProduto(linha: ProdutoLinhaCompleta): Produto {
-  return new Produto({
+function linhaParaRegistro(linha: ProdutoLinhaCompleta): ProdutoRegistro {
+  return {
     id: linha.id,
     nome: linha.nome,
     categoria: linha.categoria,
@@ -37,11 +60,11 @@ function linhaParaProduto(linha: ProdutoLinhaCompleta): Produto {
     estoqueMinimo: linha.estoque_minimo,
     dataValidade: linha.data_validade ? paraDataSimples(linha.data_validade) : null,
     numeroLote: linha.numero_lote,
-  });
+  };
 }
 
 export class ProdutoDAO {
-  constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
+  constructor(private readonly executor: ExecutorSQL) {}
 
   async listarTodos(): Promise<ProdutoLinha[]> {
     const resultado = await this.executor.query<ProdutoLinha>(
@@ -55,7 +78,7 @@ export class ProdutoDAO {
   // ------------------------- RF_B3 - Gerenciar produtos -------------------------
 
   // consulta com os filtros da tela; filtro vazio traz todos os produtos
-  async consultar(filtro: FiltroProduto): Promise<Produto[]> {
+  async consultar(filtro: FiltroProduto): Promise<ProdutoRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];
 
@@ -84,21 +107,21 @@ export class ProdutoDAO {
       `SELECT ${COLUNAS} FROM produto ${where} ORDER BY nome`,
       parametros
     );
-    return resultado.rows.map(linhaParaProduto);
+    return resultado.rows.map(linhaParaRegistro);
   }
 
-  async buscarPorId(id: number): Promise<Produto | null> {
+  async buscarPorId(id: number): Promise<ProdutoRegistro | null> {
     const resultado = await this.executor.query<ProdutoLinhaCompleta>(`SELECT ${COLUNAS} FROM produto WHERE id = $1`, [id]);
-    return resultado.rows[0] ? linhaParaProduto(resultado.rows[0]) : null;
+    return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
   // FOR UPDATE: trava a linha até o fim da transação (RF_F1)
-  async buscarPorIdParaAtualizar(id: number): Promise<Produto | null> {
+  async buscarPorIdParaAtualizar(id: number): Promise<ProdutoRegistro | null> {
     const resultado = await this.executor.query<ProdutoLinhaCompleta>(
       `SELECT ${COLUNAS} FROM produto WHERE id = $1 FOR UPDATE`,
       [id]
     );
-    return resultado.rows[0] ? linhaParaProduto(resultado.rows[0]) : null;
+    return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
   async atualizarEstoque(id: number, quantidadeEstoque: number, dataValidade: string | null): Promise<void> {
@@ -118,20 +141,18 @@ export class ProdutoDAO {
   }
 
   // a quantidade em estoque não entra: produto novo começa com 0 (valor padrão da tabela)
-  async inserir(produto: Produto): Promise<Produto> {
-    const dados = produto.paraLinhaDeDados();
+  async inserir(dados: ProdutoDados): Promise<ProdutoRegistro> {
     const resultado = await this.executor.query<ProdutoLinhaCompleta>(
       `INSERT INTO produto (nome, categoria, unidade_medida, estoque_minimo, data_validade, numero_lote)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${COLUNAS}`,
       [dados.nome, dados.categoria, dados.unidadeMedida, dados.estoqueMinimo, dados.dataValidade, dados.numeroLote]
     );
-    return linhaParaProduto(resultado.rows[0]);
+    return linhaParaRegistro(resultado.rows[0]);
   }
 
   // também não altera a quantidade em estoque, que só muda por movimentação (RF_F1)
-  async atualizar(produto: Produto): Promise<Produto | null> {
-    const dados = produto.paraLinhaDeDados();
+  async atualizar(dados: ProdutoDados): Promise<ProdutoRegistro | null> {
     const resultado = await this.executor.query<ProdutoLinhaCompleta>(
       `UPDATE produto
           SET nome = $1, categoria = $2, unidade_medida = $3, estoque_minimo = $4, data_validade = $5, numero_lote = $6
@@ -139,7 +160,7 @@ export class ProdutoDAO {
     RETURNING ${COLUNAS}`,
       [dados.nome, dados.categoria, dados.unidadeMedida, dados.estoqueMinimo, dados.dataValidade, dados.numeroLote, dados.id]
     );
-    return resultado.rows[0] ? linhaParaProduto(resultado.rows[0]) : null;
+    return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
   async excluir(id: number): Promise<boolean> {
