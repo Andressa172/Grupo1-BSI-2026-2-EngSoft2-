@@ -14,7 +14,7 @@ const importa = (codigo: string, modulo: RegExp) =>
   new RegExp(`import\\s[^;]*from\\s+['"][^'"]*${modulo.source}['"]`).test(codigo);
 
 const MODULOS = [
-  { nome: 'Atendidos (referência)', controller: 'server/GerenciarAtendidosController.ts', classe: 'GerenciarAtendidosController', model: 'server/model/Atendido.ts', dao: 'server/dao/AtendidoDAO.ts', modelClasse: 'Atendido', daoClasse: 'AtendidoDAO', rotas: ['app/api/atendidos/route.ts', 'app/api/atendidos/[id]/route.ts'] },
+  { nome: 'Atendidos (referência)', controller: 'server/GerenciarAtendidosController.ts', classe: 'GerenciarAtendidosController', model: 'server/model/Atendido.ts', dao: 'server/dao/AtendidoDAO.ts', modelClasse: 'Atendido', daoClasse: 'AtendidoDAO', rotas: ['app/api/atendidos/route.ts', 'app/api/atendidos/[id]/route.ts'], singleton: false },
   { nome: 'Usuários / login', controller: 'server/UsuarioController.ts', classe: 'UsuarioController', model: 'server/model/Usuario.ts', dao: 'server/dao/UsuarioDAO.ts', modelClasse: 'Usuario', daoClasse: 'UsuarioDAO', rotas: ['app/api/usuarios/route.ts', 'app/api/usuarios/[id]/route.ts', 'app/api/auth/route.ts'] },
   { nome: 'RF_F7 - Abrir cotação', controller: 'server/AbrirCotacaoController.ts', classe: 'AbrirCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/route.ts'] },
   { nome: 'RF_F8 - Aprovar cotação', controller: 'server/AprovarCotacaoController.ts', classe: 'AprovarCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/[id]/route.ts'] },
@@ -34,11 +34,19 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
   const model = ler(m.model);
   const dao = ler(m.dao);
 
-  describe('Controller: Singleton', () => {
-    it('instância estática privada + construtor privado + getInstancia()', () => {
+  const singleton = (m as { singleton?: boolean }).singleton !== false;
+
+  describe(singleton ? 'Controller: Singleton' : 'Controller: não se auto-instancia', () => {
+    it.runIf(singleton)('instância estática privada + construtor privado + getInstancia()', () => {
       expect(controller).toMatch(/private\s+static\s+instancia/);
       expect(controller).toMatch(/private\s+constructor\s*\(/);
       expect(controller).toMatch(new RegExp(`static\\s+getInstancia\\s*\\(\\s*\\)\\s*:\\s*${m.classe}`));
+    });
+    it.runIf(!singleton)('construtor público, sem instância estática nem getInstancia() de si mesmo', () => {
+      expect(controller).not.toMatch(/static\s+(private\s+)?instancia/);
+      expect(controller).not.toMatch(new RegExp(`static\\s+getInstancia\\s*\\(\\s*\\)\\s*:\\s*${m.classe}`));
+      expect(controller).not.toMatch(/private\s+constructor/);
+      expect(controller).not.toMatch(new RegExp(`${m.classe}\\.getInstancia`));
     });
     it('não usa globalThis (a instância fica na própria classe)', () => {
       expect(controller).not.toMatch(/globalThis/);
@@ -99,9 +107,52 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
       expect(importa(codigo, /\/dao\//)).toBe(false);
       expect(importa(codigo, /db\/Database/)).toBe(false);
       expect(importa(codigo, new RegExp(`model/${m.modelClasse}`))).toBe(false);
-      expect(codigo).toMatch(new RegExp(`${m.classe}\\.getInstancia\\(\\)`));
-      expect(codigo).not.toMatch(new RegExp(`new\\s+${m.classe}`));
+      if (singleton) {
+        expect(codigo).toMatch(new RegExp(`${m.classe}\\.getInstancia\\(\\)`));
+        expect(codigo).not.toMatch(new RegExp(`new\\s+${m.classe}`));
+      } else {
+        expect(codigo).toMatch(new RegExp(`new\\s+${m.classe}\\s*\\(\\s*\\)`));
+        expect(codigo).not.toMatch(new RegExp(`${m.classe}\\.getInstancia`));
+      }
     });
+  });
+});
+
+describe.each([
+  { nome: 'RF_F3 - Receber doação de produto', classe: 'ReceberDoacaoProdutoController', rotas: ['app/api/doacoes/produto/route.ts'] },
+  { nome: 'RF_F11 - Receber doação em dinheiro', classe: 'ReceberDoacaoDinheiroController', rotas: ['app/api/doacoes/dinheiro/route.ts'] },
+])('Arquitetura (sem auto-instanciar) - $nome', (m) => {
+  const controller = ler(`server/${m.classe}.ts`);
+
+  it('Controller não se auto-instancia: construtor público, sem static instancia/getInstancia', () => {
+    expect(controller).not.toMatch(/static\s+(private\s+)?instancia/);
+    expect(controller).not.toMatch(/static\s+getInstancia/);
+    expect(controller).not.toMatch(/private\s+constructor/);
+  });
+  it('mantém a conexão do Database Singleton e controla a transação', () => {
+    expect(controller).toMatch(/this\.conexao\s*=\s*Database\.getInstancia\(\)/);
+    expect(controller).toMatch(/this\.conexao\.comTransacao/);
+  });
+  it('não chama nenhum outro Controller e não toca em DAO', () => {
+    expect(importa(controller, /Controller/)).toBe(false);
+    expect(importa(controller, /\/dao\//)).toBe(false);
+    expect(controller).not.toMatch(/new\s+\w*DAO\s*\(/);
+  });
+  it.each(m.rotas)('%s cria o Controller com new e não importa Model, DAO nem Database', (rota) => {
+    const codigo = ler(rota);
+    expect(codigo).toMatch(new RegExp(`new\\s+${m.classe}\\s*\\(\\s*\\)`));
+    expect(codigo).not.toMatch(new RegExp(`${m.classe}\\.getInstancia`));
+    expect(importa(codigo, /\/dao\//)).toBe(false);
+    expect(importa(codigo, /db\/Database/)).toBe(false);
+    expect(importa(codigo, /\/model\//)).toBe(false);
+  });
+});
+
+describe('Models das doações só conversam com outros Models e DAOs (nunca com Controller)', () => {
+  it.each(['DoacaoProduto', 'DoacaoDinheiro', 'SelecaoDoador'])('model/%s.ts', (nome) => {
+    const codigo = ler(`server/model/${nome}.ts`);
+    expect(importa(codigo, /Controller/)).toBe(false);
+    expect(importa(codigo, /db\/Database/)).toBe(false);
   });
 });
 

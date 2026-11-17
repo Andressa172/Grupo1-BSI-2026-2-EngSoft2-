@@ -54,21 +54,26 @@ describe('Database (conexão com o PostgreSQL)', () => {
 
     const banco = Database.getInstancia();
     for (const c of [
-      GerenciarAtendidosController.getInstancia(),
-      ReceberDoacaoProdutoController.getInstancia(),
-      ReceberDoacaoDinheiroController.getInstancia(),
+      new GerenciarAtendidosController(),
+      new ReceberDoacaoProdutoController(),
+      new ReceberDoacaoDinheiroController(),
     ]) {
       expect((c as unknown as { conexao: unknown }).conexao).toBe(banco);
     }
     expect(pg.criados).toHaveLength(1);
   });
 
-  it('os Controllers também são Singleton', async () => {
+  it('os Controllers não são Singleton: cada new cria um objeto, mas todos compartilham o mesmo Database', async () => {
+    const { Database } = await import('./Database');
     const { GerenciarAtendidosController: A } = await import('../GerenciarAtendidosController');
     const { ReceberDoacaoProdutoController: P } = await import('../ReceberDoacaoProdutoController');
     const { ReceberDoacaoDinheiroController: D } = await import('../ReceberDoacaoDinheiroController');
-    expect(A.getInstancia()).toBe(A.getInstancia());
-    expect(P.getInstancia()).toBe(P.getInstancia());
-    expect(D.getInstancia()).toBe(D.getInstancia());
+    for (const C of [A, P, D]) {
+      const um = new C();
+      const outro = new C();
+      expect(um).not.toBe(outro);
+      expect((um as unknown as { conexao: unknown }).conexao).toBe(Database.getInstancia());
+      expect((outro as unknown as { conexao: unknown }).conexao).toBe(Database.getInstancia());
+    }
   });
 });

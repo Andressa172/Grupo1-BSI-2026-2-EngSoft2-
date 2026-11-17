@@ -1,6 +1,6 @@
 // Control - GerenciarAtendidosController (RF_B1 - Gerenciar atendidos)
 //
-// - Singleton: uma única instância, guardada na propriedade estática `instancia`.
+// - A rota (/api/atendidos) cria o Controller com `new`; ele não se auto-instancia.
 // - Façade: a View (via rotas /api/atendidos) só conhece estes métodos.
 // - O Controller obtém a conexão com o banco (Database, também Singleton),
 //   cria o Model Atendido e decide quando validar e persistir.
@@ -38,20 +38,11 @@ function comoObjeto(dados: unknown): DadosAtendido {
 }
 
 export class GerenciarAtendidosController {
-  private static instancia: GerenciarAtendidosController | undefined;
-
   // conexão com o banco, aberta e mantida pelo Controller
   private readonly conexao: Database;
 
-  private constructor() {
+  constructor() {
     this.conexao = Database.getInstancia();
-  }
-
-  static getInstancia(): GerenciarAtendidosController {
-    if (!GerenciarAtendidosController.instancia) {
-      GerenciarAtendidosController.instancia = new GerenciarAtendidosController();
-    }
-    return GerenciarAtendidosController.instancia;
   }
 
   async consultar(dadosFiltro: FiltroAtendidoAtributos = {}): Promise<Atendido[]> {

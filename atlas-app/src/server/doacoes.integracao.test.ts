@@ -21,6 +21,19 @@ async function sql<T extends Record<string, unknown>>(texto: string, p: unknown[
 const estoque = async (id: number) => Number((await sql<{ q: number }>('SELECT quantidade_estoque AS q FROM produto WHERE id=$1', [id]))[0].q);
 const contar = async (tabela: string) => Number((await sql<{ n: string }>(`SELECT count(*) AS n FROM ${tabela}`))[0].n);
 
+// gera um CPF válido (com dígitos verificadores) a partir de um número de 9 dígitos
+function cpfDe(base: number): string {
+  const d = String(base).padStart(9, '0').split('').map(Number);
+  for (const n of [9, 10]) {
+    const soma = d.slice(0, n).reduce((a, v, i) => a + v * (n + 1 - i), 0);
+    d.push(((soma * 10) % 11) % 10);
+  }
+  return d.join('');
+}
+const novoDoador = (nome: string, cpf: number) => ({
+  tipo: 'novo', nome, contato: '(18) 98888-7777', email: 'novo@exemplo.com', tipoPessoa: 'FISICA', cpfCnpj: cpfDe(cpf),
+});
+
 const hoje = () => {
   const d = new Date();
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
@@ -69,23 +82,37 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Doações - integração (PostgreSQL)', ()
       );
       expect(r.status).toBe(201);
       expect(await estoque(arroz)).toBe(antes + 4);
-      const d = await rotas.dinheiro.POST(json({ doador: { tipo: 'existente', id: String(doador) }, valor: '25,00', formaRecebimento: 'PIX', dataRecebimento: hoje() }));
-      expect(d.status).toBe(201);
     });
 
     it('doador novo é criado junto; doador anônimo funciona', async () => {
       const antes = await contar('doador');
       expect(
-        (await rotas.produto.POST(json({ doador: { tipo: 'novo', nome: 'Maria Nova', contato: '(18) 98888-7777' }, dataRecebimento: hoje(), itens: [{ produtoId: arroz, quantidade: 1 }] }))).status
+        (await rotas.produto.POST(json({ doador: novoDoador('Maria Nova', 123456789), dataRecebimento: hoje(), itens: [{ produtoId: arroz, quantidade: 1 }] }))).status
       ).toBe(201);
       expect(await contar('doador')).toBe(antes + 1);
+      const gravado = await sql<{ cpf_cnpj: string; tipo_pessoa: string }>("SELECT cpf_cnpj, tipo_pessoa FROM doador WHERE nome = 'Maria Nova'");
+      expect(gravado[0]).toEqual({ cpf_cnpj: cpfDe(123456789), tipo_pessoa: 'FISICA' });
       expect((await rotas.produto.POST(json({ doador: { tipo: 'anonimo' }, dataRecebimento: hoje(), itens: [{ produtoId: arroz, quantidade: 1 }] }))).status).toBe(201);
+    });
+
+    it('doador novo: CPF/CNPJ é obrigatório e precisa ser válido; repetido é barrado', async () => {
+      const antes = await contar('doador');
+      const envia = (doadorNovo: unknown) =>
+        rotas.produto.POST(json({ doador: doadorNovo, dataRecebimento: hoje(), itens: [{ produtoId: arroz, quantidade: 1 }] }));
+      const semCpf = await envia({ ...novoDoador('Sem Cpf', 1), cpfCnpj: '' });
+      expect(semCpf.status).toBe(400);
+      expect((await semCpf.json()).erros['doador.cpfCnpj']).toBeDefined();
+      expect((await envia({ ...novoDoador('Cpf Ruim', 1), cpfCnpj: '111.111.111-11' })).status).toBe(400);
+      const repetido = await envia(novoDoador('Outro Nome', 123456789)); // mesmo CPF da Maria Nova
+      expect(repetido.status).toBe(400);
+      expect((await repetido.json()).erros['doador.cpfCnpj']).toMatch(/já cadastrado/);
+      expect(await contar('doador')).toBe(antes);
     });
 
     it('transação: 2º item com produto inexistente → nada é gravado (nem estoque, nem doador novo)', async () => {
       const antes = { e: await estoque(arroz), d: await contar('doador'), dp: await contar('doacao_produto'), i: await contar('item_doacao'), m: await contar('movimentacao_estoque') };
       const r = await rotas.produto.POST(
-        json({ doador: { tipo: 'novo', nome: 'Fantasma Silva', contato: '18 90000-0000' }, dataRecebimento: hoje(), itens: [{ produtoId: arroz, quantidade: 7 }, { produtoId: 999999, quantidade: 1 }] })
+        json({ doador: novoDoador('Fantasma Silva', 222333444), dataRecebimento: hoje(), itens: [{ produtoId: arroz, quantidade: 7 }, { produtoId: 999999, quantidade: 1 }] })
       );
       expect(r.status).toBe(400);
       expect(await estoque(arroz)).toBe(antes.e);
@@ -153,7 +180,7 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Doações - integração (PostgreSQL)', ()
       // a validação de Doador é do RF_B2 (outro membro): pode aceitar aspas. O que importa aqui é que o texto
       // é guardado como TEXTO e jamais interpretado como comando.
       const payload = "x'); DROP TABLE doador;--";
-      const r = await rotas.produto.POST(json({ doador: { tipo: 'novo', nome: payload, contato: '18 99999-0000' }, dataRecebimento: hoje(), itens: [{ produtoId: arroz, quantidade: 1 }] }));
+      const r = await rotas.produto.POST(json({ doador: novoDoador(payload, 333444555), dataRecebimento: hoje(), itens: [{ produtoId: arroz, quantidade: 1 }] }));
       expect(r.status).toBeLessThan(500);
       expect(await contar('doador')).toBeGreaterThan(0); // tabela continua lá
       expect(await contar('produto')).toBe(2);
@@ -210,24 +237,52 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Doações - integração (PostgreSQL)', ()
   describe('RF_F11 - doação em dinheiro', () => {
     const base = () => ({ doador: { tipo: 'existente', id: doador }, valor: '150,50', formaRecebimento: 'PIX', dataRecebimento: hoje() });
 
-    it('sem caixa aberto: doação é gravada e avisa que o caixa não foi atualizado', async () => {
-      const r = await rotas.dinheiro.POST(json(base()));
-      expect(r.status).toBe(201);
-      const corpo = await r.json();
-      expect(corpo.valor).toBe(150.5);
-      expect(await contar('doacao_dinheiro')).toBe(2); // esta + a enviada no formato da tela
-      expect(corpo.caixaAtualizado).toBe(false);
-      expect(await contar('movimentacao_caixa')).toBe(0);
+    it('sem caixa aberto: bloqueia (400, erro em "caixa") e não grava nada', async () => {
+      const antes = { d: await contar('doacao_dinheiro'), m: await contar('movimentacao_caixa'), dr: await contar('doador') };
+      const r = await rotas.dinheiro.POST(json({ ...base(), doador: novoDoador('Sem Caixa', 444555666) }));
+      expect(r.status).toBe(400);
+      expect((await r.json()).erros.caixa).toMatch(/caixa aberto/i);
+      expect(await contar('doacao_dinheiro')).toBe(antes.d);
+      expect(await contar('movimentacao_caixa')).toBe(antes.m);
+      expect(await contar('doador')).toBe(antes.dr); // o doador novo também foi desfeito
     });
 
     it('com caixa aberto: lança ENTRADA no caixa com o valor exato (centavos)', async () => {
       const caixa = (await sql<{ id: number }>("INSERT INTO caixa (status) VALUES ('ABERTO') RETURNING id"))[0].id;
       const r = await rotas.dinheiro.POST(json({ ...base(), valor: '1.234,56', formaRecebimento: 'Dinheiro' }));
       expect(r.status).toBe(201);
-      expect((await r.json()).caixaAtualizado).toBe(true);
-      const mov = await sql<{ caixa_id: number; tipo: string; valor: string }>('SELECT * FROM movimentacao_caixa');
+      const mov = await sql<{ caixa_id: number; tipo: string; valor: string; forma_pag: string }>('SELECT * FROM movimentacao_caixa');
       expect(mov).toHaveLength(1);
-      expect(mov[0]).toMatchObject({ caixa_id: caixa, tipo: 'ENTRADA', valor: '1234.56' });
+      expect(mov[0]).toMatchObject({ caixa_id: caixa, tipo: 'ENTRADA', valor: '1234.56', forma_pag: 'FISICO' });
+    });
+
+    it('PIX entra como DIGITAL; formato exato da tela (ids como texto) funciona', async () => {
+      const r = await rotas.dinheiro.POST(json({ doador: { tipo: 'existente', id: String(doador) }, valor: '25,00', formaRecebimento: 'PIX', dataRecebimento: hoje() }));
+      expect(r.status).toBe(201);
+      const mov = await sql<{ forma_pag: string }>("SELECT forma_pag FROM movimentacao_caixa WHERE valor = 25");
+      expect(mov[0].forma_pag).toBe('DIGITAL');
+    });
+
+    it('data anterior à abertura do caixa atual → 400 e nada gravado', async () => {
+      const antes = await contar('doacao_dinheiro');
+      const ontem = new Date(Date.now() - 86_400_000);
+      const dataOntem = `${String(ontem.getDate()).padStart(2, '0')}/${String(ontem.getMonth() + 1).padStart(2, '0')}/${ontem.getFullYear()}`;
+      const r = await rotas.dinheiro.POST(json({ ...base(), dataRecebimento: dataOntem }));
+      expect(r.status).toBe(400);
+      expect((await r.json()).erros.dataRecebimento).toMatch(/abertura do caixa/);
+      expect(await contar('doacao_dinheiro')).toBe(antes);
+    });
+
+    it('doador novo na doação em dinheiro grava CPF/CNPJ e entra no caixa', async () => {
+      const r = await rotas.dinheiro.POST(json({ ...base(), doador: novoDoador('Pessoa Dinheiro', 555666777) }));
+      expect(r.status).toBe(201);
+      expect((await sql('SELECT 1 FROM doador WHERE cpf_cnpj = $1', [cpfDe(555666777)])).length).toBe(1);
+    });
+
+    it('depois que o caixa fecha, a doação volta a ser bloqueada', async () => {
+      await sql("UPDATE caixa SET status='FECHADO', data_fechamento=now() WHERE status='ABERTO'");
+      expect((await rotas.dinheiro.POST(json(base()))).status).toBe(400);
+      await sql("INSERT INTO caixa (status) VALUES ('ABERTO')"); // reabre para os próximos testes
     });
 
     it('0,10 + 0,20 soma certo (sem erro de ponto flutuante)', async () => {

@@ -14,7 +14,7 @@ type Contexto = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
-    const atendido = await GerenciarAtendidosController.getInstancia().buscarPorId(Number(id));
+    const atendido = await new GerenciarAtendidosController().buscarPorId(Number(id));
     return Response.json(atendido.paraLinhaDeDados());
   } catch (erro) {
     return respostaDeErro(erro);
@@ -25,7 +25,7 @@ export async function PUT(request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
     const dados = await lerJson(request);
-    const atendido = await GerenciarAtendidosController.getInstancia().editar(Number(id), dados);
+    const atendido = await new GerenciarAtendidosController().editar(Number(id), dados);
     return Response.json(atendido.paraLinhaDeDados());
   } catch (erro) {
     return respostaDeErro(erro);
@@ -35,7 +35,7 @@ export async function PUT(request: Request, { params }: Contexto) {
 export async function DELETE(_request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
-    await GerenciarAtendidosController.getInstancia().excluir(Number(id));
+    await new GerenciarAtendidosController().excluir(Number(id));
     return Response.json({ mensagem: 'Atendido excluído.' });
   } catch (erro) {
     return respostaDeErro(erro);

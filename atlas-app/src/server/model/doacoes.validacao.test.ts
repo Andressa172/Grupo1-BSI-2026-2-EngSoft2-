@@ -49,11 +49,18 @@ describe('DoacaoProduto.validar (RF_F3)', () => {
     expect(new DoacaoProduto({ ...base, dataRecebimento: '31/02/2026' }).validar()).toHaveProperty('dataRecebimento');
   });
 
-  it('doador: novo exige nome e telefone; anônimo e existente passam', () => {
+  it('doador: novo exige nome, telefone, e-mail e CPF/CNPJ válido; anônimo e existente passam', () => {
     const v = (doador: unknown) => new DoacaoProduto({ ...base, doador }).validar();
+    const completo = { tipo: 'novo', nome: 'José Santos', contato: '(18) 99999-0000', email: 'jose@exemplo.com', tipoPessoa: 'FISICA', cpfCnpj: '529.982.247-25' };
     expect(v({ tipo: 'anonimo' })).toEqual({});
-    expect(v({ tipo: 'novo', nome: 'Jo', contato: '123' })).toMatchObject({ 'doador.nome': expect.any(String), 'doador.contato': expect.any(String) });
-    expect(v({ tipo: 'novo', nome: 'José Santos', contato: '(18) 99999-0000' })).toEqual({});
+    expect(v({ tipo: 'novo', nome: 'Jo', contato: '123' })).toMatchObject({ 'doador.nome': expect.any(String), 'doador.contato': expect.any(String), 'doador.cpfCnpj': expect.any(String) });
+    expect(v(completo)).toEqual({});
+    expect(v({ ...completo, cpfCnpj: '' })).toHaveProperty(['doador.cpfCnpj']);
+    expect(v({ ...completo, cpfCnpj: '111.111.111-11' })).toHaveProperty(['doador.cpfCnpj']);
+    expect(v({ ...completo, cpfCnpj: '529.982.247-26' })).toHaveProperty(['doador.cpfCnpj']);
+    expect(v({ ...completo, email: 'maria@' })).toHaveProperty(['doador.email']);
+    expect(v({ ...completo, tipoPessoa: 'JURIDICA', cpfCnpj: '11.222.333/0001-81' })).toEqual({});
+    expect(v({ ...completo, tipoPessoa: 'JURIDICA' })).toHaveProperty(['doador.cpfCnpj']); // CPF não vale para pessoa jurídica
     expect(v({ tipo: 'existente', id: 'abc' })).toHaveProperty('doador');
     expect(v(undefined)).toHaveProperty('doador');
   });
