@@ -4,10 +4,10 @@
 // - Façade: a View (via rota /api/cardapios) só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model CardapioDiario,
 //   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
-//   Quem cria o CardapioDiarioDAO é o Model; a saída/estorno no estoque (RF_F1) é pedida por este
-//   Controller ao AtualizarEstoqueController, dentro da mesma transação.
+//   Quem cria o CardapioDiarioDAO é o Model; a saída/estorno no estoque (RF_F1) é feita pelo
+//   Model MovimentacaoEstoque (o Controller não chama outro Controller), na mesma transação.
 import { Database } from './db/Database';
-import { AtualizarEstoqueController } from './AtualizarEstoqueController';
+import { MovimentacaoEstoque } from './model/MovimentacaoEstoque';
 import type { ExecutorSQL } from './dao/tipos';
 import { CardapioDiario, type CardapioDiarioAtributos } from './model/CardapioDiario';
 import { FiltroCardapio, type FiltroCardapioAtributos } from './model/FiltroCardapio';
@@ -98,12 +98,12 @@ export class CriarCardapioController {
       const item = itens[i];
       let motivo: 'ok' | 'categoria' | 'produto' | 'estoque' = await cardapio.verificarItem(cliente, item);
       if (motivo === 'ok') {
-        const resultado = await new AtualizarEstoqueController().atualizarEstoque(cliente, {
+        const resultado = await new MovimentacaoEstoque({
           produtoId: item.getProdutoId(),
           tipo: 'SAIDA',
           quantidade: item.getQuantidadeUtilizada(),
           origem: cardapio.getOrigemEstoque(),
-        });
+        }).aplicar(cliente);
         if (resultado !== 'APLICADA') motivo = 'estoque';
       }
       if (motivo !== 'ok') {
@@ -122,12 +122,12 @@ export class CriarCardapioController {
   private async estornarItens(cliente: ExecutorSQL, cardapioId: number): Promise<void> {
     const itens = await CardapioDiario.listarItens(cliente, cardapioId);
     for (const item of itens) {
-      await new AtualizarEstoqueController().atualizarEstoque(cliente, {
+      await new MovimentacaoEstoque({
         produtoId: item.produtoId,
         tipo: 'ENTRADA',
         quantidade: item.quantidadeUtilizada,
         origem: `Estorno: cardápio #${cardapioId}`,
-      });
+      }).aplicar(cliente);
     }
   }
 }

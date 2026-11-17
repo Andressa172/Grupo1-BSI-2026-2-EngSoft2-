@@ -1,12 +1,43 @@
 // DAO - Caixa e MovimentacaoCaixa (RF_F4, RF_F5, RF_F6)
-import { Database } from '../db/Database';
-import { Caixa, type StatusCaixa } from '../model/Caixa';
-import {
-  MovimentacaoCaixa,
-  type FormaPagamentoCaixa,
-  type TipoMovimentacaoCaixa,
-} from '../model/MovimentacaoCaixa';
+// Só executa SQL com parâmetros: recebe a conexão no construtor e os dados por parâmetro, e devolve
+// registros simples (CaixaRegistro, MovimentacaoCaixaRegistro). Quem monta os Models é o Model.
+import type { StatusCaixa } from '../model/Caixa';
+import type { FormaPagamentoCaixa, TipoMovimentacaoCaixa } from '../model/MovimentacaoCaixa';
 import type { ExecutorSQL } from './tipos';
+
+// dados que o Model passa para gravar a abertura
+export interface CaixaDados {
+  saldoFisicoAbertura: number;
+  saldoDigitalAbertura: number;
+  abertoPor: number;
+}
+
+// registro lido do banco (datas como texto ISO no horário de Brasília)
+export interface CaixaRegistro {
+  id: number;
+  dataAbertura?: string;
+  dataFechamento: string | null;
+  saldoFisicoAbertura: number;
+  saldoDigitalAbertura: number;
+  saldoFisicoFechamento: number | null;
+  saldoDigitalFechamento: number | null;
+  status: StatusCaixa;
+  abertoPor: number;
+}
+
+// dados que o Model passa para gravar uma movimentação
+export interface MovimentacaoCaixaDados {
+  caixaId: number;
+  tipo: TipoMovimentacaoCaixa;
+  formaPag: FormaPagamentoCaixa;
+  valor: number;
+  origem: string;
+}
+
+export interface MovimentacaoCaixaRegistro extends MovimentacaoCaixaDados {
+  id: number;
+  data?: string;
+}
 
 interface CaixaLinha {
   id: number;
@@ -35,8 +66,8 @@ function paraIso(valor: Date | string | null | undefined): string | undefined {
   return valor instanceof Date ? valor.toISOString() : String(valor);
 }
 
-function linhaParaCaixa(linha: CaixaLinha): Caixa {
-  return new Caixa({
+function linhaParaCaixa(linha: CaixaLinha): CaixaRegistro {
+  return {
     id: linha.id,
     dataAbertura: paraIso(linha.data_abertura),
     dataFechamento: paraIso(linha.data_fechamento) ?? null,
@@ -52,11 +83,11 @@ function linhaParaCaixa(linha: CaixaLinha): Caixa {
         : null,
     status: linha.status,
     abertoPor: linha.aberto_por ?? 0,
-  });
+  };
 }
 
-function linhaParaMovimentacao(linha: MovimentacaoCaixaLinha): MovimentacaoCaixa {
-  return new MovimentacaoCaixa({
+function linhaParaMovimentacao(linha: MovimentacaoCaixaLinha): MovimentacaoCaixaRegistro {
+  return {
     id: linha.id,
     caixaId: linha.caixa_id,
     tipo: linha.tipo,
@@ -64,7 +95,7 @@ function linhaParaMovimentacao(linha: MovimentacaoCaixaLinha): MovimentacaoCaixa
     valor: Number(linha.valor),
     origem: linha.origem,
     data: paraIso(linha.data),
-  });
+  };
 }
 
 const COLUNAS_CAIXA = `id,
@@ -77,9 +108,9 @@ const COLUNAS_CAIXA = `id,
   status, aberto_por`;
 
 export class CaixaDAO {
-  constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
+  constructor(private readonly executor: ExecutorSQL) {}
 
-  async buscarCaixaAberto(paraAtualizacao = false): Promise<Caixa | null> {
+  async buscarCaixaAberto(paraAtualizacao = false): Promise<CaixaRegistro | null> {
     const lock = paraAtualizacao ? ' FOR UPDATE' : '';
     const resultado = await this.executor.query<CaixaLinha>(
       `SELECT ${COLUNAS_CAIXA}
@@ -91,7 +122,7 @@ export class CaixaDAO {
     return resultado.rows[0] ? linhaParaCaixa(resultado.rows[0]) : null;
   }
 
-  async listarTodos(): Promise<Caixa[]> {
+  async listarTodos(): Promise<CaixaRegistro[]> {
     const resultado = await this.executor.query<CaixaLinha>(
       `SELECT ${COLUNAS_CAIXA}
        FROM caixa
@@ -100,8 +131,7 @@ export class CaixaDAO {
     return resultado.rows.map(linhaParaCaixa);
   }
 
-  async inserir(caixa: Caixa): Promise<Caixa> {
-    const dados = caixa.paraLinhaDeDados();
+  async inserir(dados: CaixaDados): Promise<CaixaRegistro> {
     const resultado = await this.executor.query<CaixaLinha>(
       `INSERT INTO caixa (data_abertura, saldo_fisico_abertura, saldo_digital_abertura, status, aberto_por)
        VALUES (now() AT TIME ZONE 'America/Sao_Paulo', $1, $2, 'ABERTO', $3)
@@ -111,7 +141,7 @@ export class CaixaDAO {
     return linhaParaCaixa(resultado.rows[0]);
   }
 
-  async fechar(id: number, saldoFisicoFinal: number, saldoDigitalFinal: number): Promise<Caixa | null> {
+  async fechar(id: number, saldoFisicoFinal: number, saldoDigitalFinal: number): Promise<CaixaRegistro | null> {
     const resultado = await this.executor.query<CaixaLinha>(
       `UPDATE caixa
        SET saldo_fisico_fechamento = $2,
@@ -125,8 +155,7 @@ export class CaixaDAO {
     return resultado.rows[0] ? linhaParaCaixa(resultado.rows[0]) : null;
   }
 
-  async inserirMovimentacao(movimentacao: MovimentacaoCaixa): Promise<MovimentacaoCaixa> {
-    const dados = movimentacao.paraLinhaDeDados();
+  async inserirMovimentacao(dados: MovimentacaoCaixaDados): Promise<MovimentacaoCaixaRegistro> {
     const resultado = await this.executor.query<MovimentacaoCaixaLinha>(
       `INSERT INTO movimentacao_caixa (caixa_id, tipo, forma_pag, valor, origem, data)
        VALUES ($1, $2, $3, $4, $5, now() AT TIME ZONE 'America/Sao_Paulo')
@@ -137,7 +166,7 @@ export class CaixaDAO {
     return linhaParaMovimentacao(resultado.rows[0]);
   }
 
-  async listarMovimentacoesPorCaixa(caixaId: number): Promise<MovimentacaoCaixa[]> {
+  async listarMovimentacoesPorCaixa(caixaId: number): Promise<MovimentacaoCaixaRegistro[]> {
     const resultado = await this.executor.query<MovimentacaoCaixaLinha>(
       `SELECT id, caixa_id, tipo, forma_pag, valor::float8 AS valor, origem,
               to_char(data, 'YYYY-MM-DD"T"HH24:MI:SS"-03:00"') AS data

@@ -65,7 +65,7 @@ export class MovimentacaoCaixa {
 
   /** Grava a movimentação (o Model cria o CaixaDAO com a conexão do Controller) e devolve a salva. */
   async incluir(conexao: ExecutorSQL): Promise<MovimentacaoCaixa> {
-    return new CaixaDAO(conexao).inserirMovimentacao(this);
+    return this.inserir(conexao);
   }
 
   validar(): void {
@@ -87,11 +87,14 @@ export class MovimentacaoCaixa {
   }
 
   async inserir(conexao: ExecutorSQL): Promise<MovimentacaoCaixa> {
-    return new CaixaDAO(conexao).inserirMovimentacao(this);
+    const { caixaId, tipo, formaPag, valor, origem } = this.paraLinhaDeDados();
+    const salva = await new CaixaDAO(conexao).inserirMovimentacao({ caixaId, tipo, formaPag, valor, origem });
+    return new MovimentacaoCaixa(salva);
   }
 
   static async listarPorCaixa(conexao: ExecutorSQL, caixaId: number): Promise<MovimentacaoCaixa[]> {
-    return new CaixaDAO(conexao).listarMovimentacoesPorCaixa(caixaId);
+    const registros = await new CaixaDAO(conexao).listarMovimentacoesPorCaixa(caixaId);
+    return registros.map((registro) => new MovimentacaoCaixa(registro));
   }
 
   paraLinhaDeDados() {

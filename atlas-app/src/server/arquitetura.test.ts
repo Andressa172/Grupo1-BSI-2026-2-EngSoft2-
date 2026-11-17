@@ -255,10 +255,11 @@ describe('RF_F1 - ninguém abaixo do Controller aciona o estoque', () => {
     expect(codigo).not.toMatch(/registrarEntrada|registrarSaida/);
   });
 
-  it('o AtualizarEstoqueController cria os Models (MovimentacaoEstoque e Produto)', () => {
+  it('o AtualizarEstoqueController cria o Model MovimentacaoEstoque, que executa o fluxo (Produto fica no Model)', () => {
     const codigo = ler('server/AtualizarEstoqueController.ts');
     expect(codigo).toMatch(/new\s+MovimentacaoEstoque\s*\(/);
-    expect(codigo).toMatch(/new\s+Produto\s*\(/);
+    expect(codigo).toMatch(/\.aplicar\(/);
+    expect(ler('server/model/MovimentacaoEstoque.ts')).toMatch(/new\s+Produto\s*\(/);
   });
 });
 
@@ -309,13 +310,27 @@ describe('Direção das dependências (todos os módulos)', () => {
   });
 });
 
-describe.each(['ProdutoDAO', 'MovimentacaoEstoqueDAO'])('%s (RF_B3 / RF_F1): conexão e dados só por parâmetro', (nome) => {
-  const dao = ler(`server/dao/${nome}.ts`);
+// Regras gerais, valem para o sistema todo (todos os arquivos das pastas server e server/dao).
+const arquivos = (pasta: string, sufixo: RegExp) =>
+  fs.readdirSync(path.join(SRC, pasta)).filter((f) => sufixo.test(f) && !f.endsWith('.test.ts'));
+const CONTROLLERS = arquivos('server', /Controller\.ts$/);
+const DAOS = arquivos('server/dao', /DAO\.ts$/);
+
+describe.each(CONTROLLERS)('Regra geral - %s', (arquivo) => {
+  const controller = ler(`server/${arquivo}`);
+  it('não importa nem chama outro Controller (só se usa o Model dos outros módulos)', () => {
+    expect(controller).not.toMatch(/from\s+['"][^'"]*Controller['"]/);
+  });
+});
+
+describe.each(DAOS)('Regra geral - %s', (arquivo) => {
+  const dao = ler(`server/dao/${arquivo}`);
   it('não importa Database nem usa getInstancia (a conexão vem no construtor)', () => {
     expect(importa(dao, /db\/Database/)).toBe(false);
     expect(dao).not.toMatch(/getInstancia/);
+    expect(dao).toMatch(/constructor\(private readonly executor: ExecutorSQL\)/);
   });
-  it('não importa Model em tempo de execução nem dá new em Model', () => {
-    expect(dao).not.toMatch(/^import\s+(?!type\b)[^;]*from\s+['"][^'"]*\/model\//m);
+  it('não importa Model em tempo de execução (só tipos) e não dá new em Model', () => {
+    expect(dao).not.toMatch(/^import\s+(?!type\b)[^;]*from\s+['"][^'"]*\/model\/(?!datasBR)/m);
   });
 });

@@ -1,6 +1,5 @@
 // DAO - CardapioDiario (RF_F10). Só executa SQL, sempre com parâmetros.
 import type { ExecutorSQL } from './tipos';
-import { Database } from '../db/Database';
 import type { TipoRefeicao } from '../model/CardapioDiario';
 import type { FiltroCardapio } from '../model/FiltroCardapio';
 
@@ -27,7 +26,7 @@ export interface ItemCardapioRegistrado {
 }
 
 export class CardapioDiarioDAO {
-  constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
+  constructor(private readonly executor: ExecutorSQL) {}
 
   async existeParaDataETipo(dataIso: string, tipoRefeicao: TipoRefeicao, idIgnorado?: number): Promise<boolean> {
     const resultado = await this.executor.query(

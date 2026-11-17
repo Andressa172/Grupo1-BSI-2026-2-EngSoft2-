@@ -12,6 +12,7 @@ import {
 } from './erros';
 import type { ExecutorSQL } from './dao/tipos';
 import type { Database } from './db/Database';
+import type { CaixaDados, MovimentacaoCaixaDados } from './dao/CaixaDAO';
 
 // O Controller não conhece o DAO (quem cria o CaixaDAO é o Model), então o DAO falso entra
 // substituindo o módulo do DAO: cada teste monta o seu ambiente em memória e o registra na ponte.
@@ -26,14 +27,24 @@ interface CaixaDAOFalso {
 
 const ponte = vi.hoisted(() => ({ dao: undefined as unknown as CaixaDAOFalso }));
 
+// O DAO real devolve registros simples; o ambiente falso abaixo trabalha com Models, então o
+// DAO falso converte nos dois sentidos (dados -> Model ao gravar, Model -> registro ao devolver).
 vi.mock('./dao/CaixaDAO', () => ({
   CaixaDAO: class {
-    buscarCaixaAberto = (...args: [boolean?]) => ponte.dao.buscarCaixaAberto(...args);
-    listarTodos = () => ponte.dao.listarTodos();
-    inserir = (caixa: Caixa) => ponte.dao.inserir(caixa);
-    fechar = (id: number, fisico: number, digital: number) => ponte.dao.fechar(id, fisico, digital);
-    inserirMovimentacao = (mov: MovimentacaoCaixa) => ponte.dao.inserirMovimentacao(mov);
-    listarMovimentacoesPorCaixa = (caixaId: number) => ponte.dao.listarMovimentacoesPorCaixa(caixaId);
+    buscarCaixaAberto = async (...args: [boolean?]) => {
+      const caixa = await ponte.dao.buscarCaixaAberto(...args);
+      return caixa ? caixa.paraLinhaDeDados() : null;
+    };
+    listarTodos = async () => (await ponte.dao.listarTodos()).map((c) => c.paraLinhaDeDados());
+    inserir = async (dados: CaixaDados) => (await ponte.dao.inserir(new Caixa(dados))).paraLinhaDeDados();
+    fechar = async (id: number, fisico: number, digital: number) => {
+      const caixa = await ponte.dao.fechar(id, fisico, digital);
+      return caixa ? caixa.paraLinhaDeDados() : null;
+    };
+    inserirMovimentacao = async (dados: MovimentacaoCaixaDados) =>
+      (await ponte.dao.inserirMovimentacao(new MovimentacaoCaixa(dados))).paraLinhaDeDados();
+    listarMovimentacoesPorCaixa = async (caixaId: number) =>
+      (await ponte.dao.listarMovimentacoesPorCaixa(caixaId)).map((m) => m.paraLinhaDeDados());
   },
 }));
 

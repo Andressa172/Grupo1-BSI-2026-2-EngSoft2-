@@ -1,6 +1,5 @@
 // DAO - Evento (RF_F9). Só executa SQL, sempre com parâmetros.
 import type { ExecutorSQL } from './tipos';
-import { Database } from '../db/Database';
 import type { AlocacaoRecurso } from '../model/AlocacaoRecurso';
 import type { FiltroEvento } from '../model/FiltroEvento';
 
@@ -38,7 +37,7 @@ export interface ProdutoAlocado {
 }
 
 export class EventoDAO {
-  constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
+  constructor(private readonly executor: ExecutorSQL) {}
 
   async inserirEvento(nome: string, dataIso: string, descricao: string | null): Promise<number> {
     const resultado = await this.executor.query<{ id: number }>(

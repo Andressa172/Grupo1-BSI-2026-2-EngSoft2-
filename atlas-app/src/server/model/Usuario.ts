@@ -3,7 +3,7 @@
 // persistência criando o UsuarioDAO com a conexão que recebe do UsuarioController.
 import type { ErrosDeCampo } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
-import { UsuarioDAO } from '../dao/UsuarioDAO';
+import { UsuarioDAO, type UsuarioRegistro } from '../dao/UsuarioDAO';
 import type { FiltroUsuario } from './FiltroUsuario';
 
 export const PERFIS_USUARIO = ['GERENTE', 'SECRETARIO', 'FUNCIONARIO'] as const;
@@ -194,12 +194,12 @@ export class Usuario {
   // O Model cria o UsuarioDAO usando a conexão que o Controller abriu.
 
   async incluir(conexao: ExecutorSQL): Promise<void> {
-    const salvo = await new UsuarioDAO(conexao).inserir(this);
-    this.id = salvo.getId();
+    const salvo = await new UsuarioDAO(conexao).inserir(this.paraLinhaDeDados());
+    this.id = salvo.id;
   }
 
   async alterar(conexao: ExecutorSQL): Promise<boolean> {
-    const salvo = await new UsuarioDAO(conexao).atualizar(this);
+    const salvo = await new UsuarioDAO(conexao).atualizar(this.paraLinhaDeDados());
     return salvo !== null;
   }
 
@@ -214,19 +214,27 @@ export class Usuario {
 
   async existeOutroComMesmoCpf(conexao: ExecutorSQL): Promise<boolean> {
     if (!this.cpf) return false;
-    return new UsuarioDAO(conexao).existeComCpf(this.cpf, this.id);
+    return new UsuarioDAO(conexao).existeComCpf(limparCPF(this.cpf), this.id);
   }
 
   static async buscarPorId(conexao: ExecutorSQL, id: number): Promise<Usuario | null> {
-    return new UsuarioDAO(conexao).buscarPorId(id);
+    const registro = await new UsuarioDAO(conexao).buscarPorId(id);
+    return registro ? Usuario.doRegistro(registro) : null;
   }
 
   static async buscarPorLogin(conexao: ExecutorSQL, login: string): Promise<Usuario | null> {
-    return new UsuarioDAO(conexao).buscarPorLogin(login);
+    const registro = await new UsuarioDAO(conexao).buscarPorLogin(login);
+    return registro ? Usuario.doRegistro(registro) : null;
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroUsuario): Promise<Usuario[]> {
-    return new UsuarioDAO(conexao).consultar(filtro);
+    const registros = await new UsuarioDAO(conexao).consultar(filtro);
+    return registros.map((registro) => Usuario.doRegistro(registro));
+  }
+
+  // o DAO devolve registros simples; o Model é quem monta o Usuario
+  private static doRegistro(registro: UsuarioRegistro): Usuario {
+    return new Usuario(registro);
   }
 
   static async contarGerentesAtivos(conexao: ExecutorSQL, idIgnorado?: number): Promise<number> {

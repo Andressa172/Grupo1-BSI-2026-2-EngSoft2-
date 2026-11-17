@@ -1,8 +1,23 @@
-// DAO - Doador (RF_B4)
+// DAO - Doador (RF_B4). Só executa SQL com parâmetros. Recebe a conexão no construtor e os dados por
+// parâmetro, e devolve registros simples (DoadorRegistro): quem monta o Doador é o Model.
 import type { ExecutorSQL } from './tipos';
-import { Database } from '../db/Database';
-import { Doador } from '../model/Doador';
 import type { FiltroDoador } from '../model/FiltroDoador';
+
+// dados que o Model passa para gravar
+export interface DoadorDados {
+  id?: number;
+  nome: string;
+  telefone: string | null;
+  email: string | null;
+  cpfCnpj: string | null;
+  tipoPessoa: 'FISICA' | 'JURIDICA';
+  anonimo: boolean;
+}
+
+// registro lido do banco
+export interface DoadorRegistro extends DoadorDados {
+  id: number;
+}
 
 interface DoadorLinha {
   id: number;
@@ -16,9 +31,8 @@ interface DoadorLinha {
 
 const COLUNAS = 'id, nome, telefone, email, cpf_cnpj, tipo_pessoa, anonimo';
 
-// o DAO só lê a linha do banco; quem vira Doador é o próprio model
-function linhaParaDoador(linha: DoadorLinha): Doador {
-  return Doador.reconstituir({
+function linhaParaRegistro(linha: DoadorLinha): DoadorRegistro {
+  return {
     id: linha.id,
     nome: linha.nome,
     telefone: linha.telefone,
@@ -26,19 +40,19 @@ function linhaParaDoador(linha: DoadorLinha): Doador {
     cpfCnpj: linha.cpf_cnpj,
     tipoPessoa: linha.tipo_pessoa,
     anonimo: linha.anonimo,
-  });
+  };
 }
 
 export class DoadorDAO {
-  constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
+  constructor(private readonly executor: ExecutorSQL) {}
 
-  async listarTodos(): Promise<Doador[]> {
+  async listarTodos(): Promise<DoadorRegistro[]> {
     const resultado = await this.executor.query<DoadorLinha>(`SELECT ${COLUNAS} FROM doador ORDER BY nome`);
-    return resultado.rows.map(linhaParaDoador);
+    return resultado.rows.map(linhaParaRegistro);
   }
 
   // filtro vazio traz todos; os 3 filtros (nome, tipo de pessoa, anônimo) se combinam com AND
-  async consultar(filtro: FiltroDoador): Promise<Doador[]> {
+  async consultar(filtro: FiltroDoador): Promise<DoadorRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];
 
@@ -61,12 +75,12 @@ export class DoadorDAO {
       `SELECT ${COLUNAS} FROM doador ${where} ORDER BY nome`,
       parametros
     );
-    return resultado.rows.map(linhaParaDoador);
+    return resultado.rows.map(linhaParaRegistro);
   }
 
-  async buscarPorId(id: number): Promise<Doador | null> {
+  async buscarPorId(id: number): Promise<DoadorRegistro | null> {
     const resultado = await this.executor.query<DoadorLinha>(`SELECT ${COLUNAS} FROM doador WHERE id = $1`, [id]);
-    return resultado.rows[0] ? linhaParaDoador(resultado.rows[0]) : null;
+    return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
   // nome duplicado é permitido (duas pessoas podem ter o mesmo nome); quem identifica o doador é o CPF/CNPJ
@@ -100,19 +114,17 @@ export class DoadorDAO {
     return resultado.rows[0]?.existe ?? false;
   }
 
-  async inserir(doador: Doador): Promise<Doador> {
-    const dados = doador.paraLinhaDeDados();
+  async inserir(dados: DoadorDados): Promise<DoadorRegistro> {
     const resultado = await this.executor.query<DoadorLinha>(
       `INSERT INTO doador (nome, telefone, email, cpf_cnpj, tipo_pessoa, anonimo)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${COLUNAS}`,
       [dados.nome, dados.telefone, dados.email, dados.cpfCnpj, dados.tipoPessoa, dados.anonimo]
     );
-    return linhaParaDoador(resultado.rows[0]);
+    return linhaParaRegistro(resultado.rows[0]);
   }
 
-  async atualizar(doador: Doador): Promise<Doador | null> {
-    const dados = doador.paraLinhaDeDados();
+  async atualizar(dados: DoadorDados): Promise<DoadorRegistro | null> {
     const resultado = await this.executor.query<DoadorLinha>(
       `UPDATE doador
           SET nome = $1, telefone = $2, email = $3, cpf_cnpj = $4, tipo_pessoa = $5, anonimo = $6
@@ -120,7 +132,7 @@ export class DoadorDAO {
     RETURNING ${COLUNAS}`,
       [dados.nome, dados.telefone, dados.email, dados.cpfCnpj, dados.tipoPessoa, dados.anonimo, dados.id]
     );
-    return resultado.rows[0] ? linhaParaDoador(resultado.rows[0]) : null;
+    return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
   async excluir(id: number): Promise<boolean> {

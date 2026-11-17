@@ -4,10 +4,10 @@
 // - Façade: a View (via rota /api/eventos) só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model Evento,
 //   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
-//   Quem cria o EventoDAO é o Model; a saída/estorno no estoque (RF_F1) é pedida por este
-//   Controller ao AtualizarEstoqueController, dentro da mesma transação.
+//   Quem cria o EventoDAO é o Model; a saída/estorno no estoque (RF_F1) é feita pelo
+//   Model MovimentacaoEstoque (o Controller não chama outro Controller), na mesma transação.
 import { Database } from './db/Database';
-import { AtualizarEstoqueController } from './AtualizarEstoqueController';
+import { MovimentacaoEstoque } from './model/MovimentacaoEstoque';
 import type { ExecutorSQL } from './dao/tipos';
 import { Evento, type EventoAtributos } from './model/Evento';
 import { FiltroEvento, type FiltroEventoAtributos } from './model/FiltroEvento';
@@ -97,12 +97,12 @@ export class AlocarRecursosController {
     for (let i = 0; i < recursos.length; i++) {
       const recurso = recursos[i];
       if (recurso.getTipo() === 'PRODUTO') {
-        const resultado = await new AtualizarEstoqueController().atualizarEstoque(cliente, {
+        const resultado = await new MovimentacaoEstoque({
           produtoId: recurso.getProdutoId(),
           tipo: 'SAIDA',
           quantidade: recurso.getQuantidade(),
           origem: evento.getOrigemEstoque(),
-        });
+        }).aplicar(cliente);
         if (resultado !== 'APLICADA') {
           throw new ErroValidacao('Estoque insuficiente.', {
             [`recurso.${i}.quantidade`]: 'Estoque insuficiente para a quantidade informada.',
@@ -117,12 +117,12 @@ export class AlocarRecursosController {
   private async estornarRecursos(cliente: ExecutorSQL, eventoId: number): Promise<void> {
     const produtos = await Evento.listarProdutosAlocados(cliente, eventoId);
     for (const produto of produtos) {
-      await new AtualizarEstoqueController().atualizarEstoque(cliente, {
+      await new MovimentacaoEstoque({
         produtoId: produto.produtoId,
         tipo: 'ENTRADA',
         quantidade: produto.quantidade,
         origem: `Estorno: evento #${eventoId}`,
-      });
+      }).aplicar(cliente);
     }
   }
 }
