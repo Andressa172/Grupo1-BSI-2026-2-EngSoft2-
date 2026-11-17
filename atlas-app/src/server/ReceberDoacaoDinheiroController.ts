@@ -1,6 +1,6 @@
 // Control - ReceberDoacaoDinheiroController (RF_F11 - Receber doação em dinheiro)
-// Singleton + Façade, com a conexão e a transação sob responsabilidade do Controller
-// (mesmo padrão do ReceberDoacaoProdutoController).
+// Instanciado pela camada Service (DoacaoService), com a conexão e a transação
+// sob responsabilidade do Controller (mesmo padrão do ReceberDoacaoProdutoController).
 import { Database } from './db/Database';
 import { CaixaController } from './CaixaController';
 import { DoacaoDinheiro, type DoacaoDinheiroAtributos } from './model/DoacaoDinheiro';
@@ -24,23 +24,14 @@ function comoObjeto(dados: unknown): Partial<DoacaoDinheiroAtributos> {
 }
 
 export class ReceberDoacaoDinheiroController {
-  private static instancia: ReceberDoacaoDinheiroController | undefined;
-
   private readonly conexao: Database;
 
   // Controller do RF_F6, chamado para lançar a entrada no caixa
   private readonly caixa: CaixaController;
 
-  private constructor() {
+  constructor() {
     this.conexao = Database.getInstancia();
     this.caixa = CaixaController.getInstancia();
-  }
-
-  static getInstancia(): ReceberDoacaoDinheiroController {
-    if (!ReceberDoacaoDinheiroController.instancia) {
-      ReceberDoacaoDinheiroController.instancia = new ReceberDoacaoDinheiroController();
-    }
-    return ReceberDoacaoDinheiroController.instancia;
   }
 
   /** Consulta com 2 filtros: doador e período. */

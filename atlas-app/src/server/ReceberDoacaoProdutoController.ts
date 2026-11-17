@@ -1,7 +1,6 @@
 // Control - ReceberDoacaoProdutoController (RF_F3 - Receber doação de produto)
 //
-// - Singleton: uma única instância, guardada na propriedade estática `instancia`.
-// - Façade: a View (via rotas /api/doacoes/produto) só conhece estes métodos.
+// - Instanciado pela camada Service (DoacaoService), sem auto-instanciação.
 // - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model DoacaoProduto,
 //   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
 //   Quem cria o DAO é o Model; a entrada no estoque (RF_F1) é pedida por este Controller ao
@@ -29,20 +28,11 @@ function comoObjeto(dados: unknown): Partial<DoacaoProdutoAtributos> {
 }
 
 export class ReceberDoacaoProdutoController {
-  private static instancia: ReceberDoacaoProdutoController | undefined;
-
   // conexão com o banco, aberta e mantida pelo Controller
   private readonly conexao: Database;
 
-  private constructor() {
+  constructor() {
     this.conexao = Database.getInstancia();
-  }
-
-  static getInstancia(): ReceberDoacaoProdutoController {
-    if (!ReceberDoacaoProdutoController.instancia) {
-      ReceberDoacaoProdutoController.instancia = new ReceberDoacaoProdutoController();
-    }
-    return ReceberDoacaoProdutoController.instancia;
   }
 
   /** Consulta com 2 filtros: doador e período. */
