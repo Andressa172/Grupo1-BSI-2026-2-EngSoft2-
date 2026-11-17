@@ -1,6 +1,6 @@
 // Control - LancarEntradaCompraController (RF_F2 - Lançar entrada de compras)
 //
-// - Singleton: uma única instância, guardada na propriedade estática `instancia`.
+// - Não se auto-instancia: quem usa o Controller (a rota ou outro caso de uso) cria com `new`.
 // - Façade: a View (via rotas /api/compras) só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model Compra,
 //   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
@@ -29,20 +29,11 @@ function comoObjeto(dados: unknown): Partial<CompraAtributos> {
 }
 
 export class LancarEntradaCompraController {
-  private static instancia: LancarEntradaCompraController | undefined;
-
   // conexão com o banco, aberta e mantida pelo Controller
   private readonly conexao: Database;
 
-  private constructor() {
+  constructor() {
     this.conexao = Database.getInstancia();
-  }
-
-  static getInstancia(): LancarEntradaCompraController {
-    if (!LancarEntradaCompraController.instancia) {
-      LancarEntradaCompraController.instancia = new LancarEntradaCompraController();
-    }
-    return LancarEntradaCompraController.instancia;
   }
 
   /** Consulta com 3 filtros: nota fiscal, fornecedor e período. */
@@ -71,7 +62,7 @@ export class LancarEntradaCompraController {
       const itens = compra.getItens();
       for (let i = 0; i < itens.length; i++) {
         const item = itens[i];
-        const resultado = await AtualizarEstoqueController.getInstancia().atualizarEstoque(cliente, {
+        const resultado = await new AtualizarEstoqueController().atualizarEstoque(cliente, {
           produtoId: item.getProdutoId(),
           tipo: 'ENTRADA',
           quantidade: item.getQuantidade(),

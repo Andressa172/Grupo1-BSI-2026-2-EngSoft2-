@@ -10,7 +10,7 @@ import { respostaDeErro } from '@/server/http';
 export async function GET(request: Request) {
   try {
     const parametros = new URL(request.url).searchParams;
-    const produtos = await ProdutoController.getInstancia().consultar({
+    const produtos = await new ProdutoController().consultar({
       nome: parametros.get('nome'),
       categoria: parametros.get('categoria'),
       validade: parametros.get('validade'),
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const dados = await request.json();
-    const produto = await ProdutoController.getInstancia().cadastrar(dados);
+    const produto = await new ProdutoController().cadastrar(dados);
     return Response.json(produto.paraLinhaDeDados(), { status: 201 });
   } catch (erro) {
     return respostaDeErro(erro);

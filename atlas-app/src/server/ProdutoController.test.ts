@@ -80,7 +80,7 @@ const arroz = {
 };
 
 describe('ProdutoController - RF_B3 Gerenciar produtos', () => {
-  const controller = ProdutoController.getInstancia();
+  const controller = new ProdutoController();
 
   beforeEach(() => {
     banco.produtos = [];
@@ -90,8 +90,8 @@ describe('ProdutoController - RF_B3 Gerenciar produtos', () => {
   });
 
   describe('padrões Singleton e camadas', () => {
-    it('getInstancia devolve sempre a mesma instância', () => {
-      expect(ProdutoController.getInstancia()).toBe(controller);
+    it('o Controller não se auto-instancia: quem o usa cria com new', () => {
+      expect(new ProdutoController()).not.toBe(controller);
     });
 
     it('o Controller obtém a conexão pelo Singleton Database', () => {

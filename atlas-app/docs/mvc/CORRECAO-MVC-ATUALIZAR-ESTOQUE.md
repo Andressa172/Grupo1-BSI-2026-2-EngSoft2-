@@ -25,7 +25,7 @@ Observações gerais:
 O fluxo é **sempre Controller → Model → DAO**. Quem fica embaixo nunca chama quem fica em cima,
 e ninguém pula camada:
 
-- O **Controller** é Singleton, guarda a conexão (`Database`), faz `new` dos Models e decide a
+- O **Controller** não se auto-instancia (quem usa dá o `new`), guarda a conexão (`Database`), faz `new` dos Models e decide a
   transação. Não importa nem instancia DAO.
 - O **Model** valida os próprios dados e persiste fazendo `new XDAO(conexao)` com a conexão que o
   Controller passou. Não importa Controller.
@@ -44,6 +44,20 @@ Antes:   CardapioDiarioDAO / EventoDAO  ──►  MovimentacaoEstoque (Model)  
 
 ## O que foi mudado
 
+### Controller sem auto-instanciar (segunda parte da folha)
+
+A folha pede "tirar o `new` da AtualizarEstoqueController dentro da própria classe (nas demais classes também)".
+Ou seja, o Controller não se instancia: sem `private static instancia` e sem `getInstancia()`. Quem usa
+dá o `new`. Foi aplicado em `AtualizarEstoqueController`, `ProdutoController` e `LancarEntradaCompraController`
+(o mesmo critério que o PR #24 aplicou a Atendidos, Doação de Produto e Doação em Dinheiro):
+
+- O construtor passou a ser público e continua obtendo a conexão por `Database.getInstancia()`
+  (o `Database` segue Singleton).
+- As rotas (`/api/produtos`, `/api/compras`, `/api/estoque/movimentacoes`) fazem `new XController()`.
+- Os Controllers que pedem estoque (Compra, Cardápio e Evento) fazem `new AtualizarEstoqueController()`.
+- Os demais Controllers (Caixa, Cardápio, Evento, Doador, Usuário, Parametrização, Cotações) ainda têm
+  `getInstancia()`; cada responsável deve aplicar o mesmo.
+
 ### Estoque (RF_F1)
 
 - `MovimentacaoEstoque` (Model): saíram `registrarEntrada` e `registrarSaida`, que chamavam o
@@ -55,8 +69,8 @@ Antes:   CardapioDiarioDAO / EventoDAO  ──►  MovimentacaoEstoque (Model)  
 
 ### Quem pede o estoque
 
-Os Controllers chamam `AtualizarEstoqueController.getInstancia().atualizarEstoque(...)` direto, no
-ponto de uso e dentro da transação, sem guardar o Controller em campo.
+Os Controllers criam `new AtualizarEstoqueController()` no ponto de uso e chamam `atualizarEstoque(...)`
+dentro da transação, sem guardar o Controller em campo.
 
 | Caso de uso | Antes | Depois |
 |---|---|---|
@@ -88,7 +102,10 @@ TEST_DATABASE_URL=postgresql://atlas:atlas@localhost:5432/atlas npm test   # com
 
 ## Pontos em aberto
 
-- "Tirar o `new` da AtualizarEstoqueController dentro da própria classe": foi entendido como
-  nenhuma outra classe criar ou pegar o Controller de estoque por dentro, só os Controllers
-  solicitantes, no ponto de uso. O `new` dentro do `getInstancia()` do próprio Singleton fica,
-  porque é o padrão que a folha aprovou. Vale confirmar com a professora.
+- **Controller chamando Controller.** Compra, Cardápio e Evento chamam o `AtualizarEstoqueController` (o RF_F1
+  é um caso de uso oculto, solicitado pelos outros, como na ERS). A folha não proíbe isso, só pede C → M → DAO
+  e instanciar os Models no Controller. A solução do PR #24 evitou esse caso copiando a lógica de estoque
+  para dentro do Model `DoacaoProduto`, o que duplica o RF_F1. Mantivemos o Controller de estoque como ponto
+  único das regras (saldo, produto inexistente, validade). Vale confirmar com a professora.
+- **Singleton.** Ela deu "ok" em "Singleton e Façade" e, na mesma folha, pediu para tirar o `new` da classe.
+  Lemos como: o Controller não se auto-instancia (o Singleton fica só no `Database`). Vale confirmar.

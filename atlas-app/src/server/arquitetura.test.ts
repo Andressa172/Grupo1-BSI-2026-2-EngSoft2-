@@ -202,8 +202,37 @@ describe('Singleton em tempo de execução (Controllers)', () => {
   });
 });
 
+describe.each([
+  { nome: 'RF_B3 - Gerenciar produtos', classe: 'ProdutoController', rotas: ['app/api/produtos/route.ts', 'app/api/produtos/[id]/route.ts'] },
+  { nome: 'RF_F1 - Atualizar estoque', classe: 'AtualizarEstoqueController', rotas: ['app/api/estoque/movimentacoes/route.ts'] },
+  { nome: 'RF_F2 - Lançar entrada de compras', classe: 'LancarEntradaCompraController', rotas: ['app/api/compras/route.ts'] },
+])('Arquitetura (sem auto-instanciar) - $nome', (m) => {
+  const controller = ler(`server/${m.classe}.ts`);
+
+  it('Controller não se auto-instancia: construtor público, sem static instancia/getInstancia', () => {
+    expect(controller).not.toMatch(/static\s+(private\s+)?instancia/);
+    expect(controller).not.toMatch(/static\s+getInstancia/);
+    expect(controller).not.toMatch(/private\s+constructor/);
+  });
+  it('mantém a conexão do Database Singleton', () => {
+    expect(controller).toMatch(/this\.conexao\s*=\s*Database\.getInstancia\(\)/);
+  });
+  it('não importa nem instancia DAO', () => {
+    expect(importa(controller, /\/dao\/(?!tipos)/)).toBe(false);
+    expect(controller).not.toMatch(/new\s+\w*DAO\s*\(/);
+  });
+  it.each(m.rotas)('%s cria o Controller com new e não importa Model, DAO nem Database', (rota) => {
+    const codigo = ler(rota);
+    expect(codigo).toMatch(new RegExp(`new\\s+${m.classe}\\s*\\(\\s*\\)`));
+    expect(codigo).not.toMatch(new RegExp(`${m.classe}\\.getInstancia`));
+    expect(importa(codigo, /\/dao\//)).toBe(false);
+    expect(importa(codigo, /db\/Database/)).toBe(false);
+    expect(importa(codigo, /\/model\//)).toBe(false);
+  });
+});
+
 // RF_F1 - Atualizar estoque: só o Controller de estoque é acionado, e só pelos Controllers dos casos de uso
-// solicitantes. Model e DAO nunca chamam o AtualizarEstoqueController (fluxo C -> M -> DAO).
+// solicitantes (cada um cria o AtualizarEstoqueController com new, no ponto de uso). Model e DAO nunca chamam o AtualizarEstoqueController (fluxo C -> M -> DAO).
 describe('RF_F1 - ninguém abaixo do Controller aciona o estoque', () => {
   const listar = (pasta: string, filtro: (nome: string) => boolean) =>
     fs
