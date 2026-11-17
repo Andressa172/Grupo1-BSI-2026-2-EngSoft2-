@@ -11,7 +11,7 @@ import { lerJson } from '@/server/lerJson';
 export async function GET(request: Request) {
   try {
     const parametros = new URL(request.url).searchParams;
-    const doacoes = await ReceberDoacaoProdutoController.getInstancia().consultar({
+    const doacoes = await new ReceberDoacaoProdutoController().consultar({
       doadorId: parametros.get('doadorId'),
       dataInicial: parametros.get('dataInicial'),
       dataFinal: parametros.get('dataFinal'),
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const dados = await lerJson(request);
-    const doacao = await ReceberDoacaoProdutoController.getInstancia().registrar(dados);
+    const doacao = await new ReceberDoacaoProdutoController().registrar(dados);
     return Response.json(doacao.paraLinhaDeDados(), { status: 201 });
   } catch (erro) {
     return respostaDeErro(erro);

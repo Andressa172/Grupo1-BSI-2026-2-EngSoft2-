@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Modal, Table, THead, EmptyRow } from '@/components/app/ui';
-import { dataHojeBR, mascaraMoeda, mascaraTelefone } from '@/view/mascaras';
+import { dataHojeBR, mascaraCpfCnpj, mascaraMoeda, mascaraTelefone } from '@/view/mascaras';
 import { CampoData } from '@/view/CampoData';
 
 function formatBRL(v: number) {
@@ -32,7 +32,7 @@ interface DadosFiltroDoacao { doadorId: string; dataInicial: string; dataFinal: 
 type SelecaoDoador =
   | { tipo: 'existente'; id: string }
   | { tipo: 'anonimo' }
-  | { tipo: 'novo'; nome: string; contato: string }
+  | { tipo: 'novo'; nome: string; contato: string; email: string; tipoPessoa: string; cpfCnpj: string }
   | { tipo: 'nenhum' };
 
 function montarParametros(f: DadosFiltroDoacao): string {
@@ -87,7 +87,6 @@ export default function DoacoesPage() {
   const [doacoesProduto, setDoacoesProduto] = useState<DoacaoProdutoApi[]>([]);
   const [doacoesDinheiro, setDoacoesDinheiro] = useState<DoacaoDinheiroApi[]>([]);
   const [erroCarga, setErroCarga] = useState('');
-  const [aviso, setAviso] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [recarregar, setRecarregar] = useState(0); // muda após registrar, para refazer as consultas
 
@@ -169,6 +168,9 @@ export default function DoacoesPage() {
   const [doadorSel, setDoadorSel] = useState('');
   const [novoNome, setNovoNome] = useState('');
   const [novoContato, setNovoContato] = useState('');
+  const [novoEmail, setNovoEmail] = useState('');
+  const [novoTipoPessoa, setNovoTipoPessoa] = useState('FISICA');
+  const [novoCpfCnpj, setNovoCpfCnpj] = useState('');
   const [dataRecebimento, setDataRecebimento] = useState('');
 
   // doação de produto
@@ -183,6 +185,9 @@ export default function DoacoesPage() {
     setDoadorSel('');
     setNovoNome('');
     setNovoContato('');
+    setNovoEmail('');
+    setNovoTipoPessoa('FISICA');
+    setNovoCpfCnpj('');
     setDataRecebimento(dataHojeBR());
     setItens([itemVazio()]);
     setValor('');
@@ -192,7 +197,9 @@ export default function DoacoesPage() {
 
   function selecaoDoador(): SelecaoDoador {
     if (doadorSel === DOADOR_ANONIMO) return { tipo: 'anonimo' };
-    if (doadorSel === DOADOR_NOVO) return { tipo: 'novo', nome: novoNome, contato: novoContato };
+    if (doadorSel === DOADOR_NOVO) return {
+        tipo: 'novo', nome: novoNome, contato: novoContato, email: novoEmail, tipoPessoa: novoTipoPessoa, cpfCnpj: novoCpfCnpj,
+      };
     if (doadorSel) return { tipo: 'existente', id: doadorSel };
     return { tipo: 'nenhum' };
   }
@@ -210,15 +217,8 @@ export default function DoacoesPage() {
         setErros(await lerErros(resposta));
         return;
       }
-      const registrada = await resposta.json();
       setErros({});
       setModalOpen(false);
-      // doação em dinheiro com o caixa fechado: a doação fica gravada e a tela avisa
-      setAviso(
-        registrada.caixaAtualizado === false
-          ? 'Doação registrada, mas não há caixa aberto: o valor não foi lançado no caixa.'
-          : ''
-      );
       setRecarregar((n) => n + 1);
     } catch {
       setErros({ geral: 'Não foi possível registrar. Confira se o banco de dados está no ar.' });
@@ -257,7 +257,6 @@ export default function DoacoesPage() {
       </div>
 
       {erroCarga && <p className="text-sm text-primary">{erroCarga}</p>}
-      {aviso && <p className="text-sm text-foreground/70">{aviso}</p>}
 
       <form onSubmit={consultar} className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-start">
         <div className="col-span-2 sm:min-w-48">
@@ -392,6 +391,39 @@ export default function DoacoesPage() {
                 <MensagemErro texto={erros['doador.nome']} />
               </div>
               <div>
+                <Field label="Tipo de pessoa *">
+                  <Select value={novoTipoPessoa} onChange={(e) => setNovoTipoPessoa(e.target.value)} className={destaque(erros['doador.tipoPessoa'])}>
+                    <option value="FISICA">Pessoa física (CPF)</option>
+                    <option value="JURIDICA">Pessoa jurídica (CNPJ)</option>
+                  </Select>
+                </Field>
+                <MensagemErro texto={erros['doador.tipoPessoa']} />
+              </div>
+              <div>
+                <Field label={novoTipoPessoa === 'JURIDICA' ? 'CNPJ *' : 'CPF *'}>
+                  <Input
+                    value={novoCpfCnpj}
+                    onChange={(e) => setNovoCpfCnpj(mascaraCpfCnpj(e.target.value))}
+                    placeholder={novoTipoPessoa === 'JURIDICA' ? '00.000.000/0000-00' : '000.000.000-00'}
+                    inputMode="numeric"
+                    className={destaque(erros['doador.cpfCnpj'])}
+                  />
+                </Field>
+                <MensagemErro texto={erros['doador.cpfCnpj']} />
+              </div>
+              <div>
+                <Field label="E-mail *">
+                  <Input
+                    type="email"
+                    value={novoEmail}
+                    onChange={(e) => setNovoEmail(e.target.value)}
+                    placeholder="nome@exemplo.com"
+                    className={destaque(erros['doador.email'])}
+                  />
+                </Field>
+                <MensagemErro texto={erros['doador.email']} />
+              </div>
+              <div>
                 <Field label="Contato *">
                   <Input
                     value={novoContato}
@@ -507,6 +539,7 @@ export default function DoacoesPage() {
             </div>
           )}
 
+          <MensagemErro texto={erros.caixa} />
           <MensagemErro texto={erros.geral} />
           <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="ghost" size="md" onClick={() => setModalOpen(false)}>

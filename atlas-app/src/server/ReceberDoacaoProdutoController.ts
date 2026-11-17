@@ -1,16 +1,15 @@
 // Control - ReceberDoacaoProdutoController (RF_F3 - Receber doação de produto)
-//
-// - Singleton: uma única instância, guardada na propriedade estática `instancia`.
-// - Façade: a View (via rotas /api/doacoes/produto) só conhece estes métodos.
-// - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model DoacaoProduto,
-//   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
-//   Quem cria o DAO é o Model; a entrada no estoque (RF_F1) é pedida por este Controller ao
-//   AtualizarEstoqueController, item a item, dentro da mesma transação.
+// Fluxo: View -> Controller -> Model -> DAO. A rota cria o Controller com `new`; o Controller não
+// se auto-instancia nem chama outro Controller: a entrada no estoque (RF_F1) é feita pelo Model.
+// O Controller mantém a conexão (Database, Singleton) e controla a transação (tudo grava ou nada grava).
 import { Database } from './db/Database';
-import { AtualizarEstoqueController } from './AtualizarEstoqueController';
-import { DoacaoProduto, type DoacaoProdutoAtributos } from './model/DoacaoProduto';
-import { FiltroDoacao, type FiltroDoacaoAtributos } from './model/FiltroDoacao';
-import type { DoacaoProdutoRegistro } from './dao/DoacaoProdutoDAO';
+import {
+  DoacaoProduto,
+  type DoacaoProdutoAtributos,
+  type DoacaoProdutoRegistro,
+  type FiltroDoacaoAtributos,
+} from './model/DoacaoProduto';
+import { FiltroDoacao } from './model/FiltroDoacao';
 import { ErroValidacao, type ErrosDeCampo } from './erros';
 
 const MENSAGEM_CAMPOS_INVALIDOS = 'Corrija os campos destacados.';
@@ -29,20 +28,11 @@ function comoObjeto(dados: unknown): Partial<DoacaoProdutoAtributos> {
 }
 
 export class ReceberDoacaoProdutoController {
-  private static instancia: ReceberDoacaoProdutoController | undefined;
-
   // conexão com o banco, aberta e mantida pelo Controller
   private readonly conexao: Database;
 
-  private constructor() {
+  constructor() {
     this.conexao = Database.getInstancia();
-  }
-
-  static getInstancia(): ReceberDoacaoProdutoController {
-    if (!ReceberDoacaoProdutoController.instancia) {
-      ReceberDoacaoProdutoController.instancia = new ReceberDoacaoProdutoController();
-    }
-    return ReceberDoacaoProdutoController.instancia;
   }
 
   /** Consulta com 2 filtros: doador e período. */
@@ -52,27 +42,15 @@ export class ReceberDoacaoProdutoController {
     return DoacaoProduto.consultar(this.conexao, filtro);
   }
 
-  /** Passos 1 a 9 do fluxo básico: valida tudo e só então registra a doação e dá entrada no estoque. */
+  /** Valida tudo e, numa só transação, grava a doação e dá entrada de cada item no estoque. */
   async registrar(dados: unknown): Promise<DoacaoProduto> {
     const doacao = new DoacaoProduto(comoObjeto(dados));
     lancarSeTiverErros(doacao.validar());
     await this.conexao.comTransacao(async (cliente) => {
       await doacao.incluir(cliente);
-
       const itens = doacao.getItens();
       for (let i = 0; i < itens.length; i++) {
-        const item = itens[i];
-        const resultado = await AtualizarEstoqueController.getInstancia().atualizarEstoque(cliente, {
-          produtoId: item.getProdutoId(),
-          tipo: 'ENTRADA',
-          quantidade: item.getQuantidade(),
-          origem: `Doação de produto #${doacao.getId()}`,
-          dataValidade: item.getDataValidade(),
-        });
-        if (resultado !== 'APLICADA') {
-          throw new ErroValidacao('Produto inválido.', { [`item.${i}.produto`]: 'Produto inválido: não cadastrado.' });
-        }
-        await doacao.incluirItem(cliente, item);
+        await doacao.incluirItem(cliente, itens[i], i);
       }
     });
     return doacao;

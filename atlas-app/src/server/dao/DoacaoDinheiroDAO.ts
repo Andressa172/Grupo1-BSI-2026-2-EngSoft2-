@@ -33,22 +33,6 @@ export class DoacaoDinheiroDAO {
     return resultado.rows[0].id;
   }
 
-  /**
-   * Lança a entrada no caixa aberto (RF_F6). Devolve false se não há caixa aberto
-   * (a doação continua registrada, só não há caixa para receber o lançamento).
-   */
-  async registrarEntradaNoCaixa(doacaoId: number, valor: number): Promise<boolean> {
-    const caixa = await this.executor.query<{ id: number }>(
-      "SELECT id FROM caixa WHERE status = 'ABERTO' ORDER BY id DESC LIMIT 1"
-    );
-    if (caixa.rows.length === 0) return false;
-    await this.executor.query(
-      "INSERT INTO movimentacao_caixa (caixa_id, tipo, valor, origem) VALUES ($1, 'ENTRADA', $2, $3)",
-      [caixa.rows[0].id, valor, `Doação em dinheiro #${doacaoId}`]
-    );
-    return true;
-  }
-
   async consultar(filtro: FiltroDoacao): Promise<DoacaoDinheiroRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];
