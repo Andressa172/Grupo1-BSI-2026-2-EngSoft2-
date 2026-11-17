@@ -5,7 +5,7 @@
  * DELETE /api/atendidos/:id -> exclui o atendido
  */
 
-import { GerenciarAtendidosController } from '@/server/GerenciarAtendidosController';
+import { AtendidoService } from '@/server/service/AtendidoService';
 import { respostaDeErro } from '@/server/http';
 import { lerJson } from '@/server/lerJson';
 
@@ -14,7 +14,7 @@ type Contexto = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
-    const atendido = await GerenciarAtendidosController.getInstancia().buscarPorId(Number(id));
+    const atendido = await new AtendidoService().buscarPorId(Number(id));
     return Response.json(atendido.paraLinhaDeDados());
   } catch (erro) {
     return respostaDeErro(erro);
@@ -25,7 +25,7 @@ export async function PUT(request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
     const dados = await lerJson(request);
-    const atendido = await GerenciarAtendidosController.getInstancia().editar(Number(id), dados);
+    const atendido = await new AtendidoService().editar(Number(id), dados);
     return Response.json(atendido.paraLinhaDeDados());
   } catch (erro) {
     return respostaDeErro(erro);
@@ -35,7 +35,7 @@ export async function PUT(request: Request, { params }: Contexto) {
 export async function DELETE(_request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
-    await GerenciarAtendidosController.getInstancia().excluir(Number(id));
+    await new AtendidoService().excluir(Number(id));
     return Response.json({ mensagem: 'Atendido excluído.' });
   } catch (erro) {
     return respostaDeErro(erro);

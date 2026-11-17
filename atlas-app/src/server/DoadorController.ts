@@ -16,15 +16,10 @@ function lancarSeTiverErros(erros: ErrosDeCampo): void {
 }
 
 export class DoadorController {
-  private static instancia: DoadorController | undefined;
+  private readonly conexao: Database;
 
-  private constructor(private readonly conexao: Database = Database.getInstancia()) {}
-
-  static getInstancia(): DoadorController {
-    if (!DoadorController.instancia) {
-      DoadorController.instancia = new DoadorController();
-    }
-    return DoadorController.instancia;
+  constructor() {
+    this.conexao = Database.getInstancia();
   }
 
   async consultar(dadosFiltro: FiltroDoadorAtributos = {}): Promise<Doador[]> {

@@ -4,14 +4,14 @@
  * POST /api/doacoes/dinheiro                                   -> registra uma doação
  */
 
-import { ReceberDoacaoDinheiroController } from '@/server/ReceberDoacaoDinheiroController';
+import { DoacaoService } from '@/server/service/DoacaoService';
 import { respostaDeErro } from '@/server/http';
 import { lerJson } from '@/server/lerJson';
 
 export async function GET(request: Request) {
   try {
     const parametros = new URL(request.url).searchParams;
-    const doacoes = await ReceberDoacaoDinheiroController.getInstancia().consultar({
+    const doacoes = await new DoacaoService().consultarDinheiro({
       doadorId: parametros.get('doadorId'),
       dataInicial: parametros.get('dataInicial'),
       dataFinal: parametros.get('dataFinal'),
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const dados = await lerJson(request);
-    const doacao = await ReceberDoacaoDinheiroController.getInstancia().registrar(dados);
+    const doacao = await new DoacaoService().registrarDinheiro(dados);
     return Response.json(doacao.paraLinhaDeDados(), { status: 201 });
   } catch (erro) {
     return respostaDeErro(erro);

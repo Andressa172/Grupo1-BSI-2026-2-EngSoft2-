@@ -104,7 +104,7 @@ vi.mock('./dao/UsuarioDAO', () => ({
 }));
 
 describe('UsuarioController - Autenticação e RF_B2 Gerenciar Funcionários', () => {
-  const controller = UsuarioController.getInstancia();
+  const controller = new UsuarioController();
 
   beforeEach(() => {
     banco.usuarios = [
@@ -132,9 +132,11 @@ describe('UsuarioController - Autenticação e RF_B2 Gerenciar Funcionários', (
     banco.conexoesUsadas = [];
   });
 
-  describe('padrões Singleton e camadas (Control -> Model -> DAO)', () => {
-    it('getInstancia devolve sempre a mesma instância', () => {
-      expect(UsuarioController.getInstancia()).toBe(controller);
+  describe('padrões de camadas (Service -> Control -> Model -> DAO)', () => {
+    it('o Controller não se auto-instancia e pode ser criado pela Service', async () => {
+      const { UsuarioService } = await import('./service/UsuarioService');
+      const service = new UsuarioService(controller);
+      expect(service).toBeInstanceOf(UsuarioService);
     });
 
     it('o Controller obtém a conexão pelo Singleton Database', () => {

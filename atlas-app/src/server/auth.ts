@@ -1,5 +1,5 @@
 // Helper de autenticação e autorização para rotas administrativas (Gerente)
-import { UsuarioController } from './UsuarioController';
+import { UsuarioService } from './service/UsuarioService';
 import { ErroAutenticacao, ErroAutorizacao, ErroNaoEncontrado } from './erros';
 import type { Usuario } from './model/Usuario';
 
@@ -40,8 +40,8 @@ export async function exigirGerente(request: Request, corpo?: Record<string, unk
     throw new ErroAutenticacao('Usuário não autenticado.');
   }
 
-  // a consulta passa pelo Controller (C -> M -> DAO); usuário inexistente vira erro de autenticação
-  const usuario = await UsuarioController.getInstancia()
+  // a consulta passa pela Service -> Controller (C -> M -> DAO); usuário inexistente vira erro de autenticação
+  const usuario = await new UsuarioService()
     .buscarPorId(usuarioId)
     .catch((erro: unknown) => {
       if (erro instanceof ErroNaoEncontrado) return null;

@@ -1,8 +1,7 @@
 // Control - UsuarioController (Autenticação e RF_B2 - Gerenciar Funcionários)
 //
-// - Singleton: uma única instância, guardada na propriedade estática `instancia`.
-// - Façade: a View (via rotas /api/usuarios e /api/auth) só conhece estes métodos.
-// - O Controller obtém a conexão com o banco (Database, também Singleton),
+// - Instanciado pela camada Service (UsuarioService), sem auto-instanciação.
+// - O Controller obtém a conexão com o banco (Database, Singleton),
 //   cria o Model Usuario / FiltroUsuario e decide quando validar e persistir.
 //   Quem cria o UsuarioDAO é o Model.
 import { Database } from './db/Database';
@@ -64,20 +63,11 @@ function lancarSeTiverErros(erros: ErrosDeCampo): void {
 }
 
 export class UsuarioController {
-  private static instancia: UsuarioController | undefined;
-
   // conexão com o banco, aberta e mantida pelo Controller
   private readonly conexao: Database;
 
-  private constructor() {
+  constructor() {
     this.conexao = Database.getInstancia();
-  }
-
-  static getInstancia(): UsuarioController {
-    if (!UsuarioController.instancia) {
-      UsuarioController.instancia = new UsuarioController();
-    }
-    return UsuarioController.instancia;
   }
 
   async autenticar(login: unknown, senha: unknown): Promise<Usuario> {
