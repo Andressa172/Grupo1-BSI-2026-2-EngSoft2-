@@ -50,7 +50,7 @@ export default function Hero() {
             {/* Main Headline */}
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-medium tracking-tight text-foreground leading-[1.15]">
               {HERO_CONTENT.heading}{' '}
-              <span className="block text-primary font-display italic font-normal pt-1">
+              <span className="block text-primary font-display font-medium pt-1">
                 {HERO_CONTENT.highlightedHeading}
               </span>
             </h1>

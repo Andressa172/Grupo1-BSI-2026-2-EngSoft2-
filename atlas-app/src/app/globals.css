@@ -25,7 +25,7 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   /* títulos da landing (a variável só existe dentro do layout (marketing)) */
-  --font-display: var(--font-landing-display), Georgia, serif;
+  --font-display: var(--font-landing-display), system-ui, sans-serif;
 }
 
 
@@ -44,9 +44,6 @@ body {
 }
 
 .landing :is(h1, h2, h3) {
-  font-family: var(--font-landing-display), Georgia, serif;
-  /* SOFT arredonda as pontas das letras; opsz ajusta o desenho ao tamanho do título */
-  font-variation-settings: "SOFT" 70, "WONK" 0;
-  font-optical-sizing: auto;
-  letter-spacing: -0.015em;
+  font-family: var(--font-landing-display), system-ui, sans-serif;
+  letter-spacing: -0.02em;
 }
