@@ -1,16 +1,7 @@
 // Control - ReceberDoacaoProdutoController (RF_F3 - Receber doação de produto)
-<<<<<<< HEAD
-//
-// - Instanciado pela camada Service (DoacaoService), sem auto-instanciação.
-// - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model DoacaoProduto,
-//   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
-//   Quem cria o DAO é o Model; a entrada no estoque (RF_F1) é pedida por este Controller ao
-//   AtualizarEstoqueController, item a item, dentro da mesma transação.
-=======
 // Fluxo: View -> Controller -> Model -> DAO. A rota cria o Controller com `new`; o Controller não
 // se auto-instancia nem chama outro Controller: a entrada no estoque (RF_F1) é feita pelo Model.
 // O Controller mantém a conexão (Database, Singleton) e controla a transação (tudo grava ou nada grava).
->>>>>>> ff417c4de0e7941ad1f7b899e4d416e5da8847eb
 import { Database } from './db/Database';
 import {
   DoacaoProduto,

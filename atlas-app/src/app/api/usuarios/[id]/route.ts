@@ -5,7 +5,7 @@
  * DELETE /api/usuarios/:id -> exclui o funcionário
  */
 
-import { UsuarioService } from '@/server/service/UsuarioService';
+import { UsuarioController } from '@/server/UsuarioController';
 import { respostaDeErro } from '@/server/http';
 import { lerJson } from '@/server/lerJson';
 
@@ -14,7 +14,7 @@ type Contexto = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
-    const usuario = await new UsuarioService().buscarPorId(Number(id));
+    const usuario = await new UsuarioController().buscarPorId(Number(id));
     return Response.json(usuario.paraDadosPublicos());
   } catch (erro) {
     return respostaDeErro(erro);
@@ -25,7 +25,7 @@ export async function PUT(request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
     const dados = await lerJson(request);
-    const usuario = await new UsuarioService().editar(Number(id), dados);
+    const usuario = await new UsuarioController().editar(Number(id), dados);
     return Response.json(usuario.paraDadosPublicos());
   } catch (erro) {
     return respostaDeErro(erro);
@@ -35,7 +35,7 @@ export async function PUT(request: Request, { params }: Contexto) {
 export async function DELETE(_request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
-    await new UsuarioService().excluir(Number(id));
+    await new UsuarioController().excluir(Number(id));
     return Response.json({ mensagem: 'Funcionário excluído.' });
   } catch (erro) {
     return respostaDeErro(erro);

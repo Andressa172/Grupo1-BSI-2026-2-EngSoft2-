@@ -15,7 +15,7 @@ type Contexto = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
-    const cotacao = await AprovarCotacaoController.getInstancia().buscarPorId(id);
+    const cotacao = await new AprovarCotacaoController().buscarPorId(id);
     return Response.json(cotacao);
   } catch (erro) {
     return respostaDeErro(erro);
@@ -26,7 +26,7 @@ export async function PATCH(request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
     const dados = await lerJson(request);
-    const cotacao = await AprovarCotacaoController.getInstancia().avaliar(id, dados);
+    const cotacao = await new AprovarCotacaoController().avaliar(id, dados);
     return Response.json(cotacao);
   } catch (erro) {
     return respostaDeErro(erro);
@@ -37,7 +37,7 @@ export async function PUT(request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
     const dados = await lerJson(request);
-    const cotacao = await AbrirCotacaoController.getInstancia().alterar(id, dados);
+    const cotacao = await new AbrirCotacaoController().alterar(id, dados);
     return Response.json(cotacao);
   } catch (erro) {
     return respostaDeErro(erro);

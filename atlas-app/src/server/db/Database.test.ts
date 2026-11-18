@@ -54,11 +54,7 @@ describe('Database (conexão com o PostgreSQL)', () => {
 
     const banco = Database.getInstancia();
     for (const c of [
-<<<<<<< HEAD
-      GerenciarAtendidosController.getInstancia(),
-=======
       new GerenciarAtendidosController(),
->>>>>>> ff417c4de0e7941ad1f7b899e4d416e5da8847eb
       new ReceberDoacaoProdutoController(),
       new ReceberDoacaoDinheiroController(),
     ]) {
@@ -67,11 +63,6 @@ describe('Database (conexão com o PostgreSQL)', () => {
     expect(pg.criados).toHaveLength(1);
   });
 
-<<<<<<< HEAD
-  it('o Controller do RF_B1 também é Singleton', async () => {
-    const { GerenciarAtendidosController: A } = await import('../GerenciarAtendidosController');
-    expect(A.getInstancia()).toBe(A.getInstancia());
-=======
   it('os Controllers não são Singleton: cada new cria um objeto, mas todos compartilham o mesmo Database', async () => {
     const { Database } = await import('./Database');
     const { GerenciarAtendidosController: A } = await import('../GerenciarAtendidosController');
@@ -84,6 +75,5 @@ describe('Database (conexão com o PostgreSQL)', () => {
       expect((um as unknown as { conexao: unknown }).conexao).toBe(Database.getInstancia());
       expect((outro as unknown as { conexao: unknown }).conexao).toBe(Database.getInstancia());
     }
->>>>>>> ff417c4de0e7941ad1f7b899e4d416e5da8847eb
   });
 });

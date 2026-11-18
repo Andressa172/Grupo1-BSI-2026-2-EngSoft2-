@@ -1,6 +1,7 @@
 // Control - UsuarioController (Autenticação e RF_B2 - Gerenciar Funcionários)
 //
-// - Instanciado pela camada Service (UsuarioService), sem auto-instanciação.
+// - Instanciado pelas rotas (/api/usuarios e /api/auth) e por auth.ts com `new UsuarioController()`,
+//   sem auto-instanciação.
 // - O Controller obtém a conexão com o banco (Database, Singleton),
 //   cria o Model Usuario / FiltroUsuario e decide quando validar e persistir.
 //   Quem cria o UsuarioDAO é o Model.

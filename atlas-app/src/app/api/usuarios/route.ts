@@ -4,14 +4,14 @@
  * POST /api/usuarios                       -> cadastra um novo funcionário
  */
 
-import { UsuarioService } from '@/server/service/UsuarioService';
+import { UsuarioController } from '@/server/UsuarioController';
 import { respostaDeErro } from '@/server/http';
 import { lerJson } from '@/server/lerJson';
 
 export async function GET(request: Request) {
   try {
     const parametros = new URL(request.url).searchParams;
-    const usuarios = await new UsuarioService().consultar({
+    const usuarios = await new UsuarioController().consultar({
       nome: parametros.get('nome'),
       perfil: parametros.get('perfil'),
       status: parametros.get('status'),
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const dados = await lerJson(request);
-    const usuario = await new UsuarioService().cadastrar(dados);
+    const usuario = await new UsuarioController().cadastrar(dados);
     return Response.json(usuario.paraDadosPublicos(), { status: 201 });
   } catch (erro) {
     return respostaDeErro(erro);

@@ -14,17 +14,10 @@ const importa = (codigo: string, modulo: RegExp) =>
   new RegExp(`import\\s[^;]*from\\s+['"][^'"]*${modulo.source}['"]`).test(codigo);
 
 const MODULOS = [
-<<<<<<< HEAD
-  { nome: 'Atendidos (referência)', controller: 'server/GerenciarAtendidosController.ts', classe: 'GerenciarAtendidosController', model: 'server/model/Atendido.ts', dao: 'server/dao/AtendidoDAO.ts', modelClasse: 'Atendido', daoClasse: 'AtendidoDAO', rotas: ['app/api/atendidos/route.ts', 'app/api/atendidos/[id]/route.ts'], singleton: true },
-  { nome: 'Usuários / login', controller: 'server/UsuarioController.ts', classe: 'UsuarioController', model: 'server/model/Usuario.ts', dao: 'server/dao/UsuarioDAO.ts', modelClasse: 'Usuario', daoClasse: 'UsuarioDAO', rotas: ['app/api/usuarios/route.ts', 'app/api/usuarios/[id]/route.ts', 'app/api/auth/route.ts'], singleton: false, service: 'UsuarioService' },
-  { nome: 'RF_F7 - Abrir cotação', controller: 'server/AbrirCotacaoController.ts', classe: 'AbrirCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/route.ts'], singleton: true },
-  { nome: 'RF_F8 - Aprovar cotação', controller: 'server/AprovarCotacaoController.ts', classe: 'AprovarCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/[id]/route.ts'], singleton: true },
-=======
   { nome: 'Atendidos (referência)', controller: 'server/GerenciarAtendidosController.ts', classe: 'GerenciarAtendidosController', model: 'server/model/Atendido.ts', dao: 'server/dao/AtendidoDAO.ts', modelClasse: 'Atendido', daoClasse: 'AtendidoDAO', rotas: ['app/api/atendidos/route.ts', 'app/api/atendidos/[id]/route.ts'], singleton: false },
-  { nome: 'Usuários / login', controller: 'server/UsuarioController.ts', classe: 'UsuarioController', model: 'server/model/Usuario.ts', dao: 'server/dao/UsuarioDAO.ts', modelClasse: 'Usuario', daoClasse: 'UsuarioDAO', rotas: ['app/api/usuarios/route.ts', 'app/api/usuarios/[id]/route.ts', 'app/api/auth/route.ts'] },
-  { nome: 'RF_F7 - Abrir cotação', controller: 'server/AbrirCotacaoController.ts', classe: 'AbrirCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/route.ts'] },
-  { nome: 'RF_F8 - Aprovar cotação', controller: 'server/AprovarCotacaoController.ts', classe: 'AprovarCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/[id]/route.ts'] },
->>>>>>> ff417c4de0e7941ad1f7b899e4d416e5da8847eb
+  { nome: 'Usuários / login', controller: 'server/UsuarioController.ts', classe: 'UsuarioController', model: 'server/model/Usuario.ts', dao: 'server/dao/UsuarioDAO.ts', modelClasse: 'Usuario', daoClasse: 'UsuarioDAO', rotas: ['app/api/usuarios/route.ts', 'app/api/usuarios/[id]/route.ts', 'app/api/auth/route.ts'], singleton: false },
+  { nome: 'RF_F7 - Abrir cotação', controller: 'server/AbrirCotacaoController.ts', classe: 'AbrirCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/route.ts'], singleton: false },
+  { nome: 'RF_F8 - Aprovar cotação', controller: 'server/AprovarCotacaoController.ts', classe: 'AprovarCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/[id]/route.ts'], singleton: false },
 ];
 
 describe('Singleton do Database', () => {
@@ -41,19 +34,6 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
   const model = ler(m.model);
   const dao = ler(m.dao);
 
-<<<<<<< HEAD
-  describe('Controller: instância', () => {
-    it('segue o padrão configurado (Singleton ou instanciado via Service)', () => {
-      if (m.singleton) {
-        expect(controller).toMatch(/private\s+static\s+instancia/);
-        expect(controller).toMatch(/private\s+constructor\s*\(/);
-        expect(controller).toMatch(new RegExp(`static\\s+getInstancia\\s*\\(\\s*\\)\\s*:\\s*${m.classe}`));
-      } else {
-        expect(controller).not.toMatch(/private\s+static\s+instancia/);
-        expect(controller).not.toMatch(/static\s+getInstancia/);
-        expect(controller).not.toMatch(new RegExp(`new\\s+${m.classe}\\s*\\(`));
-      }
-=======
   const singleton = (m as { singleton?: boolean }).singleton !== false;
 
   describe(singleton ? 'Controller: Singleton' : 'Controller: não se auto-instancia', () => {
@@ -61,7 +41,6 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
       expect(controller).toMatch(/private\s+static\s+instancia/);
       expect(controller).toMatch(/private\s+constructor\s*\(/);
       expect(controller).toMatch(new RegExp(`static\\s+getInstancia\\s*\\(\\s*\\)\\s*:\\s*${m.classe}`));
->>>>>>> ff417c4de0e7941ad1f7b899e4d416e5da8847eb
     });
     it.runIf(!singleton)('construtor público, sem instância estática nem getInstancia() de si mesmo', () => {
       expect(controller).not.toMatch(/static\s+(private\s+)?instancia/);
@@ -128,21 +107,12 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
       expect(importa(codigo, /\/dao\//)).toBe(false);
       expect(importa(codigo, /db\/Database/)).toBe(false);
       expect(importa(codigo, new RegExp(`model/${m.modelClasse}`))).toBe(false);
-<<<<<<< HEAD
-      if (m.service) {
-        expect(codigo).toMatch(new RegExp(`new\\s+${m.service}\\s*\\(`));
-        expect(codigo).not.toMatch(new RegExp(`new\\s+${m.classe}`));
-      } else {
-        expect(codigo).toMatch(new RegExp(`${m.classe}\\.getInstancia\\(\\)`));
-        expect(codigo).not.toMatch(new RegExp(`new\\s+${m.classe}`));
-=======
       if (singleton) {
         expect(codigo).toMatch(new RegExp(`${m.classe}\\.getInstancia\\(\\)`));
         expect(codigo).not.toMatch(new RegExp(`new\\s+${m.classe}`));
       } else {
         expect(codigo).toMatch(new RegExp(`new\\s+${m.classe}\\s*\\(\\s*\\)`));
         expect(codigo).not.toMatch(new RegExp(`${m.classe}\\.getInstancia`));
->>>>>>> ff417c4de0e7941ad1f7b899e4d416e5da8847eb
       }
     });
   });
@@ -221,12 +191,12 @@ describe('Regras dos slides MVC/DAO para Cotações (RF_F7 e RF_F8)', () => {
   });
 });
 
-describe('Singleton em tempo de execução (Controllers)', () => {
-  it('getInstancia() sempre devolve o mesmo objeto em cada Controller Singleton', async () => {
+describe('Instanciação em tempo de execução (Cotações)', () => {
+  it('Controllers de cotação não são Singleton: cada new cria um objeto distinto', async () => {
     const { AbrirCotacaoController } = await import('./AbrirCotacaoController');
     const { AprovarCotacaoController } = await import('./AprovarCotacaoController');
-    expect(AbrirCotacaoController.getInstancia()).toBe(AbrirCotacaoController.getInstancia());
-    expect(AprovarCotacaoController.getInstancia()).toBe(AprovarCotacaoController.getInstancia());
+    expect(new AbrirCotacaoController()).not.toBe(new AbrirCotacaoController());
+    expect(new AprovarCotacaoController()).not.toBe(new AprovarCotacaoController());
   });
 });
 
