@@ -102,7 +102,7 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
     });
   });
 
-  describe('Rotas (View/API) só conhecem o Controller', () => {
+  describe('Rotas (View/API) só conhecem o Controller ou Service', () => {
     it.each(m.rotas)('%s não importa Model, DAO nem Database', (rota) => {
       const codigo = ler(rota);
       expect(importa(codigo, /\/dao\//)).toBe(false);
@@ -192,6 +192,14 @@ describe('Regras dos slides MVC/DAO para Cotações (RF_F7 e RF_F8)', () => {
   });
 });
 
+describe('Instanciação em tempo de execução (Cotações)', () => {
+  it('Controllers de cotação não são Singleton: cada new cria um objeto distinto', async () => {
+    const { AbrirCotacaoController } = await import('./AbrirCotacaoController');
+    const { AprovarCotacaoController } = await import('./AprovarCotacaoController');
+    expect(new AbrirCotacaoController()).not.toBe(new AbrirCotacaoController());
+    expect(new AprovarCotacaoController()).not.toBe(new AprovarCotacaoController());
+  });
+});
 
 describe.each([
   { nome: 'RF_B3 - Gerenciar produtos', classe: 'ProdutoController', rotas: ['app/api/produtos/route.ts', 'app/api/produtos/[id]/route.ts'] },
@@ -340,5 +348,37 @@ describe.each(DAOS)('Regra geral - %s', (arquivo) => {
   it('não importa Model em tempo de execução (só tipos) e não chama outro DAO', () => {
     expect(dao).not.toMatch(/^import\s+(?!type\b)[^;]*from\s+['"][^'"]*\/model\/(?!datasBR)/m);
     expect(dao).not.toMatch(/from\s+['"]\.\/\w*DAO['"]/);
+  });
+});
+
+// View (rotas da API e telas): só conhece o Controller; não importa Model, DAO nem Database,
+// nem mesmo como tipo (slide 10 da Aula 71: a View não instancia nem conhece as Models).
+function arquivosDe(pasta: string, ehAlvo: (nome: string) => boolean): string[] {
+  const saida: string[] = [];
+  for (const entrada of fs.readdirSync(path.join(SRC, pasta), { withFileTypes: true })) {
+    const relativo = `${pasta}/${entrada.name}`;
+    if (entrada.isDirectory()) saida.push(...arquivosDe(relativo, ehAlvo));
+    else if (ehAlvo(entrada.name)) saida.push(relativo);
+  }
+  return saida;
+}
+
+describe.each(arquivosDe('app', (n) => /^(route\.ts|page\.tsx)$/.test(n)))('View - %s', (arquivo) => {
+  it('não importa Model, DAO nem Database (só o Controller)', () => {
+    const codigo = ler(arquivo);
+    expect(codigo).not.toMatch(/from\s+['"][^'"]*\/server\/(model|dao|db)\//);
+  });
+});
+
+describe('RF_F2 - ItemCompra persiste a si mesmo (slide 17: o SQL do item fica na entidade do item)', () => {
+  const item = ler('server/model/ItemCompra.ts');
+  const compra = ler('server/model/Compra.ts');
+  it('o ItemCompra cria o CompraDAO(conexao) e grava o próprio item', () => {
+    expect(importa(item, /dao\/CompraDAO/)).toBe(true);
+    expect(item).toMatch(/new\s+CompraDAO\(conexao\)\.inserirItem\(compraId,\s*this\)/);
+  });
+  it('a Compra manda o item se gravar, sem chamar inserirItem do DAO', () => {
+    expect(compra).toMatch(/item\.incluir\(conexao,/);
+    expect(compra).not.toMatch(/\.inserirItem\(/);
   });
 });

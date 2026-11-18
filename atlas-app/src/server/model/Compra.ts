@@ -99,7 +99,7 @@ export class Compra {
       erros.itens = `Uma compra pode ter no máximo ${MAXIMO_ITENS} itens.`;
     } else {
       this.itens.forEach((item, i) => {
-        const errosItem = item.validar(this.dataCompra);
+        const errosItem = item.validar();
         for (const campo of Object.keys(errosItem)) erros[`item.${i}.${campo}`] = errosItem[campo];
       });
       if (Object.keys(erros).every((campo) => !campo.startsWith('item.')) && this.getValorTotalEmCentavos() > VALOR_TOTAL_MAXIMO_EM_CENTAVOS) {
@@ -112,13 +112,13 @@ export class Compra {
   // ------------------------------ persistência ------------------------------
 
   /**
-   * Passo 9: grava a compra (os itens e a entrada no estoque, RF_F1, ficam em incluirItem).
+   * Passo 9: grava a compra, com o gerente que a lançou (os itens e a entrada no estoque, RF_F1, ficam em incluirItem).
    * Deve ser chamado dentro de uma transação: se qualquer passo falhar, nada fica gravado (fluxo 9.1).
    */
-  async incluir(conexao: ExecutorSQL): Promise<void> {
+  async incluir(conexao: ExecutorSQL, gerenteId: number): Promise<void> {
     const dao = new CompraDAO(conexao);
     try {
-      this.id = await dao.inserirCompra(this.numeroNF, paraIso(this.dataCompra), this.fornecedor, this.getValorTotal());
+      this.id = await dao.inserirCompra(this.numeroNF, paraIso(this.dataCompra), this.fornecedor, this.getValorTotal(), gerenteId);
     } catch (erro) {
       // 23505 = UNIQUE violado: outra pessoa lançou a mesma nota ao mesmo tempo
       // (depois da checagem do Controller e antes desta gravação)
@@ -151,7 +151,7 @@ export class Compra {
     produto.atualizQuantidade(movimentacao.getQuantidade(), 'ENTRADA', movimentacao.getDataValidadeIso());
     await produto.salvarEstoque(conexao);
     await movimentacao.registrar(conexao);
-    await new CompraDAO(conexao).inserirItem(this.id!, item);
+    await item.incluir(conexao, this.id!);
   }
 
   /** Fluxo 2.1: já existe compra com esta nota fiscal? Quem decide o que fazer é o Controller. */

@@ -15,6 +15,36 @@ import { Field, Input, Select, Modal, Table, THead, EmptyRow } from '@/component
 import { dataHojeBR, mascaraMoeda } from '@/view/mascaras';
 import { CampoData } from '@/view/CampoData';
 
+// o servidor só atende o Gerente autenticado: manda o id do usuário logado (RF_F2)
+function obterHeadersUsuario(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const bruto = localStorage.getItem('atlas-usuario-logado');
+    if (bruto) {
+      const usuario = JSON.parse(bruto) as { id?: number };
+      if (usuario?.id) headers['x-usuario-id'] = String(usuario.id);
+    }
+  } catch {
+    // sem usuário logado: o servidor responde 401
+  }
+  return headers;
+}
+
+// mesma regra do servidor para o número da nota: maiúsculas e só letras, números, espaço, ponto, hífen e barra
+function mascaraNotaFiscal(valor: string) {
+  return valor
+    .toUpperCase()
+    .replace(/[^A-Z0-9 .\-/]/g, '')
+    .replace(/^[^A-Z0-9]+/, '')
+    .replace(/ {2,}/g, ' ')
+    .slice(0, 60);
+}
+
+// "dd/mm/aaaa" -> "aaaa-mm-dd" (só para comparar datas); vazio se a data ainda está incompleta
+function dataBRparaIso(texto: string): string {
+  return texto.length === 10 ? `${texto.slice(6)}-${texto.slice(3, 5)}-${texto.slice(0, 2)}` : '';
+}
+
 function formatBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
@@ -121,7 +151,7 @@ export default function ComprasPage() {
   // compras lançadas, de acordo com o filtro aplicado
   useEffect(() => {
     let cancelado = false;
-    fetch(`/api/compras?${montarParametros(filtroAplicado)}`)
+    fetch(`/api/compras?${montarParametros(filtroAplicado)}`, { headers: obterHeadersUsuario() })
       .then(async (r) => {
         if (!r.ok) throw new Error('falha');
         const c = (await r.json()) as CompraApi[];
@@ -141,7 +171,7 @@ export default function ComprasPage() {
     e.preventDefault();
     // o servidor valida o filtro; se houver erro, mostra ao lado do campo
     try {
-      const resposta = await fetch(`/api/compras?${montarParametros(filtro)}`);
+      const resposta = await fetch(`/api/compras?${montarParametros(filtro)}`, { headers: obterHeadersUsuario() });
       if (!resposta.ok) {
         setErrosFiltro(await lerErros(resposta));
         return;
@@ -192,6 +222,11 @@ export default function ComprasPage() {
       if (!item.produtoId) faltando[`item.${i}.produto`] = 'Selecione o produto.';
       if (!item.quantidade) faltando[`item.${i}.quantidade`] = 'Informe a quantidade.';
       if (!item.valorUnitario) faltando[`item.${i}.valorUnitario`] = 'Informe o valor unitário.';
+      // produto vencido não entra no estoque: avisa já aqui, antes da confirmação (o servidor valida de novo)
+      const validade = dataBRparaIso(item.dataValidade);
+      if (validade !== '' && validade < dataBRparaIso(dataHojeBR())) {
+        faltando[`item.${i}.dataValidade`] = 'Data de validade inválida: o produto já está vencido (anterior à data atual).';
+      }
     });
     setErros(faltando);
     if (Object.keys(faltando).length === 0) setEtapa('confirmar');
@@ -203,7 +238,7 @@ export default function ComprasPage() {
     try {
       const resposta = await fetch('/api/compras', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: obterHeadersUsuario(),
         body: JSON.stringify({ numeroNF, dataCompra, fornecedor, itens }),
       });
       if (!resposta.ok) {
@@ -301,7 +336,7 @@ export default function ComprasPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Field label="Número da nota fiscal *">
-                  <Input value={numeroNF} maxLength={60} onChange={(e) => setNumeroNF(e.target.value)} className={destaque(erros.numeroNF)} />
+                  <Input value={numeroNF} maxLength={60} onChange={(e) => setNumeroNF(mascaraNotaFiscal(e.target.value))} className={destaque(erros.numeroNF)} />
                 </Field>
                 <MensagemErro texto={erros.numeroNF} />
               </div>
@@ -357,7 +392,7 @@ export default function ComprasPage() {
                         <Input
                           inputMode="numeric"
                           value={item.quantidade}
-                          onChange={(e) => alterarItem(idx, 'quantidade', e.target.value.replace(/\D/g, ''))}
+                          onChange={(e) => alterarItem(idx, 'quantidade', e.target.value.replace(/\D/g, '').slice(0, 7))}
                           className={destaque(erros[`item.${idx}.quantidade`])}
                         />
                       </Field>
