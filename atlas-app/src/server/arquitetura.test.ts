@@ -15,9 +15,9 @@ const importa = (codigo: string, modulo: RegExp) =>
 
 const MODULOS = [
   { nome: 'Atendidos (referência)', controller: 'server/GerenciarAtendidosController.ts', classe: 'GerenciarAtendidosController', model: 'server/model/Atendido.ts', dao: 'server/dao/AtendidoDAO.ts', modelClasse: 'Atendido', daoClasse: 'AtendidoDAO', rotas: ['app/api/atendidos/route.ts', 'app/api/atendidos/[id]/route.ts'], singleton: false },
-  { nome: 'Usuários / login', controller: 'server/UsuarioController.ts', classe: 'UsuarioController', model: 'server/model/Usuario.ts', dao: 'server/dao/UsuarioDAO.ts', modelClasse: 'Usuario', daoClasse: 'UsuarioDAO', rotas: ['app/api/usuarios/route.ts', 'app/api/usuarios/[id]/route.ts', 'app/api/auth/route.ts'] },
-  { nome: 'RF_F7 - Abrir cotação', controller: 'server/AbrirCotacaoController.ts', classe: 'AbrirCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/route.ts'] },
-  { nome: 'RF_F8 - Aprovar cotação', controller: 'server/AprovarCotacaoController.ts', classe: 'AprovarCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/[id]/route.ts'] },
+  { nome: 'Usuários / login', controller: 'server/UsuarioController.ts', classe: 'UsuarioController', model: 'server/model/Usuario.ts', dao: 'server/dao/UsuarioDAO.ts', modelClasse: 'Usuario', daoClasse: 'UsuarioDAO', rotas: ['app/api/usuarios/route.ts', 'app/api/usuarios/[id]/route.ts', 'app/api/auth/route.ts'], singleton: false },
+  { nome: 'RF_F7 - Abrir cotação', controller: 'server/AbrirCotacaoController.ts', classe: 'AbrirCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/route.ts'], singleton: false },
+  { nome: 'RF_F8 - Aprovar cotação', controller: 'server/AprovarCotacaoController.ts', classe: 'AprovarCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/[id]/route.ts'], singleton: false },
 ];
 
 describe('Singleton do Database', () => {
@@ -101,7 +101,7 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
     });
   });
 
-  describe('Rotas (View/API) só conhecem o Controller', () => {
+  describe('Rotas (View/API) só conhecem o Controller ou Service', () => {
     it.each(m.rotas)('%s não importa Model, DAO nem Database', (rota) => {
       const codigo = ler(rota);
       expect(importa(codigo, /\/dao\//)).toBe(false);
@@ -191,14 +191,12 @@ describe('Regras dos slides MVC/DAO para Cotações (RF_F7 e RF_F8)', () => {
   });
 });
 
-describe('Singleton em tempo de execução (Controllers)', () => {
-  it('getInstancia() sempre devolve o mesmo objeto em cada Controller', async () => {
-    const { UsuarioController } = await import('./UsuarioController');
+describe('Instanciação em tempo de execução (Cotações)', () => {
+  it('Controllers de cotação não são Singleton: cada new cria um objeto distinto', async () => {
     const { AbrirCotacaoController } = await import('./AbrirCotacaoController');
     const { AprovarCotacaoController } = await import('./AprovarCotacaoController');
-    expect(UsuarioController.getInstancia()).toBe(UsuarioController.getInstancia());
-    expect(AbrirCotacaoController.getInstancia()).toBe(AbrirCotacaoController.getInstancia());
-    expect(AprovarCotacaoController.getInstancia()).toBe(AprovarCotacaoController.getInstancia());
+    expect(new AbrirCotacaoController()).not.toBe(new AbrirCotacaoController());
+    expect(new AprovarCotacaoController()).not.toBe(new AprovarCotacaoController());
   });
 });
 

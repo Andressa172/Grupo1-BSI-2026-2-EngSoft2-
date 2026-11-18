@@ -45,7 +45,7 @@ export async function exigirGerente(
   }
 
   // a consulta passa pelo Controller (C -> M -> DAO); usuário inexistente vira erro de autenticação
-  const usuario = await UsuarioController.getInstancia()
+  const usuario = await new UsuarioController()
     .buscarPorId(usuarioId)
     .catch((erro: unknown) => {
       if (erro instanceof ErroNaoEncontrado) return null;

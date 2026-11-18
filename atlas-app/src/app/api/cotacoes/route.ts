@@ -11,7 +11,7 @@ import { lerJson } from '@/server/lerJson';
 export async function GET(request: Request) {
   try {
     const parametros = new URL(request.url).searchParams;
-    const cotacoes = await AbrirCotacaoController.getInstancia().consultar({
+    const cotacoes = await new AbrirCotacaoController().consultar({
       id: parametros.get('id'),
       status: parametros.get('status'),
       descricao: parametros.get('descricao'),
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const dados = await lerJson(request);
-    const cotacao = await AbrirCotacaoController.getInstancia().abrir(dados);
+    const cotacao = await new AbrirCotacaoController().abrir(dados);
     return Response.json(cotacao, { status: 201 });
   } catch (erro) {
     return respostaDeErro(erro);

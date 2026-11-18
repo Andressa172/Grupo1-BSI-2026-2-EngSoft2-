@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, Check, X as XIcon, ClipboardCheck } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X as XIcon, ClipboardCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Field,
@@ -159,8 +159,9 @@ export default function CotacoesPage() {
   // Modal de detalhes completos da cotação (ao clicar na linha)
   const [detalheAlvo, setDetalheAlvo] = useState<CotacaoView | null>(null);
 
-  // Modal RF_F7 - Abrir cotação (Secretário)
+  // Modal RF_F7 - Abrir / Alterar cotação (Secretário)
   const [novaOpen, setNovaOpen] = useState(false);
+  const [editandoCotacao, setEditandoCotacao] = useState<CotacaoView | null>(null);
   const [descricao, setDescricao] = useState('');
   const [dataAbertura, setDataAbertura] = useState(hojeIso());
   const [dataLimite, setDataLimite] = useState('');
@@ -251,6 +252,7 @@ export default function CotacoesPage() {
   // -------------------- RF_F7: Abrir cotação (Secretário) --------------------
 
   function abrirModalNovaCotacao() {
+    setEditandoCotacao(null);
     setDescricao('');
     setDataAbertura(hojeIso());
     setDataLimite('');
@@ -262,10 +264,32 @@ export default function CotacoesPage() {
     setNovaOpen(true);
   }
 
+  function abrirModalEditarCotacao(cotacao: CotacaoView) {
+    setDetalheAlvo(null);
+    setEditandoCotacao(cotacao);
+    setDescricao(cotacao.descricao);
+    setDataAbertura(cotacao.dataAbertura.slice(0, 10));
+    setDataLimite(cotacao.dataLimite ? cotacao.dataLimite.slice(0, 10) : '');
+    setItens(
+      cotacao.itens.length > 0
+        ? cotacao.itens.map((i) => ({
+            produtoId: String(i.produtoId),
+            quantidadeDesejada: String(i.quantidadeDesejada),
+          }))
+        : [{ produtoId: produtos[0] ? String(produtos[0].id) : '', quantidadeDesejada: '' }]
+    );
+    setConfirmandoAbertura(false);
+    setErrosAbertura({});
+    setErroGeralAbertura('');
+    setFoiValidadoAbertura(false);
+    setNovaOpen(true);
+  }
+
   function fecharModalNovaCotacao() {
     if (salvandoAbertura) return;
     // Fluxo alternativo 7.1 (Cancelamento): descarta dados temporários
     setNovaOpen(false);
+    setEditandoCotacao(null);
     setConfirmandoAbertura(false);
     setErrosAbertura({});
     setErroGeralAbertura('');
@@ -323,8 +347,12 @@ export default function CotacoesPage() {
     setSalvandoAbertura(true);
     setErroGeralAbertura('');
     try {
-      const resposta = await fetch('/api/cotacoes', {
-        method: 'POST',
+      const emEdicao = editandoCotacao !== null;
+      const url = emEdicao ? `/api/cotacoes/${editandoCotacao.id}` : '/api/cotacoes';
+      const metodo = emEdicao ? 'PUT' : 'POST';
+
+      const resposta = await fetch(url, {
+        method: metodo,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           descricao: descricao.trim(),
@@ -344,13 +372,20 @@ export default function CotacoesPage() {
           setErrosAbertura(corpo.erros);
           setConfirmandoAbertura(false);
         }
-        setErroGeralAbertura(corpo.erro ?? 'Não foi possível registrar a cotação.');
+        setErroGeralAbertura(
+          corpo.erro ?? (emEdicao ? 'Não foi possível alterar a cotação.' : 'Não foi possível registrar a cotação.')
+        );
         return;
       }
 
       setNovaOpen(false);
+      setEditandoCotacao(null);
       setConfirmandoAbertura(false);
-      setAvisoGeral('Cotação aberta e registrada com sucesso com status PENDENTE.');
+      setAvisoGeral(
+        emEdicao
+          ? `Cotação #${editandoCotacao.id} alterada com sucesso.`
+          : 'Cotação aberta e registrada com sucesso com status PENDENTE.'
+      );
       await carregarCotacoes();
     } catch {
       setErroGeralAbertura('Sem conexão com o servidor. Tente novamente.');
@@ -632,11 +667,24 @@ export default function CotacoesPage() {
                     )}
                   </td>
                   <td className="px-2 py-2 sm:px-4" onClick={(e) => e.stopPropagation()}>
-                    {ehGerente && c.status === 'PENDENTE' && (
+                    {(ehSecretario || (ehGerente && c.status === 'PENDENTE')) && (
                       <RowActions>
-                        <IconAction label={`Avaliar cotação #${c.id}: ${c.descricao}`} onClick={() => abrirModalAvaliar(c)}>
-                          <ClipboardCheck size={16} />
-                        </IconAction>
+                        {ehSecretario && (
+                          <IconAction
+                            label={`Alterar cotação #${c.id}: ${c.descricao}`}
+                            onClick={() => abrirModalEditarCotacao(c)}
+                          >
+                            <Pencil size={16} />
+                          </IconAction>
+                        )}
+                        {ehGerente && c.status === 'PENDENTE' && (
+                          <IconAction
+                            label={`Avaliar cotação #${c.id}: ${c.descricao}`}
+                            onClick={() => abrirModalAvaliar(c)}
+                          >
+                            <ClipboardCheck size={16} />
+                          </IconAction>
+                        )}
                       </RowActions>
                     )}
                   </td>
@@ -713,6 +761,17 @@ export default function CotacoesPage() {
               <Button type="button" variant="ghost" size="md" onClick={() => setDetalheAlvo(null)}>
                 Fechar
               </Button>
+              {ehSecretario && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="md"
+                  iconLeft={<Pencil size={16} />}
+                  onClick={() => abrirModalEditarCotacao(detalheAlvo)}
+                >
+                  Alterar cotação
+                </Button>
+              )}
               {ehGerente && detalheAlvo.status === 'PENDENTE' && (
                 <Button
                   type="button"
@@ -729,8 +788,12 @@ export default function CotacoesPage() {
         )}
       </Modal>
 
-      {/* Modal RF_F7: Abrir cotação (Secretário) */}
-      <Modal open={novaOpen} title="Abrir nova cotação" onClose={fecharModalNovaCotacao}>
+      {/* Modal RF_F7: Abrir / Alterar cotação (Secretário) */}
+      <Modal
+        open={novaOpen}
+        title={editandoCotacao ? `Alterar cotação #${editandoCotacao.id}` : 'Abrir nova cotação'}
+        onClose={fecharModalNovaCotacao}
+      >
         {!confirmandoAbertura ? (
           <form
             onSubmit={avancarParaConfirmacaoAbertura}
@@ -806,19 +869,38 @@ export default function CotacoesPage() {
                         <Select
                           value={item.produtoId}
                           onChange={(e) => {
+                            const novoProdutoId = e.target.value;
+                            const duplicado =
+                              novoProdutoId !== '' &&
+                              itens.some((outro, outroIdx) => outroIdx !== idx && outro.produtoId === novoProdutoId);
+                            if (duplicado) {
+                              setErrosAbertura({
+                                ...errosAbertura,
+                                [`itens.${idx}.produto`]: 'Este produto já foi adicionado na cotação.',
+                              });
+                              return;
+                            }
                             const copy = [...itens];
-                            copy[idx].produtoId = e.target.value;
+                            copy[idx].produtoId = novoProdutoId;
                             setItens(copy);
+                            if (errosAbertura[`itens.${idx}.produto`]) {
+                              setErrosAbertura({ ...errosAbertura, [`itens.${idx}.produto`]: '' });
+                            }
                           }}
                           required
                           {...invalido(`itens.${idx}.produto`, errosAbertura)}
                         >
                           <option value="">Selecione um produto...</option>
-                          {produtos.map((p) => (
-                            <option key={p.id} value={String(p.id)}>
-                              {p.nome} ({p.unidadeMedida})
-                            </option>
-                          ))}
+                          {produtos.map((p) => {
+                            const jaSelecionado = itens.some(
+                              (outro, outroIdx) => outroIdx !== idx && outro.produtoId === String(p.id)
+                            );
+                            return (
+                              <option key={p.id} value={String(p.id)} disabled={jaSelecionado}>
+                                {p.nome} ({p.unidadeMedida}){jaSelecionado ? ' — já adicionado' : ''}
+                              </option>
+                            );
+                          })}
                         </Select>
                       </Field>
                     </div>
@@ -856,16 +938,24 @@ export default function CotacoesPage() {
               ))}
               <MensagemErro texto={errosAbertura.itens} />
 
-              <button
-                type="button"
-                onClick={() =>
-                  setItens([...itens, { produtoId: produtos[0] ? String(produtos[0].id) : '', quantidadeDesejada: '' }])
-                }
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline w-fit cursor-pointer"
-              >
-                <Plus size={14} aria-hidden />
-                Adicionar outro item
-              </button>
+              {!(produtos.length > 0 && itens.length >= produtos.length) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const proximoDisponivel = produtos.find(
+                      (p) => !itens.some((i) => i.produtoId === String(p.id))
+                    );
+                    setItens([
+                      ...itens,
+                      { produtoId: proximoDisponivel ? String(proximoDisponivel.id) : '', quantidadeDesejada: '' },
+                    ]);
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline w-fit cursor-pointer"
+                >
+                  <Plus size={14} aria-hidden />
+                  Adicionar outro item
+                </button>
+              )}
             </div>
 
             <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -889,7 +979,9 @@ export default function CotacoesPage() {
               </div>
             )}
             <p className="text-sm text-foreground/80">
-              Confira os dados abaixo e confirme a abertura da cotação:
+              {editandoCotacao
+                ? 'Confira os dados abaixo e confirme a alteração da cotação:'
+                : 'Confira os dados abaixo e confirme a abertura da cotação:'}
             </p>
             <div className="rounded-lg border border-border-line/20 bg-foreground/5 p-3 text-sm space-y-1.5">
               <div>
@@ -945,7 +1037,11 @@ export default function CotacoesPage() {
                 disabled={salvandoAbertura}
                 onClick={confirmarAberturaCotacao}
               >
-                {salvandoAbertura ? 'Gravando...' : 'Confirmar abertura'}
+                {salvandoAbertura
+                  ? 'Gravando...'
+                  : editandoCotacao
+                    ? 'Confirmar alteração'
+                    : 'Confirmar abertura'}
               </Button>
             </div>
           </div>

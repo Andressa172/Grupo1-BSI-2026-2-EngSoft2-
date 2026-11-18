@@ -251,6 +251,21 @@ export class Cotacao {
     return idGerado;
   }
 
+  async atualizarCabecalho(idCotacao: number, conexao: ExecutorSQL): Promise<boolean> {
+    const dao = new CotacaoDAO(conexao);
+    const dataAberturaIso = paraIso(this.dataAbertura);
+    const dataLimiteIso = this.dataLimite ? paraIso(this.dataLimite) : null;
+    const atualizou = await dao.atualizarCotacao(idCotacao, this.descricao, dataAberturaIso, dataLimiteIso);
+    if (atualizou) {
+      this.id = idCotacao;
+    }
+    return atualizou;
+  }
+
+  async removerItens(idCotacao: number, conexao: ExecutorSQL): Promise<void> {
+    await new CotacaoDAO(conexao).removerItens(idCotacao);
+  }
+
   /**
    * RF_F8: atualiza o status, justificativa e gerente aprovador no banco criando o CotacaoDAO.
    */
