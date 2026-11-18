@@ -1,8 +1,8 @@
 // Control - UsuarioController (Autenticação e RF_B2 - Gerenciar Funcionários)
 //
-// - Instanciado pelas rotas (/api/usuarios e /api/auth) e por auth.ts com `new UsuarioController()`,
-//   sem auto-instanciação.
-// - O Controller obtém a conexão com o banco (Database, Singleton),
+// - Não se auto-instancia: quem usa o Controller (a rota) cria com `new`.
+// - Façade: a View (via rotas /api/usuarios e /api/auth) só conhece estes métodos.
+// - O Controller obtém a conexão com o banco (Database, também Singleton),
 //   cria o Model Usuario / FiltroUsuario e decide quando validar e persistir.
 //   Quem cria o UsuarioDAO é o Model.
 import { Database } from './db/Database';

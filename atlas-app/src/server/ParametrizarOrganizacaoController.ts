@@ -15,25 +15,7 @@ export interface DadosAtualizacaoOrganizacao {
 export type ResultadoOrganizacao = ReturnType<Organizacao['paraLinhaDeDados']>;
 
 export class ParametrizarOrganizacaoController {
-  private static instancia: ParametrizarOrganizacaoController | undefined;
-
-  private constructor(private readonly conexao: ExecutorSQL = Database.getInstancia()) {}
-
-  static getInstancia(): ParametrizarOrganizacaoController {
-    if (!ParametrizarOrganizacaoController.instancia) {
-      ParametrizarOrganizacaoController.instancia = new ParametrizarOrganizacaoController();
-    }
-    return ParametrizarOrganizacaoController.instancia;
-  }
-
-  static getInstance(): ParametrizarOrganizacaoController {
-    return ParametrizarOrganizacaoController.getInstancia();
-  }
-
-  /** Fábrica auxiliar para injeção de uma conexão falsa em testes unitários. */
-  static criarParaTeste(conexao: ExecutorSQL): ParametrizarOrganizacaoController {
-    return new ParametrizarOrganizacaoController(conexao);
-  }
+  constructor(private readonly conexao: ExecutorSQL = Database.getInstancia()) {}
 
   /**
    * Retorna os parâmetros atuais da organização (registro id = 1).

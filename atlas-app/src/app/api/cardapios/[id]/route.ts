@@ -14,7 +14,7 @@ export async function PUT(request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
     const dados = await lerJson(request);
-    const cardapio = await CriarCardapioController.getInstancia().alterar(Number(id), dados);
+    const cardapio = await new CriarCardapioController().alterar(Number(id), dados);
     return Response.json({ id: cardapio.getId() });
   } catch (erro) {
     return respostaDeErro(erro);
@@ -24,7 +24,7 @@ export async function PUT(request: Request, { params }: Contexto) {
 export async function DELETE(_request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
-    await CriarCardapioController.getInstancia().excluir(Number(id));
+    await new CriarCardapioController().excluir(Number(id));
     return Response.json({ mensagem: 'Cardápio excluído.' });
   } catch (erro) {
     return respostaDeErro(erro);

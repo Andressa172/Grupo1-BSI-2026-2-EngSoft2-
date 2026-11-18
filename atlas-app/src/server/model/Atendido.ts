@@ -3,7 +3,7 @@
 // criando o AtendidoDAO com a conexão que recebe do Controller (Controller -> Model -> DAO).
 import type { ErrosDeCampo } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
-import { AtendidoDAO } from '../dao/AtendidoDAO';
+import { AtendidoDAO, type AtendidoRegistro } from '../dao/AtendidoDAO';
 import type { FiltroAtendido } from './FiltroAtendido';
 import { dataValida, hoje, paraIso, parseData, textoSeguro } from './datasBR';
 
@@ -140,13 +140,13 @@ export class Atendido {
   // O Model cria o DAO usando a conexão que o Controller abriu.
 
   async incluir(conexao: ExecutorSQL): Promise<void> {
-    const salvo = await new AtendidoDAO(conexao).inserir(this);
-    this.id = salvo.getId();
-    this.dataCadastro = salvo.getDataCadastro();
+    const salvo = await new AtendidoDAO(conexao).inserir(this.dadosParaGravar());
+    this.id = salvo.id;
+    this.dataCadastro = parseData(salvo.dataCadastro);
   }
 
   async alterar(conexao: ExecutorSQL): Promise<boolean> {
-    const salvo = await new AtendidoDAO(conexao).atualizar(this);
+    const salvo = await new AtendidoDAO(conexao).atualizar(this.dadosParaGravar());
     return salvo !== null;
   }
 
@@ -161,11 +161,36 @@ export class Atendido {
   }
 
   static async buscarPorId(conexao: ExecutorSQL, id: number): Promise<Atendido | null> {
-    return new AtendidoDAO(conexao).buscarPorId(id);
+    const registro = await new AtendidoDAO(conexao).buscarPorId(id);
+    return registro ? Atendido.doRegistro(registro) : null;
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroAtendido): Promise<Atendido[]> {
-    return new AtendidoDAO(conexao).consultar(filtro);
+    const registros = await new AtendidoDAO(conexao).consultar(filtro);
+    return registros.map((registro) => Atendido.doRegistro(registro));
+  }
+
+  // o DAO devolve registros simples; o Model é quem monta o Atendido
+  private static doRegistro(registro: AtendidoRegistro): Atendido {
+    return new Atendido({
+      id: registro.id,
+      nome: registro.nome,
+      dataNascimento: registro.dataNascimento,
+      sexo: registro.sexo,
+      responsavelLegal: registro.responsavelLegal,
+      dataCadastro: registro.dataCadastro,
+    });
+  }
+
+  // dados que o DAO grava (a data de cadastro não é gravada nem alterada)
+  private dadosParaGravar() {
+    return {
+      id: this.id,
+      nome: this.nome,
+      dataNascimento: paraIso(this.dataNascimento),
+      sexo: this.sexo,
+      responsavelLegal: this.responsavelLegal,
+    };
   }
 
   paraLinhaDeDados() {

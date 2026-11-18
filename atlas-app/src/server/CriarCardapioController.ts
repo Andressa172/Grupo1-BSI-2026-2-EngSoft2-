@@ -1,13 +1,12 @@
 // Control - CriarCardapioController (RF_F10 - Criar Cardápio Diário)
 //
-// - Singleton: uma única instância, guardada na propriedade estática `instancia`.
+// - Não se auto-instancia: quem usa o Controller (a rota) cria com `new`.
 // - Façade: a View (via rota /api/cardapios) só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model CardapioDiario,
 //   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
-//   Quem cria o CardapioDiarioDAO é o Model; a saída/estorno no estoque (RF_F1) é pedida por este
-//   Controller ao AtualizarEstoqueController, dentro da mesma transação.
+//   Quem cria o CardapioDiarioDAO é o Model; a saída/estorno no estoque (RF_F1) é feita pelo
+//   Model (MovimentacaoEstoque), na mesma transação; nenhum Controller chama outro Controller.
 import { Database } from './db/Database';
-import { AtualizarEstoqueController } from './AtualizarEstoqueController';
 import type { ExecutorSQL } from './dao/tipos';
 import { CardapioDiario, type CardapioDiarioAtributos } from './model/CardapioDiario';
 import { FiltroCardapio, type FiltroCardapioAtributos } from './model/FiltroCardapio';
@@ -32,20 +31,11 @@ function comoObjeto(dados: unknown): Partial<CardapioDiarioAtributos> {
 }
 
 export class CriarCardapioController {
-  private static instancia: CriarCardapioController | undefined;
-
   // conexão com o banco, aberta e mantida pelo Controller
   private readonly conexao: Database;
 
-  private constructor() {
+  constructor() {
     this.conexao = Database.getInstancia();
-  }
-
-  static getInstancia(): CriarCardapioController {
-    if (!CriarCardapioController.instancia) {
-      CriarCardapioController.instancia = new CriarCardapioController();
-    }
-    return CriarCardapioController.instancia;
   }
 
   /** Produtos para o select da tela. */
@@ -76,7 +66,7 @@ export class CriarCardapioController {
     const cardapio = new CardapioDiario(comoObjeto(dados));
     lancarSeTiverErros(cardapio.validar());
     await this.conexao.comTransacao(async (cliente) => {
-      await this.estornarItens(cliente, id);
+      await CardapioDiario.estornarEstoque(cliente, id);
       await cardapio.alterar(cliente, id);
       await this.registrarItens(cliente, cardapio);
     });
@@ -86,48 +76,16 @@ export class CriarCardapioController {
   /** Estorna o estoque dos alimentos usados e exclui o cardápio. */
   async excluir(id: number): Promise<void> {
     await this.conexao.comTransacao(async (cliente) => {
-      await this.estornarItens(cliente, id);
+      await CardapioDiario.estornarEstoque(cliente, id);
       await CardapioDiario.excluir(cliente, id);
     });
   }
 
-  /** Dá saída no estoque de cada alimento e grava o item; só permite produtos da categoria Alimento. */
+  /** Grava cada item do cardápio (o Model dá a saída no estoque e só permite produtos da categoria Alimento). */
   private async registrarItens(cliente: ExecutorSQL, cardapio: CardapioDiario): Promise<void> {
     const itens = cardapio.getItens();
     for (let i = 0; i < itens.length; i++) {
-      const item = itens[i];
-      let motivo: 'ok' | 'categoria' | 'produto' | 'estoque' = await cardapio.verificarItem(cliente, item);
-      if (motivo === 'ok') {
-        const resultado = await new AtualizarEstoqueController().atualizarEstoque(cliente, {
-          produtoId: item.getProdutoId(),
-          tipo: 'SAIDA',
-          quantidade: item.getQuantidadeUtilizada(),
-          origem: cardapio.getOrigemEstoque(),
-        });
-        if (resultado !== 'APLICADA') motivo = 'estoque';
-      }
-      if (motivo !== 'ok') {
-        const mensagens: Record<string, string> = {
-          categoria: 'Só é permitido incluir alimentos no cardápio.',
-          estoque: 'Estoque insuficiente para a quantidade informada.',
-          produto: 'Alimento inválido: não cadastrado.',
-        };
-        throw new ErroValidacao('Não foi possível incluir o item.', { [`item.${i}.produtoId`]: mensagens[motivo] });
-      }
-      await cardapio.incluirItem(cliente, item);
-    }
-  }
-
-  /** Devolve ao estoque os alimentos usados no cardápio (estorno), antes de apagar os itens antigos. */
-  private async estornarItens(cliente: ExecutorSQL, cardapioId: number): Promise<void> {
-    const itens = await CardapioDiario.listarItens(cliente, cardapioId);
-    for (const item of itens) {
-      await new AtualizarEstoqueController().atualizarEstoque(cliente, {
-        produtoId: item.produtoId,
-        tipo: 'ENTRADA',
-        quantidade: item.quantidadeUtilizada,
-        origem: `Estorno: cardápio #${cardapioId}`,
-      });
+      await cardapio.incluirItem(cliente, itens[i], i);
     }
   }
 }

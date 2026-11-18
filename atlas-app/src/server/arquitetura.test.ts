@@ -14,10 +14,10 @@ const importa = (codigo: string, modulo: RegExp) =>
   new RegExp(`import\\s[^;]*from\\s+['"][^'"]*${modulo.source}['"]`).test(codigo);
 
 const MODULOS = [
-  { nome: 'Atendidos (referência)', controller: 'server/GerenciarAtendidosController.ts', classe: 'GerenciarAtendidosController', model: 'server/model/Atendido.ts', dao: 'server/dao/AtendidoDAO.ts', modelClasse: 'Atendido', daoClasse: 'AtendidoDAO', rotas: ['app/api/atendidos/route.ts', 'app/api/atendidos/[id]/route.ts'], singleton: false },
-  { nome: 'Usuários / login', controller: 'server/UsuarioController.ts', classe: 'UsuarioController', model: 'server/model/Usuario.ts', dao: 'server/dao/UsuarioDAO.ts', modelClasse: 'Usuario', daoClasse: 'UsuarioDAO', rotas: ['app/api/usuarios/route.ts', 'app/api/usuarios/[id]/route.ts', 'app/api/auth/route.ts'], singleton: false },
-  { nome: 'RF_F7 - Abrir cotação', controller: 'server/AbrirCotacaoController.ts', classe: 'AbrirCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/route.ts'], singleton: false },
-  { nome: 'RF_F8 - Aprovar cotação', controller: 'server/AprovarCotacaoController.ts', classe: 'AprovarCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/[id]/route.ts'], singleton: false },
+  { nome: 'Atendidos (referência)', controller: 'server/GerenciarAtendidosController.ts', classe: 'GerenciarAtendidosController', model: 'server/model/Atendido.ts', dao: 'server/dao/AtendidoDAO.ts', modelClasse: 'Atendido', daoClasse: 'AtendidoDAO', rotas: ['app/api/atendidos/route.ts', 'app/api/atendidos/[id]/route.ts'] },
+  { nome: 'Usuários / login', controller: 'server/UsuarioController.ts', classe: 'UsuarioController', model: 'server/model/Usuario.ts', dao: 'server/dao/UsuarioDAO.ts', modelClasse: 'Usuario', daoClasse: 'UsuarioDAO', rotas: ['app/api/usuarios/route.ts', 'app/api/usuarios/[id]/route.ts', 'app/api/auth/route.ts'] },
+  { nome: 'RF_F7 - Abrir cotação', controller: 'server/AbrirCotacaoController.ts', classe: 'AbrirCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/route.ts'] },
+  { nome: 'RF_F8 - Aprovar cotação', controller: 'server/AprovarCotacaoController.ts', classe: 'AprovarCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/[id]/route.ts'] },
 ];
 
 describe('Singleton do Database', () => {
@@ -34,7 +34,8 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
   const model = ler(m.model);
   const dao = ler(m.dao);
 
-  const singleton = (m as { singleton?: boolean }).singleton !== false;
+  // nenhum Controller do sistema é Singleton: a rota cria com `new` (só o Database é Singleton)
+  const singleton = false as boolean;
 
   describe(singleton ? 'Controller: Singleton' : 'Controller: não se auto-instancia', () => {
     it.runIf(singleton)('instância estática privada + construtor privado + getInstancia()', () => {
@@ -315,6 +316,38 @@ describe.each(['ProdutoDAO', 'MovimentacaoEstoqueDAO'])('%s (RF_B3 / RF_F1): con
   });
   it('não importa Model em tempo de execução nem dá new em Model', () => {
     expect(dao).not.toMatch(/^import\s+(?!type\b)[^;]*from\s+['"][^'"]*\/model\//m);
+  });
+});
+
+// Regras gerais: valem para todos os arquivos das pastas server e server/dao.
+const arquivos = (pasta: string, sufixo: RegExp) =>
+  fs.readdirSync(path.join(SRC, pasta)).filter((f) => sufixo.test(f) && !f.endsWith('.test.ts'));
+const CONTROLLERS = arquivos('server', /Controller\.ts$/);
+const DAOS = arquivos('server/dao', /DAO\.ts$/);
+
+describe.each(CONTROLLERS)('Regra geral - %s', (arquivo) => {
+  const controller = ler(`server/${arquivo}`);
+  it('não se auto-instancia (sem instância estática, getInstancia, construtor privado ou globalThis)', () => {
+    expect(controller).not.toMatch(/static\s+(private\s+)?instancia/);
+    expect(controller).not.toMatch(/static\s+getInstanc/);
+    expect(controller).not.toMatch(/private\s+constructor/);
+    expect(controller).not.toMatch(/globalThis/);
+  });
+  it('não importa nem chama outro Controller', () => {
+    expect(controller).not.toMatch(/from\s+['"][^'"]*Controller['"]/);
+  });
+});
+
+describe.each(DAOS)('Regra geral - %s', (arquivo) => {
+  const dao = ler(`server/dao/${arquivo}`);
+  it('não importa Database nem usa getInstancia (a conexão vem no construtor)', () => {
+    expect(importa(dao, /db\/Database/)).toBe(false);
+    expect(dao).not.toMatch(/getInstancia/);
+    expect(dao).toMatch(/constructor\(private readonly executor: ExecutorSQL\)/);
+  });
+  it('não importa Model em tempo de execução (só tipos) e não chama outro DAO', () => {
+    expect(dao).not.toMatch(/^import\s+(?!type\b)[^;]*from\s+['"][^'"]*\/model\/(?!datasBR)/m);
+    expect(dao).not.toMatch(/from\s+['"]\.\/\w*DAO['"]/);
   });
 });
 

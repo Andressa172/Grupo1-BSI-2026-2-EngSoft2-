@@ -1,6 +1,6 @@
 // Controller - AbrirCotacaoController (RF_F7 - Abrir cotação / CAbrirCotacao na ERS)
 //
-// - Instanciado pelas rotas com `new AbrirCotacaoController()`, sem auto-instanciação.
+// - Não se auto-instancia: quem usa o Controller (a rota) cria com `new`. Façade: a View só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database Singleton).
 // - Instancia as entidades Cotacao, ItemCotacao e FiltroCotacao.
 // - Executa as regras de negócio (IF de hierarquia de cargo Secretário), inicia a transação

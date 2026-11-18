@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const corpo = (await lerJson(request)) as Record<string, unknown>;
     const gerente = await exigirGerente(request, corpo);
 
-    const resultado = await CaixaController.getInstancia().fecharCaixa(
+    const resultado = await new CaixaController().fecharCaixa(
       {
         saldoFisicoFinal: corpo.saldoFisicoFinal,
         saldoDigitalFinal: corpo.saldoDigitalFinal,

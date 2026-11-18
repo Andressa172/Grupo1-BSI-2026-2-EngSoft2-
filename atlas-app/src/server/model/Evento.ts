@@ -2,11 +2,12 @@
 // Guarda o evento e os recursos alocados, valida tudo e persiste criando o EventoDAO
 // com a conexão que recebe do Controller (dentro de uma transação).
 import type { ErrosDeCampo } from '../erros';
-import { ErroNaoEncontrado } from '../erros';
+import { ErroNaoEncontrado, ErroValidacao } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
-import { EventoDAO, type EventoRegistro, type ProdutoAlocado } from '../dao/EventoDAO';
+import { EventoDAO, type EventoRegistro } from '../dao/EventoDAO';
 import type { FiltroEvento } from './FiltroEvento';
 import { AlocacaoRecurso } from './AlocacaoRecurso';
+import { MovimentacaoEstoque } from './MovimentacaoEstoque';
 import { dataValida, parseData, paraIso, textoSeguro } from './datasBR';
 
 export interface EventoAtributos {
@@ -89,7 +90,7 @@ export class Evento {
 
   /**
    * Atualiza o evento e apaga os recursos antigos. O Controller já estornou o estoque dos
-   * recursos antigos e aloca os novos depois. Deve rodar dentro de uma transação.
+   * recursos antigos (Evento.estornarEstoque) e aloca os novos depois. Deve rodar dentro de uma transação.
    */
   async alterar(conexao: ExecutorSQL, id: number): Promise<void> {
     const dao = new EventoDAO(conexao);
@@ -109,9 +110,17 @@ export class Evento {
     }
   }
 
-  /** Produtos já alocados ao evento, para o Controller estornar o estoque. */
-  static async listarProdutosAlocados(conexao: ExecutorSQL, eventoId: number): Promise<ProdutoAlocado[]> {
-    return new EventoDAO(conexao).listarProdutosAlocados(eventoId);
+  /** Devolve ao estoque os produtos alocados ao evento (estorno), antes de apagar os recursos antigos. */
+  static async estornarEstoque(conexao: ExecutorSQL, eventoId: number): Promise<void> {
+    const produtos = await new EventoDAO(conexao).listarProdutosAlocados(eventoId);
+    for (const produto of produtos) {
+      await new MovimentacaoEstoque({
+        produtoId: produto.produtoId,
+        tipo: 'ENTRADA',
+        quantidade: produto.quantidade,
+        origem: `Estorno: evento #${eventoId}`,
+      }).aplicar(conexao);
+    }
   }
 
   /** Origem registrada no histórico de estoque para as saídas deste evento. */
@@ -119,8 +128,24 @@ export class Evento {
     return `Alocação para evento "${this.nome}"`;
   }
 
-  /** Grava um recurso alocado. Chamado pelo Controller, recurso a recurso, depois da saída no estoque (se for produto). */
-  async incluirRecurso(conexao: ExecutorSQL, recurso: AlocacaoRecurso): Promise<void> {
+  /**
+   * Grava um recurso alocado. Se for produto, dá antes a saída no estoque (RF_F1), na mesma
+   * transação; sem saldo, nada é gravado.
+   */
+  async incluirRecurso(conexao: ExecutorSQL, recurso: AlocacaoRecurso, indice: number): Promise<void> {
+    if (recurso.getTipo() === 'PRODUTO') {
+      const resultado = await new MovimentacaoEstoque({
+        produtoId: recurso.getProdutoId(),
+        tipo: 'SAIDA',
+        quantidade: recurso.getQuantidade(),
+        origem: this.getOrigemEstoque(),
+      }).aplicar(conexao);
+      if (resultado !== 'APLICADA') {
+        throw new ErroValidacao('Estoque insuficiente.', {
+          [`recurso.${indice}.quantidade`]: 'Estoque insuficiente para a quantidade informada.',
+        });
+      }
+    }
     await new EventoDAO(conexao).inserirRecurso(this.id!, recurso);
   }
 

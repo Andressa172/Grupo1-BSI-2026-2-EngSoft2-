@@ -1,6 +1,5 @@
 // DAO - DoacaoDinheiro (RF_F11). Só executa SQL, sempre com parâmetros.
 import type { ExecutorSQL } from './tipos';
-import { Database } from '../db/Database';
 import type { FiltroDoacao } from '../model/FiltroDoacao';
 
 export interface DoacaoDinheiroRegistro {
@@ -22,7 +21,7 @@ interface LinhaConsulta {
 }
 
 export class DoacaoDinheiroDAO {
-  constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
+  constructor(private readonly executor: ExecutorSQL) {}
 
   async inserir(doadorId: number, valor: number, formaRecebimento: string, dataIso: string): Promise<number> {
     const resultado = await this.executor.query<{ id: number }>(

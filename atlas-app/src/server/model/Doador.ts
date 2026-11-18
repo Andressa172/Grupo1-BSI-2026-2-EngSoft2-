@@ -2,7 +2,7 @@
 // Valida e persiste criando o DoadorDAO com a conexão que recebe do Controller.
 import type { ErrosDeCampo } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
-import { DoadorDAO } from '../dao/DoadorDAO';
+import { DoadorDAO, type DoadorRegistro } from '../dao/DoadorDAO';
 import type { FiltroDoador } from './FiltroDoador';
 import { cpfOuCnpjValido } from './documentos';
 
@@ -96,8 +96,8 @@ export class Doador {
     this.anonimo = anonimo;
   }
 
-  // quem monta o Doador a partir da linha do banco é o próprio model, não o DAO
-  static reconstituir(linha: DoadorAtributos): Doador {
+  // quem monta o Doador a partir do registro do banco é o próprio model, não o DAO
+  static reconstituir(linha: DoadorAtributos | DoadorRegistro): Doador {
     return new Doador(linha);
   }
 
@@ -155,12 +155,12 @@ export class Doador {
   // ------------------------------ persistência ------------------------------
 
   async incluir(conexao: ExecutorSQL): Promise<void> {
-    const salvo = await new DoadorDAO(conexao).inserir(this);
-    this.id = salvo.getId();
+    const salvo = await new DoadorDAO(conexao).inserir(this.paraLinhaDeDados());
+    this.id = salvo.id;
   }
 
   async alterar(conexao: ExecutorSQL): Promise<boolean> {
-    const salvo = await new DoadorDAO(conexao).atualizar(this);
+    const salvo = await new DoadorDAO(conexao).atualizar(this.paraLinhaDeDados());
     return salvo !== null;
   }
 
@@ -187,10 +187,12 @@ export class Doador {
   }
 
   static async buscarPorId(conexao: ExecutorSQL, id: number): Promise<Doador | null> {
-    return new DoadorDAO(conexao).buscarPorId(id);
+    const registro = await new DoadorDAO(conexao).buscarPorId(id);
+    return registro ? Doador.reconstituir(registro) : null;
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroDoador): Promise<Doador[]> {
-    return new DoadorDAO(conexao).consultar(filtro);
+    const registros = await new DoadorDAO(conexao).consultar(filtro);
+    return registros.map((registro) => Doador.reconstituir(registro));
   }
 }

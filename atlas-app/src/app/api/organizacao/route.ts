@@ -45,7 +45,7 @@ async function salvarLogo(arquivo: File): Promise<string> {
 
 export async function GET() {
   try {
-    const dados = await ParametrizarOrganizacaoController.getInstancia().obterParametros();
+    const dados = await new ParametrizarOrganizacaoController().obterParametros();
     return Response.json(dados);
   } catch (erro) {
     return respostaDeErro(erro);
@@ -55,7 +55,7 @@ export async function GET() {
 export async function POST(request: Request) {
   let novoCaminhoLogo: string | null = null;
   try {
-    const controller = ParametrizarOrganizacaoController.getInstancia();
+    const controller = new ParametrizarOrganizacaoController();
     const tipo = request.headers.get('content-type') ?? '';
     let corpo: DadosAtualizacaoOrganizacao;
     let caminhoLogoAnterior: string | null = null;

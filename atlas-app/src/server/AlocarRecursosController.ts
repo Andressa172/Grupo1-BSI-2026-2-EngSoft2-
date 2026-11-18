@@ -1,13 +1,12 @@
 // Control - AlocarRecursosController (RF_F9 - Alocar recursos para eventos)
 //
-// - Singleton: uma única instância, guardada na propriedade estática `instancia`.
+// - Não se auto-instancia: quem usa o Controller (a rota) cria com `new`.
 // - Façade: a View (via rota /api/eventos) só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database, Singleton), cria o Model Evento,
 //   decide quando validar e persistir e controla a transação (tudo grava ou nada grava).
-//   Quem cria o EventoDAO é o Model; a saída/estorno no estoque (RF_F1) é pedida por este
-//   Controller ao AtualizarEstoqueController, dentro da mesma transação.
+//   Quem cria o EventoDAO é o Model; a saída/estorno no estoque (RF_F1) é feita pelo
+//   Model (MovimentacaoEstoque), na mesma transação; nenhum Controller chama outro Controller.
 import { Database } from './db/Database';
-import { AtualizarEstoqueController } from './AtualizarEstoqueController';
 import type { ExecutorSQL } from './dao/tipos';
 import { Evento, type EventoAtributos } from './model/Evento';
 import { FiltroEvento, type FiltroEventoAtributos } from './model/FiltroEvento';
@@ -32,20 +31,11 @@ function comoObjeto(dados: unknown): Partial<EventoAtributos> {
 }
 
 export class AlocarRecursosController {
-  private static instancia: AlocarRecursosController | undefined;
-
   // conexão com o banco, aberta e mantida pelo Controller
   private readonly conexao: Database;
 
-  private constructor() {
+  constructor() {
     this.conexao = Database.getInstancia();
-  }
-
-  static getInstancia(): AlocarRecursosController {
-    if (!AlocarRecursosController.instancia) {
-      AlocarRecursosController.instancia = new AlocarRecursosController();
-    }
-    return AlocarRecursosController.instancia;
   }
 
   /** Produtos para o select da tela. */
@@ -76,7 +66,7 @@ export class AlocarRecursosController {
     const evento = new Evento(comoObjeto(dados));
     lancarSeTiverErros(evento.validar());
     await this.conexao.comTransacao(async (cliente) => {
-      await this.estornarRecursos(cliente, id);
+      await Evento.estornarEstoque(cliente, id);
       await evento.alterar(cliente, id);
       await this.alocarRecursos(cliente, evento);
     });
@@ -86,43 +76,16 @@ export class AlocarRecursosController {
   /** Estorna o estoque alocado e exclui o evento. */
   async excluir(id: number): Promise<void> {
     await this.conexao.comTransacao(async (cliente) => {
-      await this.estornarRecursos(cliente, id);
+      await Evento.estornarEstoque(cliente, id);
       await Evento.excluir(cliente, id);
     });
   }
 
-  /** Aloca cada recurso; se for produto, desconta do estoque (nada é gravado se não houver saldo). */
+  /** Aloca cada recurso (o Model dá a saída no estoque quando é produto; nada é gravado se não houver saldo). */
   private async alocarRecursos(cliente: ExecutorSQL, evento: Evento): Promise<void> {
     const recursos = evento.getRecursos();
     for (let i = 0; i < recursos.length; i++) {
-      const recurso = recursos[i];
-      if (recurso.getTipo() === 'PRODUTO') {
-        const resultado = await new AtualizarEstoqueController().atualizarEstoque(cliente, {
-          produtoId: recurso.getProdutoId(),
-          tipo: 'SAIDA',
-          quantidade: recurso.getQuantidade(),
-          origem: evento.getOrigemEstoque(),
-        });
-        if (resultado !== 'APLICADA') {
-          throw new ErroValidacao('Estoque insuficiente.', {
-            [`recurso.${i}.quantidade`]: 'Estoque insuficiente para a quantidade informada.',
-          });
-        }
-      }
-      await evento.incluirRecurso(cliente, recurso);
-    }
-  }
-
-  /** Devolve ao estoque os produtos alocados no evento (estorno), antes de apagar os recursos antigos. */
-  private async estornarRecursos(cliente: ExecutorSQL, eventoId: number): Promise<void> {
-    const produtos = await Evento.listarProdutosAlocados(cliente, eventoId);
-    for (const produto of produtos) {
-      await new AtualizarEstoqueController().atualizarEstoque(cliente, {
-        produtoId: produto.produtoId,
-        tipo: 'ENTRADA',
-        quantidade: produto.quantidade,
-        origem: `Estorno: evento #${eventoId}`,
-      });
+      await evento.incluirRecurso(cliente, recursos[i], i);
     }
   }
 }

@@ -1,6 +1,6 @@
 // Controller - AprovarCotacaoController (RF_F8 - Aprovar cotação / CAprovarCotacao na ERS)
 //
-// - Instanciado pelas rotas com `new AprovarCotacaoController()`, sem auto-instanciação.
+// - Não se auto-instancia: quem usa o Controller (a rota) cria com `new`. Façade: a View só conhece estes métodos.
 // - Abre e mantém a conexão com o banco (Database Singleton).
 // - Instancia as entidades Cotacao e FiltroCotacao.
 // - Executa as regras de negócio (IF de hierarquia de cargo Gerente e status PENDENTE)

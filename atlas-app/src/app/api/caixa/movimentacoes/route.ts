@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const corpo = (await lerJson(request)) as Record<string, unknown>;
     await exigirGerente(request, corpo);
 
-    const movimentacao = await CaixaController.getInstancia().atualizarCaixa({
+    const movimentacao = await new CaixaController().atualizarCaixa({
       valor: corpo.valor as number,
       tipoMovimentacao: corpo.tipoMovimentacao as DadosAtualizarCaixa['tipoMovimentacao'],
       formaPag: corpo.formaPag as DadosAtualizarCaixa['formaPag'],

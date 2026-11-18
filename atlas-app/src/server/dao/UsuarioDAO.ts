@@ -1,10 +1,27 @@
 // DAO - Usuario (RF_B2 - Gerenciar Funcionários e Autenticação)
 // Quem cria este DAO é o model Usuario, com a conexão que recebe do UsuarioController.
+// O DAO só executa SQL com parâmetros: recebe a conexão no construtor e os dados por parâmetro, e
+// devolve registros simples (UsuarioRegistro). Quem monta o Usuario é o Model.
 import type { ExecutorSQL } from './tipos';
-import { Database } from '../db/Database';
-import { Usuario, limparCPF, type PerfilUsuario } from '../model/Usuario';
+import type { PerfilUsuario } from '../model/Usuario';
 import type { FiltroUsuario } from '../model/FiltroUsuario';
 import { ErroRegraDeNegocio } from '../erros';
+
+// dados que o Model passa para gravar
+export interface UsuarioDados {
+  id?: number;
+  nome: string;
+  login: string;
+  senhaHash: string;
+  perfil: PerfilUsuario;
+  cpf: string | null;
+  ativo: boolean;
+}
+
+// registro lido do banco
+export interface UsuarioRegistro extends UsuarioDados {
+  id: number;
+}
 
 interface UsuarioLinha {
   id: number;
@@ -18,8 +35,8 @@ interface UsuarioLinha {
 
 const COLUNAS = 'id, nome, login, senha_hash, perfil, cpf, ativo';
 
-function linhaParaUsuario(linha: UsuarioLinha): Usuario {
-  return new Usuario({
+function linhaParaRegistro(linha: UsuarioLinha): UsuarioRegistro {
+  return {
     id: linha.id,
     nome: linha.nome,
     login: linha.login,
@@ -27,29 +44,29 @@ function linhaParaUsuario(linha: UsuarioLinha): Usuario {
     perfil: linha.perfil,
     cpf: linha.cpf,
     ativo: linha.ativo,
-  });
+  };
 }
 
 export class UsuarioDAO {
-  constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
+  constructor(private readonly executor: ExecutorSQL) {}
 
-  async buscarPorLogin(login: string): Promise<Usuario | null> {
+  async buscarPorLogin(login: string): Promise<UsuarioRegistro | null> {
     const resultado = await this.executor.query<UsuarioLinha>(
       `SELECT ${COLUNAS} FROM usuario WHERE lower(login) = lower($1)`,
       [login]
     );
-    return resultado.rows[0] ? linhaParaUsuario(resultado.rows[0]) : null;
+    return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
-  async listarTodos(): Promise<Usuario[]> {
+  async listarTodos(): Promise<UsuarioRegistro[]> {
     const resultado = await this.executor.query<UsuarioLinha>(
       `SELECT ${COLUNAS} FROM usuario ORDER BY nome`
     );
-    return resultado.rows.map(linhaParaUsuario);
+    return resultado.rows.map(linhaParaRegistro);
   }
 
   // consulta com os filtros da tela (nome/login, cargo e status); filtro vazio traz todos
-  async consultar(filtro: FiltroUsuario): Promise<Usuario[]> {
+  async consultar(filtro: FiltroUsuario): Promise<UsuarioRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];
 
@@ -72,15 +89,15 @@ export class UsuarioDAO {
       `SELECT ${COLUNAS} FROM usuario ${where} ORDER BY nome`,
       parametros
     );
-    return resultado.rows.map(linhaParaUsuario);
+    return resultado.rows.map(linhaParaRegistro);
   }
 
-  async buscarPorId(id: number): Promise<Usuario | null> {
+  async buscarPorId(id: number): Promise<UsuarioRegistro | null> {
     const resultado = await this.executor.query<UsuarioLinha>(
       `SELECT ${COLUNAS} FROM usuario WHERE id = $1`,
       [id]
     );
-    return resultado.rows[0] ? linhaParaUsuario(resultado.rows[0]) : null;
+    return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
   async existeComLogin(login: string, idIgnorado?: number): Promise<boolean> {
@@ -91,8 +108,8 @@ export class UsuarioDAO {
     return resultado.rows.length > 0;
   }
 
-  async existeComCpf(cpf: string, idIgnorado?: number): Promise<boolean> {
-    const cpfDigitos = limparCPF(cpf);
+  // cpfDigitos: só os 11 dígitos (o Model já limpa)
+  async existeComCpf(cpfDigitos: string, idIgnorado?: number): Promise<boolean> {
     const resultado = await this.executor.query<{ id: number }>(
       "SELECT id FROM usuario WHERE regexp_replace(cpf, '\\D', '', 'g') = $1 AND ($2::int IS NULL OR id <> $2)",
       [cpfDigitos, idIgnorado ?? null]
@@ -108,19 +125,17 @@ export class UsuarioDAO {
     return Number(resultado.rows[0]?.total ?? 0);
   }
 
-  async inserir(usuario: Usuario): Promise<Usuario> {
-    const dados = usuario.paraLinhaDeDados();
+  async inserir(dados: UsuarioDados): Promise<UsuarioRegistro> {
     const resultado = await this.executor.query<UsuarioLinha>(
       `INSERT INTO usuario (nome, login, senha_hash, perfil, cpf, ativo)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${COLUNAS}`,
       [dados.nome, dados.login, dados.senhaHash, dados.perfil, dados.cpf, dados.ativo]
     );
-    return linhaParaUsuario(resultado.rows[0]);
+    return linhaParaRegistro(resultado.rows[0]);
   }
 
-  async atualizar(usuario: Usuario): Promise<Usuario | null> {
-    const dados = usuario.paraLinhaDeDados();
+  async atualizar(dados: UsuarioDados): Promise<UsuarioRegistro | null> {
     const resultado = await this.executor.query<UsuarioLinha>(
       `UPDATE usuario
           SET nome = $1, login = $2, senha_hash = $3, perfil = $4, cpf = $5, ativo = $6
@@ -128,7 +143,7 @@ export class UsuarioDAO {
     RETURNING ${COLUNAS}`,
       [dados.nome, dados.login, dados.senhaHash, dados.perfil, dados.cpf, dados.ativo, dados.id]
     );
-    return resultado.rows[0] ? linhaParaUsuario(resultado.rows[0]) : null;
+    return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
   async excluir(id: number): Promise<boolean> {
