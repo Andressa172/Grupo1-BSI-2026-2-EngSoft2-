@@ -11,7 +11,7 @@ import { lerJson } from '@/server/lerJson';
 export async function GET(request: Request) {
   try {
     const parametros = new URL(request.url).searchParams;
-    const atendidos = await GerenciarAtendidosController.getInstancia().consultar({
+    const atendidos = await new GerenciarAtendidosController().consultar({
       nome: parametros.get('nome'),
       sexo: parametros.get('sexo'),
       idadeMinima: parametros.get('idadeMinima'),
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const dados = await lerJson(request);
-    const atendido = await GerenciarAtendidosController.getInstancia().cadastrar(dados);
+    const atendido = await new GerenciarAtendidosController().cadastrar(dados);
     return Response.json(atendido.paraLinhaDeDados(), { status: 201 });
   } catch (erro) {
     return respostaDeErro(erro);

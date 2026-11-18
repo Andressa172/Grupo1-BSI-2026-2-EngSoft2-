@@ -1,6 +1,6 @@
 // Control - ProdutoController (RF_B3 - Gerenciar produtos)
 //
-// - Singleton: uma única instância, guardada na propriedade estática `instancia`.
+// - Não se auto-instancia: quem usa o Controller (a rota ou outro caso de uso) cria com `new`.
 // - Façade: a View (via rotas /api/produtos) só conhece estes métodos.
 // - O Controller obtém a conexão com o banco (Database, também Singleton),
 //   cria o Model Produto e decide quando validar e persistir.
@@ -23,20 +23,11 @@ function lancarSeTiverErros(erros: ErrosDeCampo): void {
 }
 
 export class ProdutoController {
-  private static instancia: ProdutoController | undefined;
-
   // conexão com o banco, aberta e mantida pelo Controller
   private readonly conexao: Database;
 
-  private constructor() {
+  constructor() {
     this.conexao = Database.getInstancia();
-  }
-
-  static getInstancia(): ProdutoController {
-    if (!ProdutoController.instancia) {
-      ProdutoController.instancia = new ProdutoController();
-    }
-    return ProdutoController.instancia;
   }
 
   async consultar(dadosFiltro: FiltroProdutoAtributos = {}): Promise<Produto[]> {

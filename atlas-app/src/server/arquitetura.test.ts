@@ -14,10 +14,17 @@ const importa = (codigo: string, modulo: RegExp) =>
   new RegExp(`import\\s[^;]*from\\s+['"][^'"]*${modulo.source}['"]`).test(codigo);
 
 const MODULOS = [
+<<<<<<< HEAD
   { nome: 'Atendidos (referência)', controller: 'server/GerenciarAtendidosController.ts', classe: 'GerenciarAtendidosController', model: 'server/model/Atendido.ts', dao: 'server/dao/AtendidoDAO.ts', modelClasse: 'Atendido', daoClasse: 'AtendidoDAO', rotas: ['app/api/atendidos/route.ts', 'app/api/atendidos/[id]/route.ts'], singleton: true },
   { nome: 'Usuários / login', controller: 'server/UsuarioController.ts', classe: 'UsuarioController', model: 'server/model/Usuario.ts', dao: 'server/dao/UsuarioDAO.ts', modelClasse: 'Usuario', daoClasse: 'UsuarioDAO', rotas: ['app/api/usuarios/route.ts', 'app/api/usuarios/[id]/route.ts', 'app/api/auth/route.ts'], singleton: false, service: 'UsuarioService' },
   { nome: 'RF_F7 - Abrir cotação', controller: 'server/AbrirCotacaoController.ts', classe: 'AbrirCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/route.ts'], singleton: true },
   { nome: 'RF_F8 - Aprovar cotação', controller: 'server/AprovarCotacaoController.ts', classe: 'AprovarCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/[id]/route.ts'], singleton: true },
+=======
+  { nome: 'Atendidos (referência)', controller: 'server/GerenciarAtendidosController.ts', classe: 'GerenciarAtendidosController', model: 'server/model/Atendido.ts', dao: 'server/dao/AtendidoDAO.ts', modelClasse: 'Atendido', daoClasse: 'AtendidoDAO', rotas: ['app/api/atendidos/route.ts', 'app/api/atendidos/[id]/route.ts'], singleton: false },
+  { nome: 'Usuários / login', controller: 'server/UsuarioController.ts', classe: 'UsuarioController', model: 'server/model/Usuario.ts', dao: 'server/dao/UsuarioDAO.ts', modelClasse: 'Usuario', daoClasse: 'UsuarioDAO', rotas: ['app/api/usuarios/route.ts', 'app/api/usuarios/[id]/route.ts', 'app/api/auth/route.ts'] },
+  { nome: 'RF_F7 - Abrir cotação', controller: 'server/AbrirCotacaoController.ts', classe: 'AbrirCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/route.ts'] },
+  { nome: 'RF_F8 - Aprovar cotação', controller: 'server/AprovarCotacaoController.ts', classe: 'AprovarCotacaoController', model: 'server/model/Cotacao.ts', dao: 'server/dao/CotacaoDAO.ts', modelClasse: 'Cotacao', daoClasse: 'CotacaoDAO', rotas: ['app/api/cotacoes/[id]/route.ts'] },
+>>>>>>> ff417c4de0e7941ad1f7b899e4d416e5da8847eb
 ];
 
 describe('Singleton do Database', () => {
@@ -34,6 +41,7 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
   const model = ler(m.model);
   const dao = ler(m.dao);
 
+<<<<<<< HEAD
   describe('Controller: instância', () => {
     it('segue o padrão configurado (Singleton ou instanciado via Service)', () => {
       if (m.singleton) {
@@ -45,6 +53,21 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
         expect(controller).not.toMatch(/static\s+getInstancia/);
         expect(controller).not.toMatch(new RegExp(`new\\s+${m.classe}\\s*\\(`));
       }
+=======
+  const singleton = (m as { singleton?: boolean }).singleton !== false;
+
+  describe(singleton ? 'Controller: Singleton' : 'Controller: não se auto-instancia', () => {
+    it.runIf(singleton)('instância estática privada + construtor privado + getInstancia()', () => {
+      expect(controller).toMatch(/private\s+static\s+instancia/);
+      expect(controller).toMatch(/private\s+constructor\s*\(/);
+      expect(controller).toMatch(new RegExp(`static\\s+getInstancia\\s*\\(\\s*\\)\\s*:\\s*${m.classe}`));
+>>>>>>> ff417c4de0e7941ad1f7b899e4d416e5da8847eb
+    });
+    it.runIf(!singleton)('construtor público, sem instância estática nem getInstancia() de si mesmo', () => {
+      expect(controller).not.toMatch(/static\s+(private\s+)?instancia/);
+      expect(controller).not.toMatch(new RegExp(`static\\s+getInstancia\\s*\\(\\s*\\)\\s*:\\s*${m.classe}`));
+      expect(controller).not.toMatch(/private\s+constructor/);
+      expect(controller).not.toMatch(new RegExp(`${m.classe}\\.getInstancia`));
     });
     it('não usa globalThis (a instância fica na própria classe)', () => {
       expect(controller).not.toMatch(/globalThis/);
@@ -105,14 +128,61 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
       expect(importa(codigo, /\/dao\//)).toBe(false);
       expect(importa(codigo, /db\/Database/)).toBe(false);
       expect(importa(codigo, new RegExp(`model/${m.modelClasse}`))).toBe(false);
+<<<<<<< HEAD
       if (m.service) {
         expect(codigo).toMatch(new RegExp(`new\\s+${m.service}\\s*\\(`));
         expect(codigo).not.toMatch(new RegExp(`new\\s+${m.classe}`));
       } else {
         expect(codigo).toMatch(new RegExp(`${m.classe}\\.getInstancia\\(\\)`));
         expect(codigo).not.toMatch(new RegExp(`new\\s+${m.classe}`));
+=======
+      if (singleton) {
+        expect(codigo).toMatch(new RegExp(`${m.classe}\\.getInstancia\\(\\)`));
+        expect(codigo).not.toMatch(new RegExp(`new\\s+${m.classe}`));
+      } else {
+        expect(codigo).toMatch(new RegExp(`new\\s+${m.classe}\\s*\\(\\s*\\)`));
+        expect(codigo).not.toMatch(new RegExp(`${m.classe}\\.getInstancia`));
+>>>>>>> ff417c4de0e7941ad1f7b899e4d416e5da8847eb
       }
     });
+  });
+});
+
+describe.each([
+  { nome: 'RF_F3 - Receber doação de produto', classe: 'ReceberDoacaoProdutoController', rotas: ['app/api/doacoes/produto/route.ts'] },
+  { nome: 'RF_F11 - Receber doação em dinheiro', classe: 'ReceberDoacaoDinheiroController', rotas: ['app/api/doacoes/dinheiro/route.ts'] },
+])('Arquitetura (sem auto-instanciar) - $nome', (m) => {
+  const controller = ler(`server/${m.classe}.ts`);
+
+  it('Controller não se auto-instancia: construtor público, sem static instancia/getInstancia', () => {
+    expect(controller).not.toMatch(/static\s+(private\s+)?instancia/);
+    expect(controller).not.toMatch(/static\s+getInstancia/);
+    expect(controller).not.toMatch(/private\s+constructor/);
+  });
+  it('mantém a conexão do Database Singleton e controla a transação', () => {
+    expect(controller).toMatch(/this\.conexao\s*=\s*Database\.getInstancia\(\)/);
+    expect(controller).toMatch(/this\.conexao\.comTransacao/);
+  });
+  it('não chama nenhum outro Controller e não toca em DAO', () => {
+    expect(importa(controller, /Controller/)).toBe(false);
+    expect(importa(controller, /\/dao\//)).toBe(false);
+    expect(controller).not.toMatch(/new\s+\w*DAO\s*\(/);
+  });
+  it.each(m.rotas)('%s cria o Controller com new e não importa Model, DAO nem Database', (rota) => {
+    const codigo = ler(rota);
+    expect(codigo).toMatch(new RegExp(`new\\s+${m.classe}\\s*\\(\\s*\\)`));
+    expect(codigo).not.toMatch(new RegExp(`${m.classe}\\.getInstancia`));
+    expect(importa(codigo, /\/dao\//)).toBe(false);
+    expect(importa(codigo, /db\/Database/)).toBe(false);
+    expect(importa(codigo, /\/model\//)).toBe(false);
+  });
+});
+
+describe('Models das doações só conversam com outros Models e DAOs (nunca com Controller)', () => {
+  it.each(['DoacaoProduto', 'DoacaoDinheiro', 'SelecaoDoador'])('model/%s.ts', (nome) => {
+    const codigo = ler(`server/model/${nome}.ts`);
+    expect(importa(codigo, /Controller/)).toBe(false);
+    expect(importa(codigo, /db\/Database/)).toBe(false);
   });
 });
 
@@ -160,8 +230,37 @@ describe('Singleton em tempo de execução (Controllers)', () => {
   });
 });
 
+describe.each([
+  { nome: 'RF_B3 - Gerenciar produtos', classe: 'ProdutoController', rotas: ['app/api/produtos/route.ts', 'app/api/produtos/[id]/route.ts'] },
+  { nome: 'RF_F1 - Atualizar estoque', classe: 'AtualizarEstoqueController', rotas: ['app/api/estoque/movimentacoes/route.ts'] },
+  { nome: 'RF_F2 - Lançar entrada de compras', classe: 'LancarEntradaCompraController', rotas: ['app/api/compras/route.ts'] },
+])('Arquitetura (sem auto-instanciar) - $nome', (m) => {
+  const controller = ler(`server/${m.classe}.ts`);
+
+  it('Controller não se auto-instancia: construtor público, sem static instancia/getInstancia', () => {
+    expect(controller).not.toMatch(/static\s+(private\s+)?instancia/);
+    expect(controller).not.toMatch(/static\s+getInstancia/);
+    expect(controller).not.toMatch(/private\s+constructor/);
+  });
+  it('mantém a conexão do Database Singleton', () => {
+    expect(controller).toMatch(/this\.conexao\s*=\s*Database\.getInstancia\(\)/);
+  });
+  it('não importa nem instancia DAO', () => {
+    expect(importa(controller, /\/dao\/(?!tipos)/)).toBe(false);
+    expect(controller).not.toMatch(/new\s+\w*DAO\s*\(/);
+  });
+  it.each(m.rotas)('%s cria o Controller com new e não importa Model, DAO nem Database', (rota) => {
+    const codigo = ler(rota);
+    expect(codigo).toMatch(new RegExp(`new\\s+${m.classe}\\s*\\(\\s*\\)`));
+    expect(codigo).not.toMatch(new RegExp(`${m.classe}\\.getInstancia`));
+    expect(importa(codigo, /\/dao\//)).toBe(false);
+    expect(importa(codigo, /db\/Database/)).toBe(false);
+    expect(importa(codigo, /\/model\//)).toBe(false);
+  });
+});
+
 // RF_F1 - Atualizar estoque: só o Controller de estoque é acionado, e só pelos Controllers dos casos de uso
-// solicitantes. Model e DAO nunca chamam o AtualizarEstoqueController (fluxo C -> M -> DAO).
+// solicitantes (cada um cria o AtualizarEstoqueController com new, no ponto de uso). Model e DAO nunca chamam o AtualizarEstoqueController (fluxo C -> M -> DAO).
 describe('RF_F1 - ninguém abaixo do Controller aciona o estoque', () => {
   const listar = (pasta: string, filtro: (nome: string) => boolean) =>
     fs
@@ -235,5 +334,48 @@ describe('Direção das dependências (todos os módulos)', () => {
     const codigo = ler(arquivo);
     expect(importa(codigo, /\/dao\/(?!tipos)[^'"]*/)).toBe(false);
     expect(codigo).not.toMatch(/new\s+\w*DAO\s*\(/);
+  });
+});
+
+describe.each(['ProdutoDAO', 'MovimentacaoEstoqueDAO'])('%s (RF_B3 / RF_F1): conexão e dados só por parâmetro', (nome) => {
+  const dao = ler(`server/dao/${nome}.ts`);
+  it('não importa Database nem usa getInstancia (a conexão vem no construtor)', () => {
+    expect(importa(dao, /db\/Database/)).toBe(false);
+    expect(dao).not.toMatch(/getInstancia/);
+  });
+  it('não importa Model em tempo de execução nem dá new em Model', () => {
+    expect(dao).not.toMatch(/^import\s+(?!type\b)[^;]*from\s+['"][^'"]*\/model\//m);
+  });
+});
+
+// View (rotas da API e telas): só conhece o Controller; não importa Model, DAO nem Database,
+// nem mesmo como tipo (slide 10 da Aula 71: a View não instancia nem conhece as Models).
+function arquivosDe(pasta: string, ehAlvo: (nome: string) => boolean): string[] {
+  const saida: string[] = [];
+  for (const entrada of fs.readdirSync(path.join(SRC, pasta), { withFileTypes: true })) {
+    const relativo = `${pasta}/${entrada.name}`;
+    if (entrada.isDirectory()) saida.push(...arquivosDe(relativo, ehAlvo));
+    else if (ehAlvo(entrada.name)) saida.push(relativo);
+  }
+  return saida;
+}
+
+describe.each(arquivosDe('app', (n) => /^(route\.ts|page\.tsx)$/.test(n)))('View - %s', (arquivo) => {
+  it('não importa Model, DAO nem Database (só o Controller)', () => {
+    const codigo = ler(arquivo);
+    expect(codigo).not.toMatch(/from\s+['"][^'"]*\/server\/(model|dao|db)\//);
+  });
+});
+
+describe('RF_F2 - ItemCompra persiste a si mesmo (slide 17: o SQL do item fica na entidade do item)', () => {
+  const item = ler('server/model/ItemCompra.ts');
+  const compra = ler('server/model/Compra.ts');
+  it('o ItemCompra cria o CompraDAO(conexao) e grava o próprio item', () => {
+    expect(importa(item, /dao\/CompraDAO/)).toBe(true);
+    expect(item).toMatch(/new\s+CompraDAO\(conexao\)\.inserirItem\(compraId,\s*this\)/);
+  });
+  it('a Compra manda o item se gravar, sem chamar inserirItem do DAO', () => {
+    expect(compra).toMatch(/item\.incluir\(conexao,/);
+    expect(compra).not.toMatch(/\.inserirItem\(/);
   });
 });

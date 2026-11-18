@@ -7,6 +7,8 @@ import type { ExecutorSQL } from '../dao/tipos';
 import { CompraDAO, type CompraRegistro } from '../dao/CompraDAO';
 import type { FiltroCompra } from './FiltroCompra';
 import { ItemCompra } from './ItemCompra';
+import { MovimentacaoEstoque } from './MovimentacaoEstoque';
+import { Produto } from './Produto';
 import { dataValida, hoje, paraIso, parseData, textoSeguro } from './datasBR';
 
 export interface CompraAtributos {
@@ -97,7 +99,7 @@ export class Compra {
       erros.itens = `Uma compra pode ter no máximo ${MAXIMO_ITENS} itens.`;
     } else {
       this.itens.forEach((item, i) => {
-        const errosItem = item.validar(this.dataCompra);
+        const errosItem = item.validar();
         for (const campo of Object.keys(errosItem)) erros[`item.${i}.${campo}`] = errosItem[campo];
       });
       if (Object.keys(erros).every((campo) => !campo.startsWith('item.')) && this.getValorTotalEmCentavos() > VALOR_TOTAL_MAXIMO_EM_CENTAVOS) {
@@ -110,13 +112,13 @@ export class Compra {
   // ------------------------------ persistência ------------------------------
 
   /**
-   * Passo 9: grava a compra (os itens e a entrada no estoque, RF_F1, ficam a cargo do Controller).
+   * Passo 9: grava a compra, com o gerente que a lançou (os itens e a entrada no estoque, RF_F1, ficam em incluirItem).
    * Deve ser chamado dentro de uma transação: se qualquer passo falhar, nada fica gravado (fluxo 9.1).
    */
-  async incluir(conexao: ExecutorSQL): Promise<void> {
+  async incluir(conexao: ExecutorSQL, gerenteId: number): Promise<void> {
     const dao = new CompraDAO(conexao);
     try {
-      this.id = await dao.inserirCompra(this.numeroNF, paraIso(this.dataCompra), this.fornecedor, this.getValorTotal());
+      this.id = await dao.inserirCompra(this.numeroNF, paraIso(this.dataCompra), this.fornecedor, this.getValorTotal(), gerenteId);
     } catch (erro) {
       // 23505 = UNIQUE violado: outra pessoa lançou a mesma nota ao mesmo tempo
       // (depois da checagem do Controller e antes desta gravação)
@@ -127,9 +129,29 @@ export class Compra {
     }
   }
 
-  /** Grava um item da compra. Chamado pelo Controller, item a item, depois da entrada no estoque. */
-  async incluirItem(conexao: ExecutorSQL, item: ItemCompra): Promise<void> {
-    await new CompraDAO(conexao).inserirItem(this.id!, item);
+  /**
+   * Grava um item da compra e dá a entrada dele no estoque (RF_F1), na mesma transação:
+   * carrega o produto (travando a linha), soma a quantidade, salva o estoque e registra o histórico.
+   */
+  async incluirItem(conexao: ExecutorSQL, item: ItemCompra, indice: number): Promise<void> {
+    const movimentacao = new MovimentacaoEstoque({
+      produtoId: item.getProdutoId(),
+      tipo: 'ENTRADA',
+      quantidade: item.getQuantidade(),
+      origem: `Compra #${this.id} - NF ${this.numeroNF}`,
+      dataValidade: item.getDataValidade(),
+    });
+    const produto = new Produto({ id: item.getProdutoId(), nome: '', categoria: '', unidadeMedida: '' });
+    // fluxo 3.1: produto não cadastrado
+    if (!(await produto.carregarParaAtualizarEstoque(conexao))) {
+      throw new ErroValidacao('Produto não cadastrado.', {
+        [`item.${indice}.produto`]: 'Produto não cadastrado: cadastre-o em Produtos antes de lançar a compra.',
+      });
+    }
+    produto.atualizQuantidade(movimentacao.getQuantidade(), 'ENTRADA', movimentacao.getDataValidadeIso());
+    await produto.salvarEstoque(conexao);
+    await movimentacao.registrar(conexao);
+    await item.incluir(conexao, this.id!);
   }
 
   /** Fluxo 2.1: já existe compra com esta nota fiscal? Quem decide o que fazer é o Controller. */

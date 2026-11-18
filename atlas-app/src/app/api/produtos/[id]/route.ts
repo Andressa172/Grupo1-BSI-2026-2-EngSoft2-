@@ -14,7 +14,7 @@ type Contexto = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
-    const produto = await ProdutoController.getInstancia().buscarPorId(Number(id));
+    const produto = await new ProdutoController().buscarPorId(Number(id));
     return Response.json(produto.paraLinhaDeDados());
   } catch (erro) {
     return respostaDeErro(erro);
@@ -25,7 +25,7 @@ export async function PUT(request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
     const dados = await request.json();
-    const produto = await ProdutoController.getInstancia().editar(Number(id), dados);
+    const produto = await new ProdutoController().editar(Number(id), dados);
     return Response.json(produto.paraLinhaDeDados());
   } catch (erro) {
     return respostaDeErro(erro);
@@ -35,7 +35,7 @@ export async function PUT(request: Request, { params }: Contexto) {
 export async function DELETE(_request: Request, { params }: Contexto) {
   try {
     const { id } = await params;
-    await ProdutoController.getInstancia().excluir(Number(id));
+    await new ProdutoController().excluir(Number(id));
     return Response.json({ mensagem: 'Produto excluído.' });
   } catch (erro) {
     return respostaDeErro(erro);

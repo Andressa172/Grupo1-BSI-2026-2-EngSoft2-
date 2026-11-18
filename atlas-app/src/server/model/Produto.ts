@@ -3,7 +3,7 @@
 // criando o ProdutoDAO com a conexão que recebe do Controller.
 import type { ErrosDeCampo } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
-import { ProdutoDAO, type ProdutoLinha } from '../dao/ProdutoDAO';
+import { ProdutoDAO, type ProdutoLinha, type ProdutoRegistro } from '../dao/ProdutoDAO';
 import type { FiltroProduto } from './FiltroProduto';
 
 export const CATEGORIAS_PRODUTO = ['Alimento', 'Material', 'Higiene', 'Outro'] as const;
@@ -214,13 +214,13 @@ export class Produto {
   // O Model cria o DAO usando a conexão que o Controller abriu.
 
   async incluir(conexao: ExecutorSQL): Promise<void> {
-    const salvo = await new ProdutoDAO(conexao).inserir(this);
-    this.id = salvo.getId();
-    this.quantidadeEstoque = salvo.getQuantidadeEstoque();
+    const salvo = await new ProdutoDAO(conexao).inserir(this.dadosParaGravar());
+    this.id = salvo.id;
+    this.quantidadeEstoque = salvo.quantidadeEstoque;
   }
 
   async alterar(conexao: ExecutorSQL): Promise<boolean> {
-    const salvo = await new ProdutoDAO(conexao).atualizar(this);
+    const salvo = await new ProdutoDAO(conexao).atualizar(this.dadosParaGravar());
     return salvo !== null;
   }
 
@@ -234,7 +234,8 @@ export class Produto {
   }
 
   static async buscarPorId(conexao: ExecutorSQL, id: number): Promise<Produto | null> {
-    return new ProdutoDAO(conexao).buscarPorId(id);
+    const registro = await new ProdutoDAO(conexao).buscarPorId(id);
+    return registro ? Produto.doRegistro(registro) : null;
   }
 
   // RF_F1, passo 4: grava a quantidade (e a validade) calculadas em atualizQuantidade
@@ -253,7 +254,7 @@ export class Produto {
     this.nome = atual.nome;
     this.categoria = atual.categoria;
     this.unidadeMedida = atual.unidadeMedida;
-    this.numeroLote = atual.numeroLote;
+    this.numeroLote = atual.numeroLote ?? '';
     this.quantidadeEstoque = atual.quantidadeEstoque;
     this.estoqueMinimo = atual.estoqueMinimo;
     this.dataValidade = atual.dataValidade;
@@ -266,7 +267,35 @@ export class Produto {
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroProduto): Promise<Produto[]> {
-    return new ProdutoDAO(conexao).consultar(filtro);
+    const registros = await new ProdutoDAO(conexao).consultar(filtro);
+    return registros.map((registro) => Produto.doRegistro(registro));
+  }
+
+  // o DAO devolve registros simples; o Model é quem monta o Produto
+  private static doRegistro(registro: ProdutoRegistro): Produto {
+    return new Produto({
+      id: registro.id,
+      nome: registro.nome,
+      categoria: registro.categoria,
+      unidadeMedida: registro.unidadeMedida,
+      quantidadeEstoque: registro.quantidadeEstoque,
+      estoqueMinimo: registro.estoqueMinimo,
+      dataValidade: registro.dataValidade,
+      numeroLote: registro.numeroLote,
+    });
+  }
+
+  // dados que o DAO grava (a quantidade em estoque não entra: só muda por movimentação, RF_F1)
+  private dadosParaGravar() {
+    return {
+      id: this.id,
+      nome: this.nome,
+      categoria: this.categoria,
+      unidadeMedida: this.unidadeMedida,
+      estoqueMinimo: this.estoqueMinimo,
+      dataValidade: this.dataValidade,
+      numeroLote: this.numeroLote,
+    };
   }
 
   paraLinhaDeDados() {

@@ -98,7 +98,7 @@ export class CriarCardapioController {
       const item = itens[i];
       let motivo: 'ok' | 'categoria' | 'produto' | 'estoque' = await cardapio.verificarItem(cliente, item);
       if (motivo === 'ok') {
-        const resultado = await AtualizarEstoqueController.getInstancia().atualizarEstoque(cliente, {
+        const resultado = await new AtualizarEstoqueController().atualizarEstoque(cliente, {
           produtoId: item.getProdutoId(),
           tipo: 'SAIDA',
           quantidade: item.getQuantidadeUtilizada(),
@@ -122,7 +122,7 @@ export class CriarCardapioController {
   private async estornarItens(cliente: ExecutorSQL, cardapioId: number): Promise<void> {
     const itens = await CardapioDiario.listarItens(cliente, cardapioId);
     for (const item of itens) {
-      await AtualizarEstoqueController.getInstancia().atualizarEstoque(cliente, {
+      await new AtualizarEstoqueController().atualizarEstoque(cliente, {
         produtoId: item.produtoId,
         tipo: 'ENTRADA',
         quantidade: item.quantidadeUtilizada,

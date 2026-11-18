@@ -4,10 +4,9 @@
  */
 
 import { exigirGerente } from '@/server/auth';
-import { CaixaController } from '@/server/CaixaController';
+import { CaixaController, type DadosAtualizarCaixa } from '@/server/CaixaController';
 import { respostaDeErro } from '@/server/http';
 import { lerJson } from '@/server/lerJson';
-import type { FormaPagamentoCaixa, TipoMovimentacaoCaixa } from '@/server/model/MovimentacaoCaixa';
 
 export async function POST(request: Request) {
   try {
@@ -16,8 +15,8 @@ export async function POST(request: Request) {
 
     const movimentacao = await CaixaController.getInstancia().atualizarCaixa({
       valor: corpo.valor as number,
-      tipoMovimentacao: corpo.tipoMovimentacao as TipoMovimentacaoCaixa,
-      formaPag: corpo.formaPag as FormaPagamentoCaixa,
+      tipoMovimentacao: corpo.tipoMovimentacao as DadosAtualizarCaixa['tipoMovimentacao'],
+      formaPag: corpo.formaPag as DadosAtualizarCaixa['formaPag'],
       origem: typeof corpo.origem === 'string' ? corpo.origem : undefined,
     });
 

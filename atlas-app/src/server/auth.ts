@@ -34,7 +34,11 @@ function extrairUsuarioId(request: Request, corpo?: Record<string, unknown>): nu
 /**
  * Valida que a requisição pertence a um usuário ativo com perfil GERENTE.
  */
-export async function exigirGerente(request: Request, corpo?: Record<string, unknown>): Promise<Usuario> {
+export async function exigirGerente(
+  request: Request,
+  corpo?: Record<string, unknown>,
+  acao = 'operar o caixa'
+): Promise<Usuario> {
   const usuarioId = extrairUsuarioId(request, corpo);
   if (!usuarioId) {
     throw new ErroAutenticacao('Usuário não autenticado.');
@@ -52,7 +56,7 @@ export async function exigirGerente(request: Request, corpo?: Record<string, unk
   }
 
   if (usuario.getPerfil() !== 'GERENTE') {
-    throw new ErroAutorizacao('Acesso restrito: apenas Gerente pode operar o caixa.');
+    throw new ErroAutorizacao(`Acesso restrito: apenas Gerente pode ${acao}.`);
   }
 
   return usuario;

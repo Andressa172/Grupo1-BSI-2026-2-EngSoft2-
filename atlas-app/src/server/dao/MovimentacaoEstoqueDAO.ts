@@ -1,8 +1,8 @@
 // DAO - MovimentacaoEstoque (RF_F1 - Atualizar estoque)
 // Grava e consulta o histórico (movimentacao_estoque). A quantidade do produto é gravada pelo
-// ProdutoDAO, via model Produto. Só executa SQL, sempre com parâmetros.
+// ProdutoDAO, via model Produto. Só executa SQL, sempre com parâmetros: recebe a conexão no
+// construtor (não abre conexão) e não cria Model.
 import type { ExecutorSQL } from './tipos';
-import { Database } from '../db/Database';
 import type { FiltroMovimentacao } from '../model/FiltroMovimentacao';
 
 export interface MovimentacaoEstoqueRegistro {
@@ -33,7 +33,7 @@ interface LinhaConsulta {
 const LIMITE_CONSULTA = 500;
 
 export class MovimentacaoEstoqueDAO {
-  constructor(private readonly executor: ExecutorSQL = Database.getInstancia()) {}
+  constructor(private readonly executor: ExecutorSQL) {}
 
   async inserir(
     produtoId: number,
