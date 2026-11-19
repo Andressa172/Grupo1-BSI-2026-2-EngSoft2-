@@ -3,9 +3,10 @@ import type { ErrosDeCampo } from '../erros';
 import { dataValida, paraIso, parseData, textoSeguro } from './datasBR';
 
 const ID_MAXIMO = 2_147_483_647;
+const DOADOR_ANONIMO = 'anonimo';
 
 export interface FiltroDoacaoAtributos {
-  doadorId?: string | number | null;
+  doadorId?: string | number | null; // id, ou 'anonimo' para só as doações de doador anônimo
   dataInicial?: string | null; // dd/mm/aaaa ou aaaa-mm-dd
   dataFinal?: string | null;
 }
@@ -21,9 +22,14 @@ export class FiltroDoacao {
     this.dataFinal = textoSeguro(atributos.dataFinal);
   }
 
-  /** null = todos os doadores. Só chamar com filtro válido. */
+  /** true = só as doações de doador anônimo (o anônimo nem sempre está na lista de cadastrados). */
+  isSomenteAnonimos(): boolean {
+    return this.doadorId === DOADOR_ANONIMO;
+  }
+
+  /** null = todos os doadores (ou só os anônimos). Só chamar com filtro válido. */
   getDoadorId(): number | null {
-    return this.doadorId === '' ? null : Number(this.doadorId);
+    return this.doadorId === '' || this.isSomenteAnonimos() ? null : Number(this.doadorId);
   }
 
   /** "aaaa-mm-dd" ou null (sem limite). Só chamar com filtro válido. */
@@ -38,7 +44,7 @@ export class FiltroDoacao {
   validar(): ErrosDeCampo {
     const erros: ErrosDeCampo = {};
 
-    if (this.doadorId !== '') {
+    if (this.doadorId !== '' && !this.isSomenteAnonimos()) {
       const id = Number(this.doadorId);
       if (!/^\d{1,10}$/.test(this.doadorId) || id <= 0 || id > ID_MAXIMO) erros.doadorId = 'Doador inválido.';
     }
