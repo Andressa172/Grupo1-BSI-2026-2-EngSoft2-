@@ -1,7 +1,6 @@
 // Control - ParametrizarOrganizacaoController (RF_Parametrizacao)
 import { Database } from './db/Database';
 import { Organizacao } from './model/Organizacao';
-import type { ExecutorSQL } from './dao/tipos';
 
 export interface DadosAtualizacaoOrganizacao {
   nomeFantasia: string;
@@ -15,7 +14,11 @@ export interface DadosAtualizacaoOrganizacao {
 export type ResultadoOrganizacao = ReturnType<Organizacao['paraLinhaDeDados']>;
 
 export class ParametrizarOrganizacaoController {
-  constructor(private readonly conexao: ExecutorSQL = Database.getInstancia()) {}
+  private readonly conexao: Database;
+
+  constructor() {
+    this.conexao = Database.getInstancia();
+  }
 
   /**
    * Retorna os parâmetros atuais da organização (registro id = 1).

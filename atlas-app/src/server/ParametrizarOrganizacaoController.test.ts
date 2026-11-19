@@ -1,8 +1,14 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ParametrizarOrganizacaoController } from './ParametrizarOrganizacaoController';
 import { ErroValidacao } from './erros';
 import type { ExecutorSQL } from './dao/tipos';
 import type { OrganizacaoLinha } from './dao/OrganizacaoDAO';
+
+const ponte = vi.hoisted(() => ({ conexao: undefined as unknown as ExecutorSQL }));
+
+vi.mock('./db/Database', () => ({
+  Database: { getInstancia: vi.fn(() => ponte.conexao) },
+}));
 
 // Conexão falsa que responde às duas consultas do OrganizacaoDAO (o Model é quem cria o DAO).
 function criarConexaoFalsa(): ExecutorSQL {
@@ -36,7 +42,8 @@ describe('ParametrizarOrganizacaoController - RF_Parametrizacao', () => {
   let controller: ParametrizarOrganizacaoController;
 
   beforeEach(() => {
-    controller = new ParametrizarOrganizacaoController(criarConexaoFalsa());
+    ponte.conexao = criarConexaoFalsa();
+    controller = new ParametrizarOrganizacaoController();
   });
 
   it('retorna parâmetros padrão quando a organização ainda não foi cadastrada', async () => {

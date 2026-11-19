@@ -37,7 +37,11 @@ export interface DadosAtualizarCaixa {
 }
 
 export class CaixaController {
-  constructor(private readonly database: Pick<Database, 'comTransacao' | 'query'> = Database.getInstancia()) {}
+  private readonly conexao: Database;
+
+  constructor() {
+    this.conexao = Database.getInstancia();
+  }
 
   /** RF_F4 - Abrir Caixa (apenas Gerente). */
   async abrirCaixa(dados: DadosAbrirCaixa, idFuncionario: number) {
@@ -52,14 +56,13 @@ export class CaixaController {
     });
     novoCaixa.validarAbertura();
 
-    return this.database.comTransacao(async (client) => {
-      const conexao = client as unknown as ExecutorSQL;
-      const caixaExistente = await Caixa.buscarAberto(conexao, true);
+    return this.conexao.comTransacao(async (tx) => {
+      const caixaExistente = await Caixa.buscarAberto(tx, true);
       if (caixaExistente) {
         throw new ErroConflito('Já existe um caixa aberto no momento.');
       }
 
-      const caixaSalvo = await novoCaixa.incluir(conexao);
+      const caixaSalvo = await novoCaixa.incluir(tx);
       return caixaSalvo.paraLinhaDeDados();
     });
   }
@@ -69,14 +72,13 @@ export class CaixaController {
     const saldoFisicoFinal = parseSaldoValido(dados.saldoFisicoFinal, 'saldoFisicoFinal');
     const saldoDigitalFinal = parseSaldoValido(dados.saldoDigitalFinal, 'saldoDigitalFinal');
 
-    return this.database.comTransacao(async (client) => {
-      const conexao = client as unknown as ExecutorSQL;
-      const caixaAberto = await Caixa.buscarAberto(conexao, true);
+    return this.conexao.comTransacao(async (tx) => {
+      const caixaAberto = await Caixa.buscarAberto(tx, true);
       if (!caixaAberto || !caixaAberto.getId()) {
         throw new ErroNaoEncontrado('Não há nenhum caixa aberto para fechar.');
       }
 
-      const movimentacoes = await caixaAberto.listarMovimentacoes(conexao);
+      const movimentacoes = await caixaAberto.listarMovimentacoes(tx);
       const esperados = caixaAberto.calcularSaldosEsperados(movimentacoes);
 
       const diferencaFisico = deCentavos(paraCentavos(saldoFisicoFinal) - paraCentavos(esperados.fisico));
@@ -96,7 +98,7 @@ export class CaixaController {
         );
       }
 
-      const caixaFechado = await caixaAberto.fechar(conexao, saldoFisicoFinal, saldoDigitalFinal);
+      const caixaFechado = await caixaAberto.fechar(tx, saldoFisicoFinal, saldoDigitalFinal);
       if (!caixaFechado) {
         throw new ErroNaoEncontrado('Não foi possível localizar o caixa aberto para fechamento.');
       }
@@ -166,22 +168,21 @@ export class CaixaController {
     if (dbClient) {
       return executar(dbClient);
     }
-    return this.database.comTransacao((client) => executar(client));
+    return this.conexao.comTransacao((tx) => executar(tx));
   }
 
   /** Retorna o caixa aberto (com movimentações e saldos) e o histórico de caixas. */
   async obterEstadoAtual() {
     // lança no caixa aberto as despesas de eventos cuja data de pagamento já chegou (RF_F6);
     // sem caixa aberto, elas continuam pendentes e aparecem no aviso abaixo
-    await this.database.comTransacao(async (cliente) => {
-      await Evento.processarDespesasPendentes(cliente as unknown as ExecutorSQL);
+    await this.conexao.comTransacao(async (tx) => {
+      await Evento.processarDespesasPendentes(tx);
     });
 
-    const conexao = this.database as unknown as ExecutorSQL;
     const [caixaAberto, todos, despesasEventosPendentes] = await Promise.all([
-      Caixa.buscarAberto(conexao, false),
-      Caixa.listarTodos(conexao),
-      Evento.listarDespesasPendentes(conexao),
+      Caixa.buscarAberto(this.conexao, false),
+      Caixa.listarTodos(this.conexao),
+      Evento.listarDespesasPendentes(this.conexao),
     ]);
 
     if (!caixaAberto || !caixaAberto.getId()) {
@@ -192,7 +193,7 @@ export class CaixaController {
       };
     }
 
-    const movimentacoes = await caixaAberto.listarMovimentacoes(conexao);
+    const movimentacoes = await caixaAberto.listarMovimentacoes(this.conexao);
     const saldosAtuais = caixaAberto.calcularSaldosEsperados(movimentacoes);
 
     return {

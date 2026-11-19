@@ -25,7 +25,14 @@ interface CaixaDAOFalso {
   listarMovimentacoesPorCaixa(caixaId: number): Promise<MovimentacaoCaixa[]>;
 }
 
-const ponte = vi.hoisted(() => ({ dao: undefined as unknown as CaixaDAOFalso }));
+const ponte = vi.hoisted(() => ({
+  dao: undefined as unknown as CaixaDAOFalso,
+  database: undefined as unknown as Pick<Database, 'comTransacao' | 'query'>,
+}));
+
+vi.mock('./db/Database', () => ({
+  Database: { getInstancia: vi.fn(() => ponte.database) },
+}));
 
 // O DAO real devolve registros simples; o ambiente falso abaixo trabalha com Models, então o
 // DAO falso converte nos dois sentidos (dados -> Model ao gravar, Model -> registro ao devolver).
@@ -119,7 +126,8 @@ function criarAmbienteCaixaFalso() {
   } as unknown as Pick<Database, 'comTransacao' | 'query'>;
 
   ponte.dao = dao;
-  const controller = new CaixaController(database);
+  ponte.database = database;
+  const controller = new CaixaController();
   return { controller, caixas, movimentacoes };
 }
 
