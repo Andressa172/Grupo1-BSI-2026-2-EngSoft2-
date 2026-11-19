@@ -263,6 +263,8 @@ export default function DoacoesPage() {
           <Field label="Doador">
             <Select value={filtro.doadorId} onChange={(e) => setFiltro({ ...filtro, doadorId: e.target.value })}>
               <option value="">Todos</option>
+              {/* o anônimo só existe no cadastro depois da 1ª doação anônima; esta opção filtra sempre */}
+              <option value="anonimo">Doador anônimo</option>
               {doadores.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.nome}

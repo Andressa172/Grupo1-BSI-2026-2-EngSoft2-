@@ -149,11 +149,51 @@ describe.each([
   });
 });
 
-describe('Models das doações só conversam com outros Models e DAOs (nunca com Controller)', () => {
-  it.each(['DoacaoProduto', 'DoacaoDinheiro', 'SelecaoDoador'])('model/%s.ts', (nome) => {
-    const codigo = ler(`server/model/${nome}.ts`);
-    expect(importa(codigo, /Controller/)).toBe(false);
-    expect(importa(codigo, /db\/Database/)).toBe(false);
+describe('Hierarquia MVC nas doações (RF_F3 e RF_F11): Model não instancia Model', () => {
+  it.each(['DoacaoProduto', 'DoacaoDinheiro', 'SelecaoDoador', 'FiltroDoacao', 'ItemDoacao'])(
+    'model/%s.ts não importa Controller nem Database',
+    (nome) => {
+      const codigo = ler(`server/model/${nome}.ts`);
+      expect(importa(codigo, /Controller/)).toBe(false);
+      expect(importa(codigo, /db\/Database/)).toBe(false);
+    }
+  );
+
+  // o Controller cria até os ItemDoacao (como o AbrirCotacaoController faz com os ItemCotacao)
+  it.each(['DoacaoProduto', 'DoacaoDinheiro', 'SelecaoDoador', 'FiltroDoacao', 'ItemDoacao'])('model/%s.ts não importa nenhum outro Model em tempo de execução', (nome) => {
+    // import de valor de outro Model da mesma pasta (./Algo), exceto o utilitário de datas
+    expect(ler(`server/model/${nome}.ts`)).not.toMatch(/^import\s+(?!type\b)[^;]*from\s+['"]\.\/(?!datasBR)\w+['"]/m);
+  });
+
+  it.each(['ReceberDoacaoProdutoController', 'ReceberDoacaoDinheiroController'])('%s cria o Doador e a escolha do doador', (nome) => {
+    const codigo = ler(`server/${nome}.ts`);
+    expect(codigo).toMatch(/new\s+SelecaoDoador\s*\(/);
+    expect(codigo).toMatch(/new\s+Doador\s*\(/);
+  });
+
+  it('ReceberDoacaoProdutoController cria os ItemDoacao e entrega à doação', () => {
+    expect(ler('server/ReceberDoacaoProdutoController.ts')).toMatch(/new\s+ItemDoacao\s*\(/);
+  });
+
+  it('DoacaoDinheiro não depende dos Models do caixa nem do doador, nem como tipo (recebe só a data de abertura)', () => {
+    const codigo = ler('server/model/DoacaoDinheiro.ts');
+    for (const outro of ['Caixa', 'MovimentacaoCaixa', 'Doador', 'SelecaoDoador']) {
+      expect(codigo).not.toMatch(new RegExp(`from\\s+['"]\\./${outro}['"]`));
+    }
+  });
+
+  it('ReceberDoacaoDinheiroController cria os Models do caixa (RF_F6) em vez de chamar o CaixaController', () => {
+    const codigo = ler('server/ReceberDoacaoDinheiroController.ts');
+    expect(codigo).toMatch(/Caixa\.buscarAberto\(/);
+    expect(codigo).toMatch(/new\s+MovimentacaoCaixa\s*\(/);
+    expect(importa(codigo, /CaixaController/)).toBe(false);
+  });
+
+  it('ReceberDoacaoProdutoController cria os Models do estoque (RF_F1) em vez de chamar o AtualizarEstoqueController', () => {
+    const codigo = ler('server/ReceberDoacaoProdutoController.ts');
+    expect(codigo).toMatch(/new\s+Produto\s*\(/);
+    expect(codigo).toMatch(/new\s+MovimentacaoEstoque\s*\(/);
+    expect(importa(codigo, /AtualizarEstoqueController/)).toBe(false);
   });
 });
 

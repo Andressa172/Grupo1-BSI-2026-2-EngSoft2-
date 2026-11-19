@@ -41,6 +41,7 @@ export class DoacaoDinheiroDAO {
       parametros.push(doadorId);
       condicoes.push(`d.doador_id = $${parametros.length}`);
     }
+    if (filtro.isSomenteAnonimos()) condicoes.push('doa.anonimo = true');
     const de = filtro.getDataInicial();
     if (de !== null) {
       parametros.push(de);

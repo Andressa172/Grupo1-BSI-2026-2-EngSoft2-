@@ -320,6 +320,19 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Doações - integração (PostgreSQL)', ()
       expect((await get(rotas.dinheiro, "/doacoes/dinheiro?dataInicial=2026-01-01'--")).status).toBe(400);
     });
 
+    it('filtro "doador anônimo" só traz doações de doador anônimo (mesmo sem o anônimo estar na lista)', async () => {
+      // uma doação anônima e uma de doador identificado
+      expect((await rotas.dinheiro.POST(json({ ...base(), doador: { tipo: 'anonimo' }, valor: '7,00' }))).status).toBe(201);
+      const todas = (await (await get(rotas.dinheiro, '/doacoes/dinheiro')).json()) as { doador: string }[];
+      const so = (await (await get(rotas.dinheiro, '/doacoes/dinheiro?doadorId=anonimo')).json()) as { doador: string }[];
+      expect(so.length).toBeGreaterThan(0);
+      expect(so.length).toBeLessThan(todas.length);
+      expect(so.every((d) => d.doador === 'Anônimo' || d.doador === 'Doador Anônimo')).toBe(true);
+      const produtos = (await (await get(rotas.produto, '/doacoes/produto?doadorId=anonimo')).json()) as { doador: string }[];
+      expect(produtos.every((d) => d.doador === 'Anônimo' || d.doador === 'Doador Anônimo')).toBe(true);
+      expect((await get(rotas.dinheiro, '/doacoes/dinheiro?doadorId=anonimo%20OR%201=1')).status).toBe(400);
+    });
+
     it('corpo inválido e tipos errados → 400, nunca 500', async () => {
       for (const c of ['{"valor":', '', '[]', 'null', '"x"']) expect((await rotas.dinheiro.POST(crua(c))).status).toBe(400);
       for (const l of [{ doador: 1, valor: {}, formaRecebimento: [], dataRecebimento: 7 }, { ...base(), valor: ['10'] }, { ...base(), valor: null }]) {
