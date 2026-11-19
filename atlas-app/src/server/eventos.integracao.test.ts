@@ -55,7 +55,9 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Eventos - integração (PostgreSQL)', () =
 
   it('recurso financeiro não mexe no estoque', async () => {
     const antes = await estoque(arroz);
-    const r = await rota.POST(json({ nome: 'Campanha', data: amanha(), recursos: [{ tipo: 'FINANCEIRO', valor: 500 }] }));
+    const r = await rota.POST(
+      json({ nome: 'Campanha', data: amanha(), recursos: [{ tipo: 'FINANCEIRO', valor: 500, dataPagamento: amanha() }] })
+    );
     expect(r.status).toBe(201);
     expect(await estoque(arroz)).toBe(antes);
   });
@@ -71,9 +73,54 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Eventos - integração (PostgreSQL)', () =
     expect(await contar('alocacao_recurso')).toBe(antes.a);
   });
 
-  it('data no passado é permitida (cadastro retroativo)', async () => {
-    const r = await rota.POST(json({ nome: 'Evento velho', data: '01/01/2000', recursos: [{ tipo: 'FINANCEIRO', valor: 10 }] }));
+  it('data no passado é rejeitada (não pode cadastrar evento que já aconteceu)', async () => {
+    const r = await rota.POST(
+      json({ nome: 'Evento velho', data: '01/01/2000', recursos: [{ tipo: 'FINANCEIRO', valor: 10, dataPagamento: amanha() }] })
+    );
+    expect(r.status).toBe(400);
+  });
+
+  it('recurso financeiro soma várias linhas e aceita descrição opcional', async () => {
+    const r = await rota.POST(
+      json({
+        nome: 'Multi financeiro',
+        data: amanha(),
+        recursos: [
+          { tipo: 'FINANCEIRO', valor: 100, dataPagamento: amanha(), descricao: 'Aluguel do som' },
+          { tipo: 'FINANCEIRO', valor: 50, dataPagamento: amanha() },
+        ],
+      })
+    );
     expect(r.status).toBe(201);
+    const { id } = await r.json();
+    const lista = (await (await get()).json()).eventos as { id: number; recursos: { valor: number; descricao: string | null }[] }[];
+    const recursos = lista.find((e) => e.id === id)!.recursos;
+    expect(recursos).toHaveLength(2);
+    expect(recursos.some((rec) => rec.descricao === 'Aluguel do som')).toBe(true);
+  });
+
+  it('recurso financeiro sem data de pagamento -> 400', async () => {
+    const r = await rota.POST(json({ nome: 'Sem data', data: amanha(), recursos: [{ tipo: 'FINANCEIRO', valor: 10 }] }));
+    expect(r.status).toBe(400);
+    expect((await r.json()).erros).toHaveProperty('recurso.0.dataPagamento');
+  });
+
+  it('soma a quantidade quando o mesmo produto aparece em duas linhas', async () => {
+    const r = await rota.POST(
+      json({
+        nome: 'Produto repetido',
+        data: amanha(),
+        recursos: [
+          { tipo: 'PRODUTO', produtoId: arroz, quantidade: 2 },
+          { tipo: 'PRODUTO', produtoId: arroz, quantidade: 3 },
+        ],
+      })
+    );
+    expect(r.status).toBe(201);
+    const { id } = await r.json();
+    const lista = (await (await get()).json()).eventos as { id: number; recursos: { quantidade: number | null }[] }[];
+    expect(lista.find((e) => e.id === id)!.recursos).toHaveLength(1);
+    expect(lista.find((e) => e.id === id)!.recursos[0].quantidade).toBe(5);
   });
 
   it('sem recursos -> 400', async () => {
@@ -132,8 +179,25 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Eventos - integração (PostgreSQL)', () =
     });
 
     it('alterar evento inexistente -> 404', async () => {
-      const r = await put(999999, { nome: 'X', data: amanha(), recursos: [{ tipo: 'FINANCEIRO', valor: 10 }] });
+      const r = await put(999999, { nome: 'X', data: amanha(), recursos: [{ tipo: 'FINANCEIRO', valor: 10, dataPagamento: amanha() }] });
       expect(r.status).toBe(404);
+    });
+
+    it('não permite alterar evento que já aconteceu', async () => {
+      const passado = (await sql<{ id: number }>(
+        "INSERT INTO evento (nome, data) VALUES ('Já aconteceu', CURRENT_DATE - 1) RETURNING id"
+      ))[0].id;
+      const r = await put(passado, { nome: 'Tentando editar', data: amanha(), recursos: [{ tipo: 'PRODUTO', produtoId: arroz, quantidade: 1 }] });
+      expect(r.status).toBe(400);
+    });
+
+    it('não permite excluir evento que já aconteceu', async () => {
+      const passado = (await sql<{ id: number }>(
+        "INSERT INTO evento (nome, data) VALUES ('Já aconteceu 2', CURRENT_DATE - 1) RETURNING id"
+      ))[0].id;
+      const r = await del(passado);
+      expect(r.status).toBe(400);
+      expect(await contar('evento')).toBeGreaterThan(0);
     });
 
     it('excluir: estorna o estoque e remove o evento (cascata remove os recursos)', async () => {

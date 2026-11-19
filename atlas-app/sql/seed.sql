@@ -45,6 +45,45 @@ INSERT INTO organizacao (id, nome_fantasia, caminho_logo)
 VALUES (1, 'Minha Organização', NULL)
 ON CONFLICT (id) DO NOTHING;
 
+-- Evento e cardápio antigos (data já passada), para demonstrar a tela de "ver" (editar/excluir
+-- ficam bloqueados por já terem acontecido) de RF_F9 e RF_F10.
+DO $$
+DECLARE
+    v_arroz_id INTEGER;
+    v_feijao_id INTEGER;
+    v_evento_id INTEGER;
+    v_cardapio_id INTEGER;
+BEGIN
+    SELECT id INTO v_arroz_id FROM produto WHERE nome = 'Arroz 5kg' LIMIT 1;
+    SELECT id INTO v_feijao_id FROM produto WHERE nome = 'Feijão 1kg' LIMIT 1;
+
+    IF NOT EXISTS (SELECT 1 FROM evento WHERE nome = 'Festa Junina') THEN
+        INSERT INTO evento (nome, data, descricao)
+        VALUES ('Festa Junina', CURRENT_DATE - 30, 'Festa junina anual do SOS Criança')
+        RETURNING id INTO v_evento_id;
+
+        IF v_arroz_id IS NOT NULL THEN
+            INSERT INTO alocacao_recurso (evento_id, tipo, produto_id, quantidade)
+            VALUES (v_evento_id, 'PRODUTO', v_arroz_id, 5);
+        END IF;
+        INSERT INTO alocacao_recurso (evento_id, tipo, valor, data_pagamento, descricao)
+        VALUES (v_evento_id, 'FINANCEIRO', 150, CURRENT_DATE - 30, 'Som e decoração');
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM cardapio_diario WHERE data = CURRENT_DATE - 30 AND tipo_refeicao = 'ALMOCO') THEN
+        INSERT INTO cardapio_diario (data, tipo_refeicao)
+        VALUES (CURRENT_DATE - 30, 'ALMOCO')
+        RETURNING id INTO v_cardapio_id;
+
+        IF v_arroz_id IS NOT NULL THEN
+            INSERT INTO item_cardapio (cardapio_id, produto_id, quantidade_utilizada) VALUES (v_cardapio_id, v_arroz_id, 3);
+        END IF;
+        IF v_feijao_id IS NOT NULL THEN
+            INSERT INTO item_cardapio (cardapio_id, produto_id, quantidade_utilizada) VALUES (v_cardapio_id, v_feijao_id, 2);
+        END IF;
+    END IF;
+END $$;
+
 -- Cotações de exemplo para demonstração de RF_F7 (Abrir cotação) e RF_F8 (Aprovar cotação)
 DO $$
 DECLARE

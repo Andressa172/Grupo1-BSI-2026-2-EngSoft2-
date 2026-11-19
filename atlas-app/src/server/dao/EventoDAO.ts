@@ -15,6 +15,8 @@ export interface EventoRegistro {
     produto: string | null;
     quantidade: number | null;
     valor: number | null;
+    dataPagamento: string | null;
+    descricao: string | null;
   }[];
 }
 
@@ -29,11 +31,22 @@ interface LinhaConsulta {
   produto: string | null;
   quantidade: number | null;
   valor: string | null; // numeric vem como string no node-postgres
+  data_pagamento: string | null;
+  recurso_descricao: string | null;
 }
 
 export interface ProdutoAlocado {
   produtoId: number;
   quantidade: number;
+}
+
+export interface DespesaEventoRegistro {
+  id: number;
+  eventoId: number;
+  eventoNome: string;
+  valor: number;
+  dataPagamento: string; // aaaa-mm-dd
+  descricao: string | null;
 }
 
 export class EventoDAO {
@@ -47,17 +60,68 @@ export class EventoDAO {
     return resultado.rows[0].id;
   }
 
-  async inserirRecurso(eventoId: number, recurso: AlocacaoRecurso): Promise<void> {
+  async inserirRecurso(eventoId: number, recurso: AlocacaoRecurso): Promise<number> {
     const dados = recurso.paraLinhaDeDados();
-    await this.executor.query(
-      'INSERT INTO alocacao_recurso (evento_id, tipo, produto_id, quantidade, valor) VALUES ($1, $2, $3, $4, $5)',
-      [eventoId, dados.tipo, dados.produtoId, dados.quantidade, dados.valor]
+    const resultado = await this.executor.query<{ id: number }>(
+      `INSERT INTO alocacao_recurso (evento_id, tipo, produto_id, quantidade, valor, data_pagamento, descricao)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [eventoId, dados.tipo, dados.produtoId, dados.quantidade, dados.valor, dados.dataPagamento, dados.descricao]
     );
+    return resultado.rows[0].id;
+  }
+
+  /** Marca a despesa do recurso financeiro como paga (RF_F6), referenciando a movimentação de caixa gerada. */
+  async marcarRecursoComoPago(id: number, movimentacaoCaixaId: number): Promise<void> {
+    await this.executor.query('UPDATE alocacao_recurso SET pago_em = now(), movimentacao_caixa_id = $2 WHERE id = $1', [
+      id,
+      movimentacaoCaixaId,
+    ]);
+  }
+
+  /**
+   * Despesas de eventos ainda pendentes (não lançadas no caixa). Sem `ateIso`, traz todas as
+   * pendentes (para avisar na tela de Caixa); com `ateIso`, só as já vencidas (<= essa data),
+   * para o lançamento automático assim que chegar o dia (RF_F6).
+   */
+  async listarDespesasPendentes(ateIso?: string): Promise<DespesaEventoRegistro[]> {
+    const condicaoData = ateIso ? 'AND a.data_pagamento <= $1' : '';
+    const resultado = await this.executor.query<{
+      id: number;
+      evento_id: number;
+      evento_nome: string;
+      valor: string;
+      data_pagamento: string;
+      descricao: string | null;
+    }>(
+      `SELECT a.id, a.evento_id, e.nome AS evento_nome, a.valor, to_char(a.data_pagamento, 'YYYY-MM-DD') AS data_pagamento, a.descricao
+         FROM alocacao_recurso a
+         JOIN evento e ON e.id = a.evento_id
+        WHERE a.tipo = 'FINANCEIRO' AND a.pago_em IS NULL ${condicaoData}
+        ORDER BY a.data_pagamento`,
+      ateIso ? [ateIso] : []
+    );
+    return resultado.rows.map((r) => ({
+      id: r.id,
+      eventoId: r.evento_id,
+      eventoNome: r.evento_nome,
+      valor: Number(r.valor),
+      dataPagamento: r.data_pagamento,
+      descricao: r.descricao,
+    }));
   }
 
   async existe(id: number): Promise<boolean> {
     const resultado = await this.executor.query('SELECT id FROM evento WHERE id = $1', [id]);
     return resultado.rows.length > 0;
+  }
+
+  /** Data (aaaa-mm-dd) do evento já gravado, para checar se já aconteceu antes de alterar/excluir. */
+  async buscarData(id: number): Promise<string | null> {
+    const resultado = await this.executor.query<{ data: string }>(
+      "SELECT to_char(data, 'YYYY-MM-DD') AS data FROM evento WHERE id = $1",
+      [id]
+    );
+    return resultado.rows[0]?.data ?? null;
   }
 
   async atualizarEvento(id: number, nome: string, dataIso: string, descricao: string | null): Promise<void> {
@@ -110,7 +174,8 @@ export class EventoDAO {
 
     const resultado = await this.executor.query<LinhaConsulta>(
       `SELECT e.id, e.nome, to_char(e.data, 'YYYY-MM-DD') AS data, e.descricao,
-              a.id AS recurso_id, a.tipo, a.produto_id, p.nome AS produto, a.quantidade, a.valor
+              a.id AS recurso_id, a.tipo, a.produto_id, p.nome AS produto, a.quantidade, a.valor,
+              to_char(a.data_pagamento, 'YYYY-MM-DD') AS data_pagamento, a.descricao AS recurso_descricao
          FROM evento e
          LEFT JOIN alocacao_recurso a ON a.evento_id = e.id
          LEFT JOIN produto p ON p.id = a.produto_id
@@ -134,6 +199,8 @@ export class EventoDAO {
           produto: l.produto,
           quantidade: l.quantidade,
           valor: l.valor !== null ? Number(l.valor) : null,
+          dataPagamento: l.data_pagamento,
+          descricao: l.recurso_descricao,
         });
       }
     }

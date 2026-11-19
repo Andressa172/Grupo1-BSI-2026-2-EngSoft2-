@@ -2,13 +2,13 @@
 // Guarda o cardápio e os alimentos usados, valida tudo e persiste criando o CardapioDiarioDAO
 // com a conexão que recebe do Controller (dentro de uma transação).
 import type { ErrosDeCampo } from '../erros';
-import { ErroNaoEncontrado, ErroValidacao } from '../erros';
+import { ErroNaoEncontrado, ErroRegraDeNegocio, ErroValidacao } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
 import { CardapioDiarioDAO, type CardapioRegistro, type ItemCardapioRegistrado } from '../dao/CardapioDiarioDAO';
 import type { FiltroCardapio } from './FiltroCardapio';
 import { ItemCardapio } from './ItemCardapio';
 import { MovimentacaoEstoque } from './MovimentacaoEstoque';
-import { dataValida, parseData, paraIso, textoSeguro } from './datasBR';
+import { dataValida, hoje, parseData, paraIso, textoSeguro } from './datasBR';
 
 export type TipoRefeicao = 'CAFE_DA_MANHA' | 'ALMOCO' | 'LANCHE' | 'JANTAR';
 export const TIPOS_REFEICAO: TipoRefeicao[] = ['CAFE_DA_MANHA', 'ALMOCO', 'LANCHE', 'JANTAR'];
@@ -57,9 +57,10 @@ export class CardapioDiario {
   validar(): ErrosDeCampo {
     const erros: ErrosDeCampo = {};
 
-    // data no passado é permitida (cadastro retroativo), a tela só avisa - não bloqueia
     if (!dataValida(this.data)) {
       erros.data = 'Data inválida: use o formato dd/mm/aaaa.';
+    } else if (paraIso(this.data) < paraIso(hoje())) {
+      erros.data = 'Data inválida: não é possível cadastrar ou alterar um cardápio para uma data que já passou.';
     }
 
     if (this.tipoRefeicao === '') {
@@ -101,8 +102,12 @@ export class CardapioDiario {
    */
   async alterar(conexao: ExecutorSQL, id: number): Promise<void> {
     const dao = new CardapioDiarioDAO(conexao);
-    if (!(await dao.existe(id))) {
+    const dataAtual = await dao.buscarData(id);
+    if (dataAtual === null) {
       throw new ErroNaoEncontrado('Cardápio não encontrado.');
+    }
+    if (dataAtual < paraIso(hoje())) {
+      throw new ErroRegraDeNegocio('Não é possível alterar um cardápio de uma data que já passou.');
     }
     if (await dao.existeParaDataETipo(paraIso(this.data), this.tipoRefeicao as TipoRefeicao, id)) {
       throw new ErroValidacao('Cardápio duplicado.', {
@@ -117,7 +122,15 @@ export class CardapioDiario {
 
   /** Exclui o cardápio (cascata remove os itens). O Controller já estornou o estoque. */
   static async excluir(conexao: ExecutorSQL, id: number): Promise<void> {
-    if (!(await new CardapioDiarioDAO(conexao).excluirCardapio(id))) {
+    const dao = new CardapioDiarioDAO(conexao);
+    const dataAtual = await dao.buscarData(id);
+    if (dataAtual === null) {
+      throw new ErroNaoEncontrado('Cardápio não encontrado.');
+    }
+    if (dataAtual < paraIso(hoje())) {
+      throw new ErroRegraDeNegocio('Não é possível excluir um cardápio de uma data que já passou.');
+    }
+    if (!(await dao.excluirCardapio(id))) {
       throw new ErroNaoEncontrado('Cardápio não encontrado.');
     }
   }

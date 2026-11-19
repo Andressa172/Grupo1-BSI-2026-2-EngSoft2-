@@ -2,13 +2,15 @@
 // Guarda o evento e os recursos alocados, valida tudo e persiste criando o EventoDAO
 // com a conexão que recebe do Controller (dentro de uma transação).
 import type { ErrosDeCampo } from '../erros';
-import { ErroNaoEncontrado, ErroValidacao } from '../erros';
+import { ErroNaoEncontrado, ErroRegraDeNegocio, ErroValidacao } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
 import { EventoDAO, type EventoRegistro } from '../dao/EventoDAO';
 import type { FiltroEvento } from './FiltroEvento';
 import { AlocacaoRecurso } from './AlocacaoRecurso';
 import { MovimentacaoEstoque } from './MovimentacaoEstoque';
-import { dataValida, parseData, paraIso, textoSeguro } from './datasBR';
+import { Caixa } from './Caixa';
+import { MovimentacaoCaixa } from './MovimentacaoCaixa';
+import { dataValida, hoje, parseData, paraIso, textoSeguro } from './datasBR';
 
 export interface EventoAtributos {
   nome: string;
@@ -32,9 +34,36 @@ export class Evento {
     this.data = parseData(atributos.data);
     this.descricao = textoSeguro(atributos.descricao) || null;
     this.recursosEmFormatoInvalido = atributos.recursos !== undefined && !Array.isArray(atributos.recursos);
-    this.recursos = Array.isArray(atributos.recursos)
+    const recursosBrutos = Array.isArray(atributos.recursos)
       ? atributos.recursos.slice(0, MAXIMO_RECURSOS + 1).map((r) => new AlocacaoRecurso(r))
       : [];
+    this.recursos = Evento.somarProdutosRepetidos(recursosBrutos);
+  }
+
+  // recursos financeiros nunca são somados (cada um é um lançamento próprio, com sua data); só
+  // produtos repetidos (mesmo produtoId) viram uma única linha com a quantidade somada.
+  private static somarProdutosRepetidos(recursos: AlocacaoRecurso[]): AlocacaoRecurso[] {
+    const somados: AlocacaoRecurso[] = [];
+    const indicePorProduto = new Map<number, number>();
+
+    for (const recurso of recursos) {
+      if (recurso.getTipo() === 'PRODUTO' && Number.isInteger(recurso.getProdutoId())) {
+        const indiceExistente = indicePorProduto.get(recurso.getProdutoId());
+        if (indiceExistente !== undefined) {
+          const existente = somados[indiceExistente];
+          somados[indiceExistente] = new AlocacaoRecurso({
+            tipo: 'PRODUTO',
+            produtoId: existente.getProdutoId(),
+            quantidade: existente.getQuantidade() + recurso.getQuantidade(),
+          });
+          continue;
+        }
+        indicePorProduto.set(recurso.getProdutoId(), somados.length);
+      }
+      somados.push(recurso);
+    }
+
+    return somados;
   }
 
   getId(): number | undefined {
@@ -62,9 +91,10 @@ export class Evento {
       erros.nome = 'Nome inválido: no máximo 120 caracteres.';
     }
 
-    // data no passado é permitida (cadastro retroativo), a tela só avisa - não bloqueia
     if (!dataValida(this.data)) {
       erros.data = 'Data inválida: use o formato dd/mm/aaaa.';
+    } else if (paraIso(this.data) < paraIso(hoje())) {
+      erros.data = 'Data inválida: não é possível cadastrar ou alterar um evento para uma data que já passou.';
     }
 
     if (this.recursosEmFormatoInvalido || this.recursos.length === 0) {
@@ -94,8 +124,12 @@ export class Evento {
    */
   async alterar(conexao: ExecutorSQL, id: number): Promise<void> {
     const dao = new EventoDAO(conexao);
-    if (!(await dao.existe(id))) {
+    const dataAtual = await dao.buscarData(id);
+    if (dataAtual === null) {
       throw new ErroNaoEncontrado('Evento não encontrado.');
+    }
+    if (dataAtual < paraIso(hoje())) {
+      throw new ErroRegraDeNegocio('Não é possível alterar um evento que já aconteceu.');
     }
 
     await dao.excluirRecursos(id);
@@ -105,7 +139,15 @@ export class Evento {
 
   /** Exclui o evento (cascata remove os recursos). O Controller já estornou o estoque. */
   static async excluir(conexao: ExecutorSQL, id: number): Promise<void> {
-    if (!(await new EventoDAO(conexao).excluirEvento(id))) {
+    const dao = new EventoDAO(conexao);
+    const dataAtual = await dao.buscarData(id);
+    if (dataAtual === null) {
+      throw new ErroNaoEncontrado('Evento não encontrado.');
+    }
+    if (dataAtual < paraIso(hoje())) {
+      throw new ErroRegraDeNegocio('Não é possível excluir um evento que já aconteceu.');
+    }
+    if (!(await dao.excluirEvento(id))) {
       throw new ErroNaoEncontrado('Evento não encontrado.');
     }
   }
@@ -146,7 +188,69 @@ export class Evento {
         });
       }
     }
-    await new EventoDAO(conexao).inserirRecurso(this.id!, recurso);
+    const recursoId = await new EventoDAO(conexao).inserirRecurso(this.id!, recurso);
+    if (recurso.getTipo() === 'FINANCEIRO') {
+      await Evento.lancarDespesaSeVencida(conexao, recursoId, this.nome, this.id!, recurso.getValor(), recurso.getDataPagamento());
+    }
+  }
+
+  /**
+   * Lança no caixa aberto a saída referente a uma despesa financeira de evento, se a data de
+   * pagamento já chegou (RF_F6, AlocacaoRecurso gera MovimentacaoCaixa). Sem caixa aberto, a
+   * despesa fica pendente até alguém abrir o caixa e a tela ser consultada de novo.
+   */
+  private static async lancarDespesaSeVencida(
+    conexao: ExecutorSQL,
+    recursoId: number,
+    eventoNome: string,
+    eventoId: number,
+    valor: number,
+    dataPagamento: Date
+  ): Promise<void> {
+    if (!dataValida(dataPagamento) || paraIso(dataPagamento) > paraIso(hoje())) return;
+    const caixa = await Caixa.buscarAberto(conexao, true);
+    if (!caixa) return;
+
+    const movimentacao = new MovimentacaoCaixa({
+      caixaId: caixa.getId() as number,
+      tipo: 'SAIDA',
+      formaPag: 'DIGITAL',
+      valor,
+      origem: `Alocação para evento "${eventoNome}" #${eventoId}`,
+    });
+    movimentacao.validar();
+    const salva = await movimentacao.incluir(conexao);
+    await new EventoDAO(conexao).marcarRecursoComoPago(recursoId, salva.getId() as number);
+  }
+
+  /**
+   * Lança no caixa aberto todas as despesas de eventos já vencidas (data de pagamento <= hoje)
+   * que ainda não foram pagas - chamado sempre que a tela de Caixa é consultada (RF_F6).
+   */
+  static async processarDespesasPendentes(conexao: ExecutorSQL): Promise<void> {
+    const dao = new EventoDAO(conexao);
+    const pendentes = await dao.listarDespesasPendentes(paraIso(hoje()));
+    if (pendentes.length === 0) return;
+    const caixa = await Caixa.buscarAberto(conexao, true);
+    if (!caixa) return;
+
+    for (const despesa of pendentes) {
+      const movimentacao = new MovimentacaoCaixa({
+        caixaId: caixa.getId() as number,
+        tipo: 'SAIDA',
+        formaPag: 'DIGITAL',
+        valor: despesa.valor,
+        origem: `Alocação para evento "${despesa.eventoNome}" #${despesa.eventoId}`,
+      });
+      movimentacao.validar();
+      const salva = await movimentacao.incluir(conexao);
+      await dao.marcarRecursoComoPago(despesa.id, salva.getId() as number);
+    }
+  }
+
+  /** Despesas de eventos ainda pendentes de pagamento, para avisar na tela de Caixa. */
+  static async listarDespesasPendentes(conexao: ExecutorSQL) {
+    return new EventoDAO(conexao).listarDespesasPendentes();
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroEvento): Promise<EventoRegistro[]> {

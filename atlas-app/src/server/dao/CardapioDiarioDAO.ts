@@ -41,6 +41,15 @@ export class CardapioDiarioDAO {
     return resultado.rows.length > 0;
   }
 
+  /** Data (aaaa-mm-dd) do cardápio já gravado, para checar se a data já passou antes de alterar/excluir. */
+  async buscarData(id: number): Promise<string | null> {
+    const resultado = await this.executor.query<{ data: string }>(
+      "SELECT to_char(data, 'YYYY-MM-DD') AS data FROM cardapio_diario WHERE id = $1",
+      [id]
+    );
+    return resultado.rows[0]?.data ?? null;
+  }
+
   async inserirCardapio(dataIso: string, tipoRefeicao: TipoRefeicao): Promise<number> {
     const resultado = await this.executor.query<{ id: number }>(
       'INSERT INTO cardapio_diario (data, tipo_refeicao) VALUES ($1, $2) RETURNING id',

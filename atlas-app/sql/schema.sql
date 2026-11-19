@@ -236,6 +236,22 @@ CREATE TABLE IF NOT EXISTS alocacao_recurso (
     )
 );
 
+-- recurso financeiro: data em que a despesa deve ser paga (obrigatória) + descrição livre (opcional)
+ALTER TABLE alocacao_recurso ADD COLUMN IF NOT EXISTS data_pagamento DATE;
+ALTER TABLE alocacao_recurso ADD COLUMN IF NOT EXISTS descricao VARCHAR(300);
+-- quando a despesa foi efetivamente lançada no caixa (RF_F6); null = ainda pendente
+ALTER TABLE alocacao_recurso ADD COLUMN IF NOT EXISTS pago_em TIMESTAMP;
+ALTER TABLE alocacao_recurso ADD COLUMN IF NOT EXISTS movimentacao_caixa_id INTEGER REFERENCES movimentacao_caixa(id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'chk_alocacao_recurso_data_pagamento'
+  ) THEN
+    ALTER TABLE alocacao_recurso ADD CONSTRAINT chk_alocacao_recurso_data_pagamento
+      CHECK (tipo != 'FINANCEIRO' OR data_pagamento IS NOT NULL);
+  END IF;
+END $$;
+
 -- ---------------------------------------------------------------------------
 -- RF_F10 / Cardápio Diário (Andressa)
 -- ---------------------------------------------------------------------------
