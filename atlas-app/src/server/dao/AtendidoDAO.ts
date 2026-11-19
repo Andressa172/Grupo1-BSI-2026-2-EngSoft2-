@@ -2,7 +2,14 @@
 // e nunca concatenam texto vindo do usuário no comando SQL. Recebe a conexão no construtor e os
 // dados por parâmetro, e devolve registros simples (AtendidoRegistro): quem monta o Atendido é o Model.
 import type { ExecutorSQL } from './tipos';
-import type { FiltroAtendido } from '../model/FiltroAtendido';
+
+// critérios da consulta, já prontos: o Model monta a partir do filtro e entrega ao DAO
+export interface CriteriosConsultaAtendido {
+  nome: string;
+  sexo: string;
+  idadeMinima: number | null;
+  idadeMaxima: number | null;
+}
 
 // dados que o Model passa para gravar (datas em aaaa-mm-dd)
 export interface AtendidoDados {
@@ -119,24 +126,24 @@ export class AtendidoDAO {
   }
 
   // filtro vazio traz todos; os 3 filtros (nome, sexo, idade) se combinam com AND
-  async consultar(filtro: FiltroAtendido): Promise<AtendidoRegistro[]> {
+  async consultar(criterios: CriteriosConsultaAtendido): Promise<AtendidoRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];
 
-    if (filtro.getNome() !== '') {
-      parametros.push(`%${escaparCuringas(semAcento(filtro.getNome()))}%`);
+    if (criterios.nome !== '') {
+      parametros.push(`%${escaparCuringas(semAcento(criterios.nome))}%`);
       condicoes.push(`${SEM_ACENTO_SQL('nome')} LIKE $${parametros.length}`);
     }
-    if (filtro.getSexo() !== '') {
-      parametros.push(filtro.getSexo());
+    if (criterios.sexo !== '') {
+      parametros.push(criterios.sexo);
       condicoes.push(`sexo = $${parametros.length}`);
     }
-    const minima = filtro.getIdadeMinima();
+    const minima = criterios.idadeMinima;
     if (minima !== null) {
       parametros.push(minima);
       condicoes.push(`EXTRACT(YEAR FROM age(CURRENT_DATE, data_nascimento)) >= $${parametros.length}`);
     }
-    const maxima = filtro.getIdadeMaxima();
+    const maxima = criterios.idadeMaxima;
     if (maxima !== null) {
       parametros.push(maxima);
       condicoes.push(`EXTRACT(YEAR FROM age(CURRENT_DATE, data_nascimento)) <= $${parametros.length}`);

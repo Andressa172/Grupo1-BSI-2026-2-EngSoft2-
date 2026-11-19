@@ -166,7 +166,12 @@ export class Atendido {
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroAtendido): Promise<Atendido[]> {
-    const registros = await new AtendidoDAO(conexao).consultar(filtro);
+    const registros = await new AtendidoDAO(conexao).consultar({
+      nome: filtro.getNome(),
+      sexo: filtro.getSexo(),
+      idadeMinima: filtro.getIdadeMinima(),
+      idadeMaxima: filtro.getIdadeMaxima(),
+    });
     return registros.map((registro) => Atendido.doRegistro(registro));
   }
 

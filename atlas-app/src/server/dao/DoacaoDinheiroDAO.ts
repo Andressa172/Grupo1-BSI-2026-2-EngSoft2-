@@ -1,6 +1,13 @@
 // DAO - DoacaoDinheiro (RF_F11). Só executa SQL, sempre com parâmetros.
 import type { ExecutorSQL } from './tipos';
-import type { FiltroDoacao } from '../model/FiltroDoacao';
+
+// critérios da consulta, já prontos: o Model monta a partir do filtro e entrega ao DAO
+export interface CriteriosConsultaDoacao {
+  doadorId: number | null;
+  somenteAnonimos: boolean;
+  dataInicialIso: string | null;
+  dataFinalIso: string | null;
+}
 
 export interface DoacaoDinheiroRegistro {
   id: number;
@@ -32,22 +39,22 @@ export class DoacaoDinheiroDAO {
     return resultado.rows[0].id;
   }
 
-  async consultar(filtro: FiltroDoacao): Promise<DoacaoDinheiroRegistro[]> {
+  async consultar(criterios: CriteriosConsultaDoacao): Promise<DoacaoDinheiroRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];
 
-    const doadorId = filtro.getDoadorId();
+    const doadorId = criterios.doadorId;
     if (doadorId !== null) {
       parametros.push(doadorId);
       condicoes.push(`d.doador_id = $${parametros.length}`);
     }
-    if (filtro.isSomenteAnonimos()) condicoes.push('doa.anonimo = true');
-    const de = filtro.getDataInicial();
+    if (criterios.somenteAnonimos) condicoes.push('doa.anonimo = true');
+    const de = criterios.dataInicialIso;
     if (de !== null) {
       parametros.push(de);
       condicoes.push(`d.data::date >= $${parametros.length}::date`);
     }
-    const ate = filtro.getDataFinal();
+    const ate = criterios.dataFinalIso;
     if (ate !== null) {
       parametros.push(ate);
       condicoes.push(`d.data::date <= $${parametros.length}::date`);

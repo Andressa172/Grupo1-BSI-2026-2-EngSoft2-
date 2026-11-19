@@ -197,6 +197,12 @@ describe('Hierarquia MVC nas doações (RF_F3 e RF_F11): Model não instancia Mo
   });
 });
 
+describe('DAOs de RF_B1, RF_F3 e RF_F11: só recebem valores simples (nenhum import de model/)', () => {
+  it.each(['AtendidoDAO', 'DoacaoDinheiroDAO', 'DoacaoProdutoDAO'])('dao/%s.ts não importa nada de model/ (nem como tipo)', (nome) => {
+    expect(ler(`server/dao/${nome}.ts`)).not.toMatch(/from\s+['"][^'"]*\/model\//);
+  });
+});
+
 describe('Regras dos slides MVC/DAO para Cotações (RF_F7 e RF_F8)', () => {
   const abrirCtrl = ler('server/AbrirCotacaoController.ts');
   const aprovarCtrl = ler('server/AprovarCotacaoController.ts');

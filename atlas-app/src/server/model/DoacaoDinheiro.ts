@@ -96,7 +96,12 @@ export class DoacaoDinheiro {
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroDoacao): Promise<DoacaoDinheiroRegistro[]> {
-    return new DoacaoDinheiroDAO(conexao).consultar(filtro);
+    return new DoacaoDinheiroDAO(conexao).consultar({
+      doadorId: filtro.getDoadorId(),
+      somenteAnonimos: filtro.isSomenteAnonimos(),
+      dataInicialIso: filtro.getDataInicial(),
+      dataFinalIso: filtro.getDataFinal(),
+    });
   }
 
   paraLinhaDeDados() {
