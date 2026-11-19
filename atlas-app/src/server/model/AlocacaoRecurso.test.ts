@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { AlocacaoRecurso } from './AlocacaoRecurso';
 
+function amanha(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
 describe('Model AlocacaoRecurso - RF_F9', () => {
   it('aceita um recurso do tipo produto válido', () => {
     const recurso = new AlocacaoRecurso({ tipo: 'PRODUTO', produtoId: 1, quantidade: 5 });
@@ -8,8 +14,23 @@ describe('Model AlocacaoRecurso - RF_F9', () => {
   });
 
   it('aceita um recurso financeiro válido', () => {
-    const recurso = new AlocacaoRecurso({ tipo: 'FINANCEIRO', valor: 150 });
+    const recurso = new AlocacaoRecurso({ tipo: 'FINANCEIRO', valor: 150, dataPagamento: amanha() });
     expect(recurso.validar()).toEqual({});
+  });
+
+  it('rejeita recurso financeiro sem data de pagamento', () => {
+    const recurso = new AlocacaoRecurso({ tipo: 'FINANCEIRO', valor: 150 });
+    expect(recurso.validar()).toHaveProperty('dataPagamento');
+  });
+
+  it('aceita descrição opcional para recurso financeiro e leva no paraLinhaDeDados', () => {
+    const comDescricao = new AlocacaoRecurso({ tipo: 'FINANCEIRO', valor: 150, dataPagamento: amanha(), descricao: 'Som e luz' });
+    expect(comDescricao.validar()).toEqual({});
+    expect(comDescricao.paraLinhaDeDados().descricao).toBe('Som e luz');
+
+    const semDescricao = new AlocacaoRecurso({ tipo: 'FINANCEIRO', valor: 150, dataPagamento: amanha() });
+    expect(semDescricao.validar()).toEqual({});
+    expect(semDescricao.paraLinhaDeDados().descricao).toBeNull();
   });
 
   it('rejeita tipo ausente ou inválido', () => {
@@ -41,7 +62,8 @@ describe('Model AlocacaoRecurso - RF_F9', () => {
   it('paraLinhaDeDados só leva produtoId/quantidade para PRODUTO e valor para FINANCEIRO', () => {
     const produto = new AlocacaoRecurso({ tipo: 'PRODUTO', produtoId: 1, quantidade: 3 }).paraLinhaDeDados();
     expect(produto.valor).toBeNull();
-    const financeiro = new AlocacaoRecurso({ tipo: 'FINANCEIRO', valor: 50 }).paraLinhaDeDados();
+    expect(produto.dataPagamento).toBeNull();
+    const financeiro = new AlocacaoRecurso({ tipo: 'FINANCEIRO', valor: 50, dataPagamento: amanha() }).paraLinhaDeDados();
     expect(financeiro.produtoId).toBeNull();
     expect(financeiro.quantidade).toBeNull();
   });

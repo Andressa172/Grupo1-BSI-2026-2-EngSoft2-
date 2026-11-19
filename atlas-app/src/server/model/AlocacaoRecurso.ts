@@ -1,6 +1,6 @@
 // Model - AlocacaoRecurso: um recurso (produto ou financeiro) alocado para um evento (RF_F9).
 import type { ErrosDeCampo } from '../erros';
-import { textoSeguro } from './datasBR';
+import { dataValida, parseData, paraIso, textoSeguro } from './datasBR';
 
 export type TipoRecurso = 'PRODUTO' | 'FINANCEIRO';
 const ID_MAXIMO = 2_147_483_647;
@@ -10,6 +10,9 @@ export class AlocacaoRecurso {
   private readonly produtoId: number;
   private readonly quantidade: number;
   private readonly valor: number;
+  // só para recurso financeiro: dia em que a despesa deve ser paga (obrigatório) e descrição livre (opcional)
+  private readonly dataPagamento: Date;
+  private readonly descricao: string | null;
 
   constructor(dados: unknown) {
     const d = typeof dados === 'object' && dados !== null ? (dados as Record<string, unknown>) : {};
@@ -24,6 +27,8 @@ export class AlocacaoRecurso {
         ? Number(d.quantidade)
         : NaN;
     this.valor = typeof d.valor === 'number' || (typeof d.valor === 'string' && d.valor.trim() !== '') ? Number(d.valor) : NaN;
+    this.dataPagamento = parseData(d.dataPagamento);
+    this.descricao = textoSeguro(d.descricao) || null;
   }
 
   getTipo(): TipoRecurso | '' {
@@ -40,6 +45,14 @@ export class AlocacaoRecurso {
 
   getValor(): number {
     return this.valor;
+  }
+
+  getDataPagamento(): Date {
+    return this.dataPagamento;
+  }
+
+  getDescricao(): string | null {
+    return this.descricao;
   }
 
   validar(): ErrosDeCampo {
@@ -61,6 +74,9 @@ export class AlocacaoRecurso {
       if (!Number.isFinite(this.valor) || this.valor <= 0) {
         erros.valor = 'O valor deve ser maior que zero.';
       }
+      if (!dataValida(this.dataPagamento)) {
+        erros.dataPagamento = 'Data de pagamento inválida: use o formato dd/mm/aaaa.';
+      }
     }
 
     return erros;
@@ -72,6 +88,8 @@ export class AlocacaoRecurso {
       produtoId: this.tipo === 'PRODUTO' ? this.produtoId : null,
       quantidade: this.tipo === 'PRODUTO' ? this.quantidade : null,
       valor: this.tipo === 'FINANCEIRO' ? this.valor : null,
+      dataPagamento: this.tipo === 'FINANCEIRO' && dataValida(this.dataPagamento) ? paraIso(this.dataPagamento) : null,
+      descricao: this.tipo === 'FINANCEIRO' ? this.descricao : null,
     };
   }
 }

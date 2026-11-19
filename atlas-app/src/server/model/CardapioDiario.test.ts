@@ -20,9 +20,9 @@ describe('Model CardapioDiario - RF_F10 Criar Cardápio Diário', () => {
     expect(cardapio.validar()).toHaveProperty('data');
   });
 
-  it('permite data anterior à atual (cadastro retroativo; a tela só avisa)', () => {
+  it('rejeita data anterior à atual (não pode cadastrar/alterar cardápio de data que já passou)', () => {
     const cardapio = new CardapioDiario({ data: '01/01/2000', tipoRefeicao: 'ALMOCO', itens: [ITEM_VALIDO] });
-    expect(cardapio.validar()).not.toHaveProperty('data');
+    expect(cardapio.validar()).toHaveProperty('data');
   });
 
   it('rejeita tipo de refeição ausente ou inválido', () => {

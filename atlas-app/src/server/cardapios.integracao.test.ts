@@ -89,9 +89,9 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Cardápios - integração (PostgreSQL)', (
     expect(await contar('cardapio_diario')).toBe(antes.c);
   });
 
-  it('data no passado é permitida (cadastro retroativo)', async () => {
+  it('data no passado é rejeitada (não pode cadastrar cardápio de data que já passou)', async () => {
     const r = await rota.POST(json({ data: '01/01/2000', tipoRefeicao: 'CAFE_DA_MANHA', itens: [{ produtoId: arroz, quantidadeUtilizada: 1 }] }));
-    expect(r.status).toBe(201);
+    expect(r.status).toBe(400);
   });
 
   it('consulta com filtro de tipo de refeição e período', async () => {
@@ -158,6 +158,23 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Cardápios - integração (PostgreSQL)', (
 
     it('excluir cardápio inexistente -> 404', async () => {
       expect((await del(999999)).status).toBe(404);
+    });
+
+    it('não permite alterar cardápio de uma data que já passou', async () => {
+      const passado = (await sql<{ id: number }>(
+        "INSERT INTO cardapio_diario (data, tipo_refeicao) VALUES (CURRENT_DATE - 1, 'JANTAR') RETURNING id"
+      ))[0].id;
+      const r = await put(passado, { data: amanha(), tipoRefeicao: 'JANTAR', itens: [{ produtoId: arroz, quantidadeUtilizada: 1 }] });
+      expect(r.status).toBe(400);
+    });
+
+    it('não permite excluir cardápio de uma data que já passou', async () => {
+      const passado = (await sql<{ id: number }>(
+        "INSERT INTO cardapio_diario (data, tipo_refeicao) VALUES (CURRENT_DATE - 1, 'LANCHE') RETURNING id"
+      ))[0].id;
+      const r = await del(passado);
+      expect(r.status).toBe(400);
+      expect(await contar('cardapio_diario')).toBeGreaterThan(0);
     });
   });
 });

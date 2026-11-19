@@ -248,11 +248,13 @@ export function LoadingRows({ colSpan, rows = 3 }: { colSpan: number; rows?: num
 export function IconAction({
   label,
   danger = false,
+  disabled = false,
   onClick,
   children,
 }: {
   label: string;
   danger?: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -260,10 +262,13 @@ export function IconAction({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
       title={label}
-      className={`rounded-md p-2 text-foreground/50 transition-colors cursor-pointer hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
-        danger ? 'hover:text-primary' : 'hover:text-foreground'
+      className={`rounded-md p-2 text-foreground/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+        disabled
+          ? 'cursor-not-allowed opacity-40'
+          : `cursor-pointer hover:bg-foreground/5 ${danger ? 'hover:text-primary' : 'hover:text-foreground'}`
       }`}
     >
       {children}

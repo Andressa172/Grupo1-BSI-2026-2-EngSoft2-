@@ -12,7 +12,7 @@ import { Plus, Trash2, Eye, ChevronDown, TriangleAlert, Pencil } from 'lucide-re
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Modal, Table, THead, EmptyRow, LoadingRows, IconAction, RowActions } from '@/components/app/ui';
 import { CampoData } from '@/view/CampoData';
-import { avisoDataRetroativa, avisoVencimentoNaData, diasParaVencer, formatarDataBR, produtosProximosDoVencimento } from '@/view/vencimento';
+import { avisoVencimentoNaData, diasParaVencer, formatarDataBR, produtosProximosDoVencimento } from '@/view/vencimento';
 
 interface Produto {
   id: number;
@@ -57,6 +57,14 @@ const LABEL_REFEICAO: Record<string, string> = {
 
 function formatarData(data: string) {
   return new Date(data + 'T00:00:00').toLocaleDateString('pt-BR');
+}
+// "aaaa-mm-dd" (banco) é comparável como texto com a data de hoje no mesmo formato
+function hojeIso(): string {
+  const h = new Date();
+  return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`;
+}
+function jaPassou(dataIso: string): boolean {
+  return dataIso.slice(0, 10) < hojeIso();
 }
 // aaaa-mm-dd (banco) -> dd/mm/aaaa (campo de data da tela)
 function paraDataCampo(iso: string) {
@@ -190,6 +198,7 @@ export default function CardapiosPage() {
   }
 
   function abrirEdicao(cardapio: CardapioApi) {
+    if (jaPassou(cardapio.data)) return;
     setCardapioEditando(cardapio);
     setDadosCardapio({ data: paraDataCampo(cardapio.data), tipoRefeicao: cardapio.tipoRefeicao });
     setItens(
@@ -238,6 +247,7 @@ export default function CardapiosPage() {
   }
 
   async function excluir(cardapio: CardapioApi) {
+    if (jaPassou(cardapio.data)) return;
     if (!confirm(`Excluir o cardápio de ${formatarData(cardapio.data)}? Os alimentos usados serão estornados ao estoque.`)) return;
     const resposta = await fetch(`/api/cardapios/${cardapio.id}`, { method: 'DELETE' });
     if (!resposta.ok) {
@@ -250,12 +260,7 @@ export default function CardapiosPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <p className="text-sm text-foreground/50 max-w-xl">
-          Cardápio diário (RF_F10): registre os alimentos usados em cada refeição. Só é permitido
-          incluir alimentos (produtos da categoria &quot;Alimento&quot;) — material escolar e outras
-          categorias não entram no cardápio.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:justify-end">
         <Button variant="primary" size="md" onClick={abrirNovo} iconLeft={<Plus size={16} />}>
           Novo cardápio
         </Button>
@@ -305,30 +310,42 @@ export default function CardapiosPage() {
             <EmptyRow colSpan={COLUNAS.length} label="Nenhum cardápio encontrado." />
           )}
           {estado === 'pronto' &&
-            cardapios.map((cardapio) => (
-              <tr key={cardapio.id} className="border-b border-border-line/10 last:border-0">
-                <td className="hidden sm:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap tabular-nums">
-                  {formatarData(cardapio.data)}
-                </td>
-                <td className="px-4 py-3 font-medium">{LABEL_REFEICAO[cardapio.tipoRefeicao] ?? cardapio.tipoRefeicao}</td>
-                <td className="hidden md:table-cell px-4 py-3 text-foreground/70">
-                  {cardapio.itens.map((i) => i.produto).join(', ')}
-                </td>
-                <td className="px-2 py-2 sm:px-4">
-                  <RowActions>
-                    <IconAction label={`Ver cardápio de ${formatarData(cardapio.data)}`} onClick={() => setVerCardapio(cardapio)}>
-                      <Eye size={16} />
-                    </IconAction>
-                    <IconAction label={`Editar cardápio de ${formatarData(cardapio.data)}`} onClick={() => abrirEdicao(cardapio)}>
-                      <Pencil size={16} />
-                    </IconAction>
-                    <IconAction label={`Excluir cardápio de ${formatarData(cardapio.data)}`} danger onClick={() => excluir(cardapio)}>
-                      <Trash2 size={16} />
-                    </IconAction>
-                  </RowActions>
-                </td>
-              </tr>
-            ))}
+            cardapios.map((cardapio) => {
+              const passou = jaPassou(cardapio.data);
+              return (
+                <tr key={cardapio.id} className="border-b border-border-line/10 last:border-0">
+                  <td className="hidden sm:table-cell px-4 py-3 text-foreground/70 whitespace-nowrap tabular-nums">
+                    {formatarData(cardapio.data)}
+                  </td>
+                  <td className="px-4 py-3 font-medium">{LABEL_REFEICAO[cardapio.tipoRefeicao] ?? cardapio.tipoRefeicao}</td>
+                  <td className="hidden md:table-cell px-4 py-3 text-foreground/70">
+                    {cardapio.itens.map((i) => i.produto).join(', ')}
+                  </td>
+                  <td className="px-2 py-2 sm:px-4">
+                    <RowActions>
+                      <IconAction label={`Ver cardápio de ${formatarData(cardapio.data)}`} onClick={() => setVerCardapio(cardapio)}>
+                        <Eye size={16} />
+                      </IconAction>
+                      <IconAction
+                        label={passou ? 'Data já passou, não é possível editar' : `Editar cardápio de ${formatarData(cardapio.data)}`}
+                        disabled={passou}
+                        onClick={() => abrirEdicao(cardapio)}
+                      >
+                        <Pencil size={16} />
+                      </IconAction>
+                      <IconAction
+                        label={passou ? 'Data já passou, não é possível excluir' : `Excluir cardápio de ${formatarData(cardapio.data)}`}
+                        danger
+                        disabled={passou}
+                        onClick={() => excluir(cardapio)}
+                      >
+                        <Trash2 size={16} />
+                      </IconAction>
+                    </RowActions>
+                  </td>
+                </tr>
+              );
+            })}
         </tbody>
       </Table>
 
@@ -337,14 +354,13 @@ export default function CardapiosPage() {
         title={cardapioEditando ? 'Editar cardápio' : 'Novo cardápio'}
         onClose={() => setModalAberto(false)}
       >
-        <form onSubmit={salvar} className="flex flex-col gap-4">
+        <form onSubmit={salvar} noValidate className="flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Field label="Data do cardápio *">
                 <CampoData value={dadosCardapio.data} onChange={(t) => setDadosCardapio({ ...dadosCardapio, data: t })} className={destaque(erros.data)} />
               </Field>
               <MensagemErro texto={erros.data} />
-              <Aviso texto={avisoDataRetroativa(dadosCardapio.data)} />
             </div>
             <Field label="Tipo de refeição *">
               <Select

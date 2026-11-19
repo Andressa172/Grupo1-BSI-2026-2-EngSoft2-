@@ -8,7 +8,7 @@ function amanha(): string {
 }
 
 const RECURSO_PRODUTO = { tipo: 'PRODUTO', produtoId: 1, quantidade: 2 };
-const RECURSO_FINANCEIRO = { tipo: 'FINANCEIRO', valor: 100 };
+const RECURSO_FINANCEIRO = { tipo: 'FINANCEIRO', valor: 100, dataPagamento: amanha() };
 
 describe('Model Evento - RF_F9 Alocar Recursos para Eventos', () => {
   it('aceita um evento válido com recurso produto', () => {
@@ -31,9 +31,9 @@ describe('Model Evento - RF_F9 Alocar Recursos para Eventos', () => {
     expect(evento.validar()).toHaveProperty('data');
   });
 
-  it('permite data anterior à atual (cadastro retroativo; a tela só avisa)', () => {
+  it('rejeita data anterior à atual (não pode cadastrar/alterar evento que já aconteceu)', () => {
     const evento = new Evento({ nome: 'Evento', data: '01/01/2000', recursos: [RECURSO_PRODUTO] });
-    expect(evento.validar()).not.toHaveProperty('data');
+    expect(evento.validar()).toHaveProperty('data');
   });
 
   it('rejeita evento sem recursos', () => {
@@ -61,5 +61,37 @@ describe('Model Evento - RF_F9 Alocar Recursos para Eventos', () => {
     expect(erros).toHaveProperty('recurso.0.produtoId');
     expect(erros).toHaveProperty('recurso.2.produtoId');
     expect(erros).not.toHaveProperty('recurso.1.valor');
+  });
+
+  it('soma a quantidade de produtos repetidos em uma única linha', () => {
+    const evento = new Evento({
+      nome: 'Evento',
+      data: amanha(),
+      recursos: [
+        { tipo: 'PRODUTO', produtoId: 1, quantidade: 2 },
+        { tipo: 'PRODUTO', produtoId: 1, quantidade: 3 },
+        { tipo: 'PRODUTO', produtoId: 2, quantidade: 5 },
+      ],
+    });
+    const recursos = evento.getRecursos();
+    expect(recursos).toHaveLength(2);
+    expect(recursos[0].getProdutoId()).toBe(1);
+    expect(recursos[0].getQuantidade()).toBe(5);
+    expect(recursos[1].getProdutoId()).toBe(2);
+    expect(recursos[1].getQuantidade()).toBe(5);
+  });
+
+  it('não soma recursos financeiros entre si (cada um é um lançamento próprio)', () => {
+    const evento = new Evento({
+      nome: 'Evento',
+      data: amanha(),
+      recursos: [RECURSO_FINANCEIRO, RECURSO_FINANCEIRO],
+    });
+    expect(evento.getRecursos()).toHaveLength(2);
+  });
+
+  it('rejeita recurso financeiro sem data de pagamento', () => {
+    const evento = new Evento({ nome: 'Evento', data: amanha(), recursos: [{ tipo: 'FINANCEIRO', valor: 100 }] });
+    expect(evento.validar()).toHaveProperty('recurso.0.dataPagamento');
   });
 });

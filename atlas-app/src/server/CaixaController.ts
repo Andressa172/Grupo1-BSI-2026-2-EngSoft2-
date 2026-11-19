@@ -2,6 +2,7 @@
 import { Database } from './db/Database';
 import type { ExecutorSQL } from './dao/tipos';
 import { Caixa, deCentavos, paraCentavos, parseSaldoValido } from './model/Caixa';
+import { Evento } from './model/Evento';
 import {
   MovimentacaoCaixa,
   type FormaPagamentoCaixa,
@@ -170,13 +171,24 @@ export class CaixaController {
 
   /** Retorna o caixa aberto (com movimentações e saldos) e o histórico de caixas. */
   async obterEstadoAtual() {
+    // lança no caixa aberto as despesas de eventos cuja data de pagamento já chegou (RF_F6);
+    // sem caixa aberto, elas continuam pendentes e aparecem no aviso abaixo
+    await this.database.comTransacao(async (cliente) => {
+      await Evento.processarDespesasPendentes(cliente as unknown as ExecutorSQL);
+    });
+
     const conexao = this.database as unknown as ExecutorSQL;
-    const [caixaAberto, todos] = await Promise.all([Caixa.buscarAberto(conexao, false), Caixa.listarTodos(conexao)]);
+    const [caixaAberto, todos, despesasEventosPendentes] = await Promise.all([
+      Caixa.buscarAberto(conexao, false),
+      Caixa.listarTodos(conexao),
+      Evento.listarDespesasPendentes(conexao),
+    ]);
 
     if (!caixaAberto || !caixaAberto.getId()) {
       return {
         caixaAberto: null,
         caixas: todos.map((c) => c.paraLinhaDeDados()),
+        despesasEventosPendentes,
       };
     }
 
@@ -190,6 +202,7 @@ export class CaixaController {
         saldosAtuais,
       },
       caixas: todos.map((c) => c.paraLinhaDeDados()),
+      despesasEventosPendentes,
     };
   }
 }

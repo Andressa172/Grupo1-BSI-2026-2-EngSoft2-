@@ -7,12 +7,12 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2, ChevronDown, TriangleAlert, Pencil } from 'lucide-react';
+import { Plus, Trash2, Eye, ChevronDown, TriangleAlert, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea, Modal, Card, Table, THead, EmptyRow, LoadingRows, IconAction, RowActions } from '@/components/app/ui';
 import { mascaraNome } from '@/view/mascaras';
 import { CampoData } from '@/view/CampoData';
-import { avisoDataRetroativa, avisoVencimentoNaData, diasParaVencer, formatarDataBR, produtosProximosDoVencimento } from '@/view/vencimento';
+import { avisoVencimentoNaData, diasParaVencer, formatarDataBR, produtosProximosDoVencimento } from '@/view/vencimento';
 
 interface Produto {
   id: number;
@@ -29,6 +29,8 @@ interface RecursoApi {
   produto: string | null;
   quantidade: number | null;
   valor: number | null;
+  dataPagamento: string | null;
+  descricao: string | null;
 }
 
 interface EventoApi {
@@ -45,13 +47,28 @@ interface DadosFiltroEvento {
   dataFinal: string;
 }
 
-type LinhaRecursoForm = { tipo: 'PRODUTO' | 'FINANCEIRO'; produtoId: string; quantidade: string; valor: string };
+type LinhaRecursoForm = {
+  tipo: 'PRODUTO' | 'FINANCEIRO';
+  produtoId: string;
+  quantidade: string;
+  valor: string;
+  dataPagamento: string;
+  descricao: string;
+};
 
-const RECURSO_VAZIO: LinhaRecursoForm = { tipo: 'PRODUTO', produtoId: '', quantidade: '', valor: '' };
+const RECURSO_VAZIO: LinhaRecursoForm = { tipo: 'PRODUTO', produtoId: '', quantidade: '', valor: '', dataPagamento: '', descricao: '' };
 const FILTRO_VAZIO: DadosFiltroEvento = { nome: '', dataInicial: '', dataFinal: '' };
 
 function formatarData(data: string) {
   return new Date(data + 'T00:00:00').toLocaleDateString('pt-BR');
+}
+// "aaaa-mm-dd" (banco) é comparável como texto com a data de hoje no mesmo formato
+function hojeIso(): string {
+  const h = new Date();
+  return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`;
+}
+function jaAconteceu(dataIso: string): boolean {
+  return dataIso.slice(0, 10) < hojeIso();
 }
 // aaaa-mm-dd (banco) -> dd/mm/aaaa (campo de data da tela)
 function paraDataCampo(iso: string) {
@@ -117,6 +134,9 @@ export default function EventosPage() {
   const [salvando, setSalvando] = useState(false);
   const [mostrarVencendo, setMostrarVencendo] = useState(false);
 
+  // visualização (só leitura) - usada também para eventos que já aconteceram (editar/excluir ficam desabilitados)
+  const [verEvento, setVerEvento] = useState<EventoApi | null>(null);
+
   const produtosVencendo = produtosProximosDoVencimento(produtos);
 
   const carregar = useCallback(async (f: DadosFiltroEvento): Promise<Record<string, string>> => {
@@ -176,6 +196,7 @@ export default function EventosPage() {
   }
 
   function abrirEdicao(evento: EventoApi) {
+    if (jaAconteceu(evento.data)) return;
     setEventoEditando(evento);
     setDadosEvento({ nome: evento.nome, data: paraDataCampo(evento.data), descricao: evento.descricao ?? '' });
     setRecursos(
@@ -185,6 +206,8 @@ export default function EventosPage() {
             produtoId: r.produtoId !== null ? String(r.produtoId) : '',
             quantidade: r.quantidade !== null ? String(r.quantidade) : '',
             valor: r.valor !== null ? String(r.valor) : '',
+            dataPagamento: r.dataPagamento ? paraDataCampo(r.dataPagamento) : '',
+            descricao: r.descricao ?? '',
           }))
         : [{ ...RECURSO_VAZIO }]
     );
@@ -192,8 +215,25 @@ export default function EventosPage() {
     setModalAberto(true);
   }
 
+  // quando o recurso é produto e o produto escolhido já está em outra linha, soma a quantidade
+  // na linha existente e remove a linha atual - evita ter "Feijão" duas vezes na lista. Só mescla
+  // depois que a quantidade da linha nova já foi digitada, senão a linha some antes de dar tempo.
   function atualizarRecurso(indice: number, mudanca: Partial<LinhaRecursoForm>) {
-    setRecursos((atual) => atual.map((r, i) => (i === indice ? { ...r, ...mudanca } : r)));
+    setRecursos((atual) => {
+      const novo = atual.map((r, i) => (i === indice ? { ...r, ...mudanca } : r));
+      const linha = novo[indice];
+      const mudouCampoRelevante = mudanca.produtoId !== undefined || mudanca.quantidade !== undefined;
+      if (mudouCampoRelevante && linha.tipo === 'PRODUTO' && linha.produtoId !== '' && linha.quantidade !== '') {
+        const outroIndice = novo.findIndex((r, i) => i !== indice && r.tipo === 'PRODUTO' && r.produtoId === linha.produtoId);
+        if (outroIndice !== -1) {
+          const quantidadeSomada = (Number(novo[outroIndice].quantidade) || 0) + (Number(linha.quantidade) || 0);
+          return novo
+            .map((r, i) => (i === outroIndice ? { ...r, quantidade: String(quantidadeSomada) } : r))
+            .filter((_, i) => i !== indice);
+        }
+      }
+      return novo;
+    });
   }
 
   async function salvar(e: React.FormEvent) {
@@ -208,7 +248,12 @@ export default function EventosPage() {
         recursos: recursos.map((r) =>
           r.tipo === 'PRODUTO'
             ? { tipo: 'PRODUTO', produtoId: Number(r.produtoId) || null, quantidade: Number(r.quantidade) || null }
-            : { tipo: 'FINANCEIRO', valor: Number(r.valor) || null }
+            : {
+                tipo: 'FINANCEIRO',
+                valor: Number(r.valor) || null,
+                dataPagamento: r.dataPagamento || null,
+                descricao: r.descricao || null,
+              }
         ),
       };
 
@@ -230,6 +275,7 @@ export default function EventosPage() {
   }
 
   async function excluir(evento: EventoApi) {
+    if (jaAconteceu(evento.data)) return;
     if (!confirm(`Excluir o evento "${evento.nome}"? O estoque alocado será estornado.`)) return;
     const resposta = await fetch(`/api/eventos/${evento.id}`, { method: 'DELETE' });
     if (!resposta.ok) {
@@ -246,11 +292,7 @@ export default function EventosPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <p className="text-sm text-foreground/50 max-w-xl">
-          Alocação de recursos para eventos (RF_F9): registre o evento e os recursos necessários — produtos
-          do estoque ou valores financeiros. O sistema verifica a disponibilidade antes de confirmar.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:justify-end">
         <Button variant="primary" size="md" onClick={abrirNovo} iconLeft={<Plus size={16} />}>
           Novo Evento
         </Button>
@@ -296,34 +338,51 @@ export default function EventosPage() {
             {estado === 'erro' && <EmptyRow colSpan={4} label="Não foi possível carregar os eventos." />}
             {estado === 'pronto' && eventos.length === 0 && <EmptyRow colSpan={4} label="Nenhum evento encontrado." />}
             {estado === 'pronto' &&
-              eventos.map((evento) => (
-                <tr key={evento.id} className="border-b border-border-line/10 last:border-0 align-top">
-                  <td className="px-4 py-3 text-foreground/60 whitespace-nowrap">{formatarData(evento.data)}</td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium">{evento.nome}</p>
-                    {evento.descricao && <p className="text-xs text-foreground/40">{evento.descricao}</p>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <ul className="space-y-1">
-                      {evento.recursos.map((r) => (
-                        <li key={r.id} className="text-foreground/70">
-                          {r.tipo === 'PRODUTO' ? `${r.produto ?? nomeProduto(r.produtoId)} — ${r.quantidade}` : `Financeiro — ${formatarBRL(r.valor ?? 0)}`}
-                        </li>
-                      ))}
-                    </ul>
-                  </td>
-                  <td className="px-4 py-3">
-                    <RowActions>
-                      <IconAction label={`Editar ${evento.nome}`} onClick={() => abrirEdicao(evento)}>
-                        <Pencil size={16} />
-                      </IconAction>
-                      <IconAction label={`Excluir ${evento.nome}`} danger onClick={() => excluir(evento)}>
-                        <Trash2 size={16} />
-                      </IconAction>
-                    </RowActions>
-                  </td>
-                </tr>
-              ))}
+              eventos.map((evento) => {
+                const passado = jaAconteceu(evento.data);
+                return (
+                  <tr key={evento.id} className="border-b border-border-line/10 last:border-0 align-top">
+                    <td className="px-4 py-3 text-foreground/60 whitespace-nowrap">{formatarData(evento.data)}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium">{evento.nome}</p>
+                      {evento.descricao && <p className="text-xs text-foreground/40">{evento.descricao}</p>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <ul className="space-y-1">
+                        {evento.recursos.map((r) => (
+                          <li key={r.id} className="text-foreground/70">
+                            {r.tipo === 'PRODUTO'
+                              ? `${r.produto ?? nomeProduto(r.produtoId)} — ${r.quantidade}`
+                              : `Financeiro — ${formatarBRL(r.valor ?? 0)}${r.dataPagamento ? ` (pagar em ${formatarData(r.dataPagamento)})` : ''}`}
+                          </li>
+                        ))}
+                      </ul>
+                    </td>
+                    <td className="px-4 py-3">
+                      <RowActions>
+                        <IconAction label={`Ver recursos de ${evento.nome}`} onClick={() => setVerEvento(evento)}>
+                          <Eye size={16} />
+                        </IconAction>
+                        <IconAction
+                          label={passado ? `Evento já aconteceu, não é possível editar` : `Editar ${evento.nome}`}
+                          disabled={passado}
+                          onClick={() => abrirEdicao(evento)}
+                        >
+                          <Pencil size={16} />
+                        </IconAction>
+                        <IconAction
+                          label={passado ? `Evento já aconteceu, não é possível excluir` : `Excluir ${evento.nome}`}
+                          danger
+                          disabled={passado}
+                          onClick={() => excluir(evento)}
+                        >
+                          <Trash2 size={16} />
+                        </IconAction>
+                      </RowActions>
+                    </td>
+                  </tr>
+                );
+              })}
           </tbody>
         </Table>
       </Card>
@@ -333,7 +392,7 @@ export default function EventosPage() {
         title={eventoEditando ? 'Editar Evento' : 'Alocar Recursos para Evento'}
         onClose={() => setModalAberto(false)}
       >
-        <form onSubmit={salvar} className="flex flex-col gap-4">
+        <form onSubmit={salvar} noValidate className="flex flex-col gap-4">
           <div>
             <Field label="Nome do evento *">
               <Input
@@ -350,7 +409,6 @@ export default function EventosPage() {
                 <CampoData value={dadosEvento.data} onChange={(t) => setDadosEvento({ ...dadosEvento, data: t })} className={destaque(erros.data)} />
               </Field>
               <MensagemErro texto={erros.data} />
-              <Aviso texto={avisoDataRetroativa(dadosEvento.data)} />
             </div>
           </div>
           <Field label="Descrição / finalidade (opcional)">
@@ -457,18 +515,38 @@ export default function EventosPage() {
                     </div>
                   </div>
                 ) : (
-                  <div>
-                    <Field label="Valor (R$)">
-                      <Input
-                        type="number"
-                        min={0.01}
-                        step="0.01"
-                        value={recurso.valor}
-                        onChange={(e) => atualizarRecurso(indice, { valor: e.target.value })}
-                        className={destaque(erros[`recurso.${indice}.valor`])}
-                      />
-                    </Field>
-                    <MensagemErro texto={erros[`recurso.${indice}.valor`]} />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <Field label="Valor (R$)">
+                        <Input
+                          type="number"
+                          min={0.01}
+                          step="0.01"
+                          value={recurso.valor}
+                          onChange={(e) => atualizarRecurso(indice, { valor: e.target.value })}
+                          className={destaque(erros[`recurso.${indice}.valor`])}
+                        />
+                      </Field>
+                      <MensagemErro texto={erros[`recurso.${indice}.valor`]} />
+                    </div>
+                    <div>
+                      <Field label="Pagar em">
+                        <CampoData
+                          value={recurso.dataPagamento}
+                          onChange={(t) => atualizarRecurso(indice, { dataPagamento: t })}
+                          className={destaque(erros[`recurso.${indice}.dataPagamento`])}
+                        />
+                      </Field>
+                      <MensagemErro texto={erros[`recurso.${indice}.dataPagamento`]} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Field label="Descrição (opcional)">
+                        <Input
+                          value={recurso.descricao}
+                          onChange={(e) => atualizarRecurso(indice, { descricao: e.target.value })}
+                        />
+                      </Field>
+                    </div>
                   </div>
                 )}
               </div>
@@ -487,6 +565,42 @@ export default function EventosPage() {
             {eventoEditando ? 'Salvar alterações' : 'Confirmar Alocação'}
           </Button>
         </form>
+      </Modal>
+
+      <Modal open={verEvento !== null} title={verEvento ? `Recursos de ${verEvento.nome}` : ''} onClose={() => setVerEvento(null)}>
+        {verEvento && (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-foreground/60">
+              Data: <span className="font-medium text-foreground">{formatarData(verEvento.data)}</span>
+            </p>
+            {verEvento.descricao && <p className="text-sm text-foreground/60">{verEvento.descricao}</p>}
+            <ul className="divide-y divide-border-line/10">
+              {verEvento.recursos.map((r) => (
+                <li key={r.id} className="flex flex-col gap-0.5 py-2 text-sm">
+                  {r.tipo === 'PRODUTO' ? (
+                    <div className="flex items-center justify-between">
+                      <span>{r.produto ?? nomeProduto(r.produtoId)}</span>
+                      <span className="text-foreground/60">{r.quantidade}</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span>Financeiro{r.descricao ? ` — ${r.descricao}` : ''}</span>
+                        <span className="text-foreground/60">{formatarBRL(r.valor ?? 0)}</span>
+                      </div>
+                      {r.dataPagamento && <span className="text-xs text-foreground/40">Pagar em {formatarData(r.dataPagamento)}</span>}
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end">
+              <Button type="button" variant="ghost" size="md" onClick={() => setVerEvento(null)}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

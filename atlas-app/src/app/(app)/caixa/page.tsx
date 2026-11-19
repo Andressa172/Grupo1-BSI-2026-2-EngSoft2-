@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowDownCircle, ArrowUpCircle, Lock, Unlock } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, ChevronDown, Lock, TriangleAlert, Unlock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, Field, Input, Select, Modal, Table, THead, EmptyRow, StatusPill } from '@/components/app/ui';
 import { mascaraMoeda, parseMoedaBR } from '@/view/mascaras';
@@ -42,6 +42,17 @@ interface DivergenciaDTO {
   diferenca: { fisico: number; digital: number };
 }
 
+// despesa de recurso financeiro de evento (RF_F9) ainda não lançada no caixa (RF_F6) - ou porque a
+// data de pagamento ainda não chegou, ou porque não havia caixa aberto quando ela venceu
+interface DespesaEventoDTO {
+  id: number;
+  eventoId: number;
+  eventoNome: string;
+  valor: number;
+  dataPagamento: string; // aaaa-mm-dd
+  descricao: string | null;
+}
+
 function formatBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
@@ -49,6 +60,18 @@ function formatBRL(v: number) {
 function formatDateTime(iso?: string | null) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+
+function formatDate(dataIso: string) {
+  return new Date(dataIso + 'T00:00:00').toLocaleDateString('pt-BR');
+}
+
+// dias entre hoje e a data (negativo/zero = já venceu ou vence hoje)
+function diasAte(dataIso: string): number {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const alvo = new Date(dataIso + 'T00:00:00');
+  return Math.round((alvo.getTime() - hoje.getTime()) / 86_400_000);
 }
 
 function obterHeadersUsuario(): Record<string, string> {
@@ -110,9 +133,11 @@ function validarValorMovimentacaoInput(valor: string, obrigatorio = false): stri
 export default function CaixaPage() {
   const [caixaAberto, setCaixaAberto] = useState<CaixaAbertoDTO | null>(null);
   const [caixas, setCaixas] = useState<CaixaDTO[]>([]);
+  const [despesasEventosPendentes, setDespesasEventosPendentes] = useState<DespesaEventoDTO[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erroPagina, setErroPagina] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState<string | null>(null);
+  const [mostrarVencidas, setMostrarVencidas] = useState(false);
 
   const [abrirOpen, setAbrirOpen] = useState(false);
   const [movOpen, setMovOpen] = useState(false);
@@ -156,6 +181,7 @@ export default function CaixaPage() {
       }
       setCaixaAberto(dados.caixaAberto ?? null);
       setCaixas(dados.caixas ?? []);
+      setDespesasEventosPendentes(dados.despesasEventosPendentes ?? []);
     } catch (e: unknown) {
       setErroPagina(e instanceof Error ? e.message : 'Erro ao carregar dados do caixa.');
     } finally {
@@ -166,6 +192,14 @@ export default function CaixaPage() {
   useEffect(() => {
     carregarCaixa();
   }, [carregarCaixa]);
+
+  // vencidas (data <= hoje) ainda pendentes só acontece sem caixa aberto: assim que o caixa abre,
+  // o backend já lança a saída sozinho (RF_F6) e elas somem daqui e aparecem nas movimentações
+  const despesasVencidas = despesasEventosPendentes.filter((d) => diasAte(d.dataPagamento) <= 0);
+  const despesasProximas = despesasEventosPendentes.filter((d) => {
+    const dias = diasAte(d.dataPagamento);
+    return dias > 0 && dias <= 2;
+  });
 
   const saldoFisicoAtual = caixaAberto?.saldosAtuais.fisico ?? 0;
   const saldoDigitalAtual = caixaAberto?.saldosAtuais.digital ?? 0;
@@ -319,6 +353,53 @@ export default function CaixaPage() {
       {erroPagina && (
         <div role="alert" className="p-3 text-sm rounded-lg bg-danger/10 border border-danger/20 text-danger">
           {erroPagina}
+        </div>
+      )}
+
+      {despesasProximas.length > 0 && (
+        <div className="flex items-start gap-2 p-3 text-sm rounded-lg bg-secondary/10 border border-secondary/30 text-foreground">
+          <TriangleAlert size={16} className="shrink-0 mt-0.5 text-secondary" />
+          <div className="flex flex-col gap-1">
+            <p>
+              {despesasProximas.length} despesa(s) de evento vencendo nos próximos 2 dias:{' '}
+              {despesasProximas
+                .map((d) => `${d.eventoNome} (${formatBRL(d.valor)}, ${formatDate(d.dataPagamento)})`)
+                .join('; ')}
+              .
+            </p>
+          </div>
+        </div>
+      )}
+
+      {despesasVencidas.length > 0 && (
+        <div className="rounded-lg border border-danger/40 bg-danger/10">
+          <button
+            type="button"
+            onClick={() => setMostrarVencidas((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 p-3 text-sm font-medium text-danger cursor-pointer"
+          >
+            <span className="flex items-center gap-1.5">
+              <TriangleAlert size={16} />
+              {despesasVencidas.length} despesa(s) de evento vencida(s) - sem caixa aberto para lançar
+            </span>
+            <ChevronDown size={16} className={`transition-transform ${mostrarVencidas ? 'rotate-180' : ''}`} />
+          </button>
+          {mostrarVencidas && (
+            <ul className="divide-y divide-danger/20 border-t border-danger/20 px-3">
+              {despesasVencidas.map((d) => (
+                <li key={d.id} className="flex flex-col gap-0.5 py-2 text-xs text-foreground">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{d.eventoNome}</span>
+                    <span className="tabular-nums">{formatBRL(d.valor)}</span>
+                  </div>
+                  <span className="text-foreground/60">
+                    Vencida em {formatDate(d.dataPagamento)}
+                    {d.descricao ? ` — ${d.descricao}` : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

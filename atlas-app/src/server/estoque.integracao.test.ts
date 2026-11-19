@@ -352,7 +352,7 @@ describe.skipIf(!TEM_BANCO_DE_TESTE)('Estoque - integração (PostgreSQL)', () =
         data: amanhaIso(),
         recursos: [
           { tipo: 'PRODUTO', produtoId: suco, quantidade: 7 },
-          { tipo: 'FINANCEIRO', valor: 100 },
+          { tipo: 'FINANCEIRO', valor: 100, dataPagamento: amanhaIso() },
         ],
       });
       expect((await produto(suco)).estoque).toBe(13);
