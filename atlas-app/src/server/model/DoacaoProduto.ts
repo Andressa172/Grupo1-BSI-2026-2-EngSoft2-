@@ -78,11 +78,22 @@ export class DoacaoProduto {
 
   /** Grava um item da doação. O Controller chama depois de dar a entrada dele no estoque. */
   async incluirItem(conexao: ExecutorSQL, item: ItemDoacao): Promise<void> {
-    await new DoacaoProdutoDAO(conexao).inserirItem(this.id!, item);
+    const validade = item.getDataValidade();
+    await new DoacaoProdutoDAO(conexao).inserirItem(
+      this.id!,
+      item.getProdutoId(),
+      item.getQuantidade(),
+      validade ? paraIso(validade) : null
+    );
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroDoacao): Promise<DoacaoProdutoRegistro[]> {
-    return new DoacaoProdutoDAO(conexao).consultar(filtro);
+    return new DoacaoProdutoDAO(conexao).consultar({
+      doadorId: filtro.getDoadorId(),
+      somenteAnonimos: filtro.isSomenteAnonimos(),
+      dataInicialIso: filtro.getDataInicial(),
+      dataFinalIso: filtro.getDataFinal(),
+    });
   }
 
   paraLinhaDeDados() {
