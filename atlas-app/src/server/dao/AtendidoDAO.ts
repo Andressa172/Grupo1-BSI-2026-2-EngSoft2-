@@ -1,6 +1,6 @@
 // DAO - Atendido (RF_B1). Só executa SQL; todas as consultas usam parâmetros ($1, $2...)
-// e nunca concatenam texto vindo do usuário no comando SQL. Recebe a conexão no construtor e os
-// dados por parâmetro, e devolve registros simples (AtendidoRegistro): quem monta o Atendido é o Model.
+// e nunca concatenam texto vindo do usuário no comando SQL. Recebe a conexão e os
+// dados por parâmetro, em cada método, e devolve registros simples (AtendidoRegistro): quem monta o Atendido é o Model.
 import type { ExecutorSQL } from './tipos';
 
 // critérios da consulta, já prontos: o Model monta a partir do filtro e entrega ao DAO
@@ -76,10 +76,12 @@ function linhaParaRegistro(linha: AtendidoLinha): AtendidoRegistro {
 }
 
 export class AtendidoDAO {
-  constructor(private readonly executor: ExecutorSQL) {}
-
-  async inserir(atendido: AtendidoDados): Promise<AtendidoRegistro> {
-    const resultado = await this.executor.query<AtendidoLinha>(
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async inserir(conexao: ExecutorSQL, atendido: AtendidoDados): Promise<AtendidoRegistro> {
+    const resultado = await conexao.query<AtendidoLinha>(
       `INSERT INTO atendido (nome, data_nascimento, sexo, responsavel_legal)
        VALUES ($1, $2, $3, $4)
        RETURNING ${COLUNAS}`,
@@ -89,8 +91,12 @@ export class AtendidoDAO {
   }
 
   // a data de cadastro não é alterada
-  async atualizar(atendido: AtendidoDados): Promise<AtendidoRegistro | null> {
-    const resultado = await this.executor.query<AtendidoLinha>(
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async atualizar(conexao: ExecutorSQL, atendido: AtendidoDados): Promise<AtendidoRegistro | null> {
+    const resultado = await conexao.query<AtendidoLinha>(
       `UPDATE atendido
           SET nome = $1, data_nascimento = $2, sexo = $3, responsavel_legal = $4
         WHERE id = $5
@@ -106,18 +112,30 @@ export class AtendidoDAO {
     return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
-  async excluir(id: number): Promise<boolean> {
-    const resultado = await this.executor.query('DELETE FROM atendido WHERE id = $1', [id]);
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async excluir(conexao: ExecutorSQL, id: number): Promise<boolean> {
+    const resultado = await conexao.query('DELETE FROM atendido WHERE id = $1', [id]);
     return (resultado.rowCount ?? 0) > 0;
   }
 
-  async buscarPorId(id: number): Promise<AtendidoRegistro | null> {
-    const resultado = await this.executor.query<AtendidoLinha>(`SELECT ${COLUNAS} FROM atendido WHERE id = $1`, [id]);
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async buscarPorId(conexao: ExecutorSQL, id: number): Promise<AtendidoRegistro | null> {
+    const resultado = await conexao.query<AtendidoLinha>(`SELECT ${COLUNAS} FROM atendido WHERE id = $1`, [id]);
     return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
-  async existeIgual(nome: string, dataNascimentoIso: string, idIgnorado?: number): Promise<boolean> {
-    const resultado = await this.executor.query<{ id: number }>(
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async existeIgual(conexao: ExecutorSQL, nome: string, dataNascimentoIso: string, idIgnorado?: number): Promise<boolean> {
+    const resultado = await conexao.query<{ id: number }>(
       `SELECT id FROM atendido
         WHERE lower(nome) = lower($1) AND data_nascimento = $2 AND ($3::int IS NULL OR id <> $3)`,
       [nome, dataNascimentoIso, idIgnorado ?? null]
@@ -126,7 +144,11 @@ export class AtendidoDAO {
   }
 
   // filtro vazio traz todos; os 3 filtros (nome, sexo, idade) se combinam com AND
-  async consultar(criterios: CriteriosConsultaAtendido): Promise<AtendidoRegistro[]> {
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async consultar(conexao: ExecutorSQL, criterios: CriteriosConsultaAtendido): Promise<AtendidoRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];
 
@@ -150,7 +172,7 @@ export class AtendidoDAO {
     }
 
     const where = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
-    const resultado = await this.executor.query<AtendidoLinha>(
+    const resultado = await conexao.query<AtendidoLinha>(
       `SELECT ${COLUNAS} FROM atendido ${where} ORDER BY nome, id`,
       parametros
     );

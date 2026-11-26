@@ -91,12 +91,11 @@ export class DoacaoDinheiro {
 
   /** Grava a doação do doador já resolvido pelo Controller. Chamar dentro de uma transação. */
   async incluir(conexao: ExecutorSQL, doadorId: number): Promise<void> {
-    const dao = new DoacaoDinheiroDAO(conexao);
-    this.id = await dao.inserir(doadorId, this.valor, this.formaRecebimento, this.getDataRecebimentoIso());
+    this.id = await new DoacaoDinheiroDAO().inserir(conexao, doadorId, this.valor, this.formaRecebimento, this.getDataRecebimentoIso());
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroDoacao): Promise<DoacaoDinheiroRegistro[]> {
-    return new DoacaoDinheiroDAO(conexao).consultar({
+    return new DoacaoDinheiroDAO().consultar(conexao, {
       doadorId: filtro.getDoadorId(),
       somenteAnonimos: filtro.isSomenteAnonimos(),
       dataInicialIso: filtro.getDataInicial(),

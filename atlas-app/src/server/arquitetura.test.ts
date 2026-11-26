@@ -10,6 +10,8 @@ import path from 'node:path';
 
 const SRC = path.resolve(__dirname, '..');
 const ler = (relativo: string) => fs.readFileSync(path.join(SRC, relativo), 'utf8');
+// DAOs sem construtor: a conexão chega como 1º parâmetro de cada método
+const DAOS_SEM_CONSTRUTOR = ['AtendidoDAO', 'DoacaoDinheiroDAO', 'DoacaoProdutoDAO'];
 const importa = (codigo: string, modulo: RegExp) =>
   new RegExp(`import\\s[^;]*from\\s+['"][^'"]*${modulo.source}['"]`).test(codigo);
 
@@ -82,7 +84,8 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
   describe('Model cria o DAO com a conexão recebida', () => {
     it('importa o DAO e faz new DAO(conexao)', () => {
       expect(importa(model, new RegExp(`dao/${m.daoClasse}`))).toBe(true);
-      expect(model).toMatch(new RegExp(`new\\s+${m.daoClasse}\\(conexao\\)`));
+      const semConstrutor = DAOS_SEM_CONSTRUTOR.includes(m.daoClasse);
+      expect(model).toMatch(new RegExp(`new\\s+${m.daoClasse}\\(${semConstrutor ? '' : 'conexao'}\\)`));
     });
     it('NÃO importa Database nem Controller (não abre conexão por conta própria)', () => {
       expect(importa(model, /db\/Database/)).toBe(false);
@@ -94,7 +97,12 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
 
   describe('DAO só executa SQL', () => {
     it('recebe o executor pelo construtor e não importa Controller', () => {
-      expect(dao).toMatch(/constructor\s*\(\s*private\s+readonly\s+executor/);
+      if (DAOS_SEM_CONSTRUTOR.includes(m.daoClasse)) {
+        expect(dao).not.toMatch(/constructor\s*\(/);
+        expect(dao).toMatch(/async\s+\w+\(\s*conexao:\s*ExecutorSQL/);
+      } else {
+        expect(dao).toMatch(/constructor\s*\(\s*private\s+readonly\s+executor/);
+      }
       expect(importa(dao, /Controller/)).toBe(false);
     });
     it('usa apenas consultas parametrizadas (sem concatenar valores no SQL)', () => {
@@ -356,7 +364,7 @@ describe('Direção das dependências (todos os módulos)', () => {
 
 describe.each(['ProdutoDAO', 'MovimentacaoEstoqueDAO'])('%s (RF_B3 / RF_F1): conexão e dados só por parâmetro', (nome) => {
   const dao = ler(`server/dao/${nome}.ts`);
-  it('não importa Database nem usa getInstancia (a conexão vem no construtor)', () => {
+  it('não importa Database nem usa getInstancia (a conexão vem por parâmetro)', () => {
     expect(importa(dao, /db\/Database/)).toBe(false);
     expect(dao).not.toMatch(/getInstancia/);
   });
@@ -389,7 +397,12 @@ describe.each(DAOS)('Regra geral - %s', (arquivo) => {
   it('não importa Database nem usa getInstancia (a conexão vem no construtor)', () => {
     expect(importa(dao, /db\/Database/)).toBe(false);
     expect(dao).not.toMatch(/getInstancia/);
-    expect(dao).toMatch(/constructor\(private readonly executor: ExecutorSQL\)/);
+    if (DAOS_SEM_CONSTRUTOR.includes(arquivo.replace('.ts', ''))) {
+      expect(dao).not.toMatch(/constructor\s*\(/);
+      expect(dao).toMatch(/async\s+\w+\(\s*conexao:\s*ExecutorSQL/);
+    } else {
+      expect(dao).toMatch(/constructor\(private readonly executor: ExecutorSQL\)/);
+    }
   });
   it('não importa Model em tempo de execução (só tipos) e não chama outro DAO', () => {
     expect(dao).not.toMatch(/^import\s+(?!type\b)[^;]*from\s+['"][^'"]*\/model\/(?!datasBR)/m);
