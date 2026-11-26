@@ -87,6 +87,7 @@ export class AtendidoDAO {
   }
 
   // a data de cadastro não é alterada
+  // ExecutorSQL é o pool normal ou o client de uma transação em aberto; os DAOs só precisam disso
   async atualizar(conexao: ExecutorSQL, atendido: AtendidoDados): Promise<AtendidoRegistro | null> {
     const resultado = await conexao.query<AtendidoLinha>(
       `UPDATE atendido
