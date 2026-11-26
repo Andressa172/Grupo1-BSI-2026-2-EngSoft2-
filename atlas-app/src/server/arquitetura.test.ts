@@ -10,7 +10,7 @@ import path from 'node:path';
 
 const SRC = path.resolve(__dirname, '..');
 const ler = (relativo: string) => fs.readFileSync(path.join(SRC, relativo), 'utf8');
-// DAOs sem construtor: a conexão (executor) chega como 1º parâmetro de cada método
+// DAOs sem construtor: a conexão chega como 1º parâmetro de cada método
 const DAOS_SEM_CONSTRUTOR = ['AtendidoDAO', 'DoacaoDinheiroDAO', 'DoacaoProdutoDAO'];
 const importa = (codigo: string, modulo: RegExp) =>
   new RegExp(`import\\s[^;]*from\\s+['"][^'"]*${modulo.source}['"]`).test(codigo);
@@ -99,7 +99,7 @@ describe.each(MODULOS)('Arquitetura - $nome', (m) => {
     it('recebe o executor pelo construtor e não importa Controller', () => {
       if (DAOS_SEM_CONSTRUTOR.includes(m.daoClasse)) {
         expect(dao).not.toMatch(/constructor\s*\(/);
-        expect(dao).toMatch(/async\s+\w+\(\s*executor:\s*ExecutorSQL/);
+        expect(dao).toMatch(/async\s+\w+\(\s*conexao:\s*ExecutorSQL/);
       } else {
         expect(dao).toMatch(/constructor\s*\(\s*private\s+readonly\s+executor/);
       }
@@ -399,7 +399,7 @@ describe.each(DAOS)('Regra geral - %s', (arquivo) => {
     expect(dao).not.toMatch(/getInstancia/);
     if (DAOS_SEM_CONSTRUTOR.includes(arquivo.replace('.ts', ''))) {
       expect(dao).not.toMatch(/constructor\s*\(/);
-      expect(dao).toMatch(/async\s+\w+\(\s*executor:\s*ExecutorSQL/);
+      expect(dao).toMatch(/async\s+\w+\(\s*conexao:\s*ExecutorSQL/);
     } else {
       expect(dao).toMatch(/constructor\(private readonly executor: ExecutorSQL\)/);
     }

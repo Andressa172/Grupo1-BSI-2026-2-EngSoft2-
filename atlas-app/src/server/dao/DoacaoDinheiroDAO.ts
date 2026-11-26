@@ -28,8 +28,8 @@ interface LinhaConsulta {
 }
 
 export class DoacaoDinheiroDAO {
-  async inserir(executor: ExecutorSQL, doadorId: number, valor: number, formaRecebimento: string, dataIso: string): Promise<number> {
-    const resultado = await executor.query<{ id: number }>(
+  async inserir(conexao: ExecutorSQL, doadorId: number, valor: number, formaRecebimento: string, dataIso: string): Promise<number> {
+    const resultado = await conexao.query<{ id: number }>(
       `INSERT INTO doacao_dinheiro (doador_id, valor, forma_recebimento, data)
        VALUES ($1, $2, $3, $4) RETURNING id`,
       [doadorId, valor, formaRecebimento, dataIso]
@@ -37,7 +37,7 @@ export class DoacaoDinheiroDAO {
     return resultado.rows[0].id;
   }
 
-  async consultar(executor: ExecutorSQL, criterios: CriteriosConsultaDoacao): Promise<DoacaoDinheiroRegistro[]> {
+  async consultar(conexao: ExecutorSQL, criterios: CriteriosConsultaDoacao): Promise<DoacaoDinheiroRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];
 
@@ -59,7 +59,7 @@ export class DoacaoDinheiroDAO {
     }
     const where = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
 
-    const resultado = await executor.query<LinhaConsulta>(
+    const resultado = await conexao.query<LinhaConsulta>(
       `SELECT d.id, d.doador_id, doa.nome AS doador, to_char(d.data, 'YYYY-MM-DD') AS data,
               d.valor::float8 AS valor, d.forma_recebimento
          FROM doacao_dinheiro d
