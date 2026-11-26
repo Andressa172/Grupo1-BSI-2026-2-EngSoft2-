@@ -76,6 +76,10 @@ function linhaParaRegistro(linha: AtendidoLinha): AtendidoRegistro {
 }
 
 export class AtendidoDAO {
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
   async inserir(conexao: ExecutorSQL, atendido: AtendidoDados): Promise<AtendidoRegistro> {
     const resultado = await conexao.query<AtendidoLinha>(
       `INSERT INTO atendido (nome, data_nascimento, sexo, responsavel_legal)
@@ -87,7 +91,10 @@ export class AtendidoDAO {
   }
 
   // a data de cadastro não é alterada
-  // ExecutorSQL é o pool normal ou o client de uma transação em aberto; os DAOs só precisam disso
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
   async atualizar(conexao: ExecutorSQL, atendido: AtendidoDados): Promise<AtendidoRegistro | null> {
     const resultado = await conexao.query<AtendidoLinha>(
       `UPDATE atendido
@@ -105,16 +112,28 @@ export class AtendidoDAO {
     return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
   async excluir(conexao: ExecutorSQL, id: number): Promise<boolean> {
     const resultado = await conexao.query('DELETE FROM atendido WHERE id = $1', [id]);
     return (resultado.rowCount ?? 0) > 0;
   }
 
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
   async buscarPorId(conexao: ExecutorSQL, id: number): Promise<AtendidoRegistro | null> {
     const resultado = await conexao.query<AtendidoLinha>(`SELECT ${COLUNAS} FROM atendido WHERE id = $1`, [id]);
     return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
   async existeIgual(conexao: ExecutorSQL, nome: string, dataNascimentoIso: string, idIgnorado?: number): Promise<boolean> {
     const resultado = await conexao.query<{ id: number }>(
       `SELECT id FROM atendido
@@ -125,6 +144,10 @@ export class AtendidoDAO {
   }
 
   // filtro vazio traz todos; os 3 filtros (nome, sexo, idade) se combinam com AND
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
   async consultar(conexao: ExecutorSQL, criterios: CriteriosConsultaAtendido): Promise<AtendidoRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];

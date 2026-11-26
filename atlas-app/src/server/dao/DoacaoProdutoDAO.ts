@@ -29,6 +29,10 @@ interface LinhaConsulta {
 }
 
 export class DoacaoProdutoDAO {
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
   async inserirDoacao(conexao: ExecutorSQL, doadorId: number, dataRecebimentoIso: string): Promise<number> {
     const resultado = await conexao.query<{ id: number }>(
       'INSERT INTO doacao_produto (doador_id, data_recebimento) VALUES ($1, $2) RETURNING id',
@@ -38,6 +42,10 @@ export class DoacaoProdutoDAO {
   }
 
   /** Grava o item da doação. A entrada no estoque (RF_F1) é feita pelo Controller, com os Models de estoque. */
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
   async inserirItem(conexao: ExecutorSQL, doacaoId: number, produtoId: number, quantidade: number, dataValidadeIso: string | null): Promise<void> {
     await conexao.query(
       'INSERT INTO item_doacao (doacao_produto_id, produto_id, quantidade, data_validade) VALUES ($1, $2, $3, $4)',
@@ -46,6 +54,10 @@ export class DoacaoProdutoDAO {
   }
 
   // filtros (doador e período) se combinam com AND; filtro vazio traz todas as doações
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
   async consultar(conexao: ExecutorSQL, criterios: CriteriosConsultaDoacao): Promise<DoacaoProdutoRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];

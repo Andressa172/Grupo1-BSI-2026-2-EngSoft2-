@@ -28,6 +28,10 @@ interface LinhaConsulta {
 }
 
 export class DoacaoDinheiroDAO {
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
   async inserir(conexao: ExecutorSQL, doadorId: number, valor: number, formaRecebimento: string, dataIso: string): Promise<number> {
     const resultado = await conexao.query<{ id: number }>(
       `INSERT INTO doacao_dinheiro (doador_id, valor, forma_recebimento, data)
@@ -37,6 +41,10 @@ export class DoacaoDinheiroDAO {
     return resultado.rows[0].id;
   }
 
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
   async consultar(conexao: ExecutorSQL, criterios: CriteriosConsultaDoacao): Promise<DoacaoDinheiroRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];
