@@ -72,14 +72,14 @@ export class DoacaoProduto {
    * também ficam a cargo do Controller. Chamar dentro de uma transação (tudo grava ou nada grava).
    */
   async incluir(conexao: ExecutorSQL, doadorId: number): Promise<void> {
-    const dao = new DoacaoProdutoDAO(conexao);
-    this.id = await dao.inserirDoacao(doadorId, paraIso(this.dataRecebimento));
+    this.id = await new DoacaoProdutoDAO().inserirDoacao(conexao, doadorId, paraIso(this.dataRecebimento));
   }
 
   /** Grava um item da doação. O Controller chama depois de dar a entrada dele no estoque. */
   async incluirItem(conexao: ExecutorSQL, item: ItemDoacao): Promise<void> {
     const validade = item.getDataValidade();
-    await new DoacaoProdutoDAO(conexao).inserirItem(
+    await new DoacaoProdutoDAO().inserirItem(
+      conexao,
       this.id!,
       item.getProdutoId(),
       item.getQuantidade(),
@@ -88,7 +88,7 @@ export class DoacaoProduto {
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroDoacao): Promise<DoacaoProdutoRegistro[]> {
-    return new DoacaoProdutoDAO(conexao).consultar({
+    return new DoacaoProdutoDAO().consultar(conexao, {
       doadorId: filtro.getDoadorId(),
       somenteAnonimos: filtro.isSomenteAnonimos(),
       dataInicialIso: filtro.getDataInicial(),

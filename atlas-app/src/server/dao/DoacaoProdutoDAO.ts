@@ -29,10 +29,8 @@ interface LinhaConsulta {
 }
 
 export class DoacaoProdutoDAO {
-  constructor(private readonly executor: ExecutorSQL) {}
-
-  async inserirDoacao(doadorId: number, dataRecebimentoIso: string): Promise<number> {
-    const resultado = await this.executor.query<{ id: number }>(
+  async inserirDoacao(executor: ExecutorSQL, doadorId: number, dataRecebimentoIso: string): Promise<number> {
+    const resultado = await executor.query<{ id: number }>(
       'INSERT INTO doacao_produto (doador_id, data_recebimento) VALUES ($1, $2) RETURNING id',
       [doadorId, dataRecebimentoIso]
     );
@@ -40,15 +38,15 @@ export class DoacaoProdutoDAO {
   }
 
   /** Grava o item da doação. A entrada no estoque (RF_F1) é feita pelo Controller, com os Models de estoque. */
-  async inserirItem(doacaoId: number, produtoId: number, quantidade: number, dataValidadeIso: string | null): Promise<void> {
-    await this.executor.query(
+  async inserirItem(executor: ExecutorSQL, doacaoId: number, produtoId: number, quantidade: number, dataValidadeIso: string | null): Promise<void> {
+    await executor.query(
       'INSERT INTO item_doacao (doacao_produto_id, produto_id, quantidade, data_validade) VALUES ($1, $2, $3, $4)',
       [doacaoId, produtoId, quantidade, dataValidadeIso]
     );
   }
 
   // filtros (doador e período) se combinam com AND; filtro vazio traz todas as doações
-  async consultar(criterios: CriteriosConsultaDoacao): Promise<DoacaoProdutoRegistro[]> {
+  async consultar(executor: ExecutorSQL, criterios: CriteriosConsultaDoacao): Promise<DoacaoProdutoRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];
 
@@ -70,7 +68,7 @@ export class DoacaoProdutoDAO {
     }
     const where = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
 
-    const resultado = await this.executor.query<LinhaConsulta>(
+    const resultado = await executor.query<LinhaConsulta>(
       `SELECT d.id, d.doador_id, doa.nome AS doador,
               to_char(d.data_recebimento, 'YYYY-MM-DD') AS data,
               i.produto_id, p.nome AS produto, i.quantidade,

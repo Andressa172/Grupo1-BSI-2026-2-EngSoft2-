@@ -1,6 +1,6 @@
 // Model - Atendido (RF_B1 - Gerenciar atendidos)
 // Guarda os dados do atendido, valida os próprios atributos e faz a persistência
-// criando o AtendidoDAO com a conexão que recebe do Controller (Controller -> Model -> DAO).
+// criando o AtendidoDAO e passando a ele a conexão que recebe do Controller (Controller -> Model -> DAO).
 import type { ErrosDeCampo } from '../erros';
 import type { ExecutorSQL } from '../dao/tipos';
 import { AtendidoDAO, type AtendidoRegistro } from '../dao/AtendidoDAO';
@@ -140,33 +140,33 @@ export class Atendido {
   // O Model cria o DAO usando a conexão que o Controller abriu.
 
   async incluir(conexao: ExecutorSQL): Promise<void> {
-    const salvo = await new AtendidoDAO(conexao).inserir(this.dadosParaGravar());
+    const salvo = await new AtendidoDAO().inserir(conexao, this.dadosParaGravar());
     this.id = salvo.id;
     this.dataCadastro = parseData(salvo.dataCadastro);
   }
 
   async alterar(conexao: ExecutorSQL): Promise<boolean> {
-    const salvo = await new AtendidoDAO(conexao).atualizar(this.dadosParaGravar());
+    const salvo = await new AtendidoDAO().atualizar(conexao, this.dadosParaGravar());
     return salvo !== null;
   }
 
   async excluir(conexao: ExecutorSQL): Promise<boolean> {
     if (this.id === undefined) return false;
-    return new AtendidoDAO(conexao).excluir(this.id);
+    return new AtendidoDAO().excluir(conexao, this.id);
   }
 
   /** Regra de negócio: não pode haver dois atendidos com o mesmo nome e data de nascimento. */
   async existeOutroIgual(conexao: ExecutorSQL): Promise<boolean> {
-    return new AtendidoDAO(conexao).existeIgual(this.nome, paraIso(this.dataNascimento), this.id);
+    return new AtendidoDAO().existeIgual(conexao, this.nome, paraIso(this.dataNascimento), this.id);
   }
 
   static async buscarPorId(conexao: ExecutorSQL, id: number): Promise<Atendido | null> {
-    const registro = await new AtendidoDAO(conexao).buscarPorId(id);
+    const registro = await new AtendidoDAO().buscarPorId(conexao, id);
     return registro ? Atendido.doRegistro(registro) : null;
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroAtendido): Promise<Atendido[]> {
-    const registros = await new AtendidoDAO(conexao).consultar({
+    const registros = await new AtendidoDAO().consultar(conexao, {
       nome: filtro.getNome(),
       sexo: filtro.getSexo(),
       idadeMinima: filtro.getIdadeMinima(),
