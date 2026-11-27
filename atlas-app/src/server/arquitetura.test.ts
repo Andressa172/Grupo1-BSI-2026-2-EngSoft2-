@@ -11,7 +11,7 @@ import path from 'node:path';
 const SRC = path.resolve(__dirname, '..');
 const ler = (relativo: string) => fs.readFileSync(path.join(SRC, relativo), 'utf8');
 // DAOs sem construtor: a conexão chega como 1º parâmetro de cada método
-const DAOS_SEM_CONSTRUTOR = ['AtendidoDAO', 'DoacaoDinheiroDAO', 'DoacaoProdutoDAO'];
+const DAOS_SEM_CONSTRUTOR = ['AtendidoDAO', 'DoacaoDinheiroDAO', 'DoacaoProdutoDAO', 'ProdutoDAO', 'MovimentacaoEstoqueDAO'];
 const importa = (codigo: string, modulo: RegExp) =>
   new RegExp(`import\\s[^;]*from\\s+['"][^'"]*${modulo.source}['"]`).test(codigo);
 
@@ -367,6 +367,8 @@ describe.each(['ProdutoDAO', 'MovimentacaoEstoqueDAO'])('%s (RF_B3 / RF_F1): con
   it('não importa Database nem usa getInstancia (a conexão vem por parâmetro)', () => {
     expect(importa(dao, /db\/Database/)).toBe(false);
     expect(dao).not.toMatch(/getInstancia/);
+    expect(dao).not.toMatch(/constructor\s*\(/);
+    expect(dao).toMatch(/async\s+\w+\(\s*conexao:\s*ExecutorSQL/);
   });
   it('não importa Model em tempo de execução nem dá new em Model', () => {
     expect(dao).not.toMatch(/^import\s+(?!type\b)[^;]*from\s+['"][^'"]*\/model\//m);

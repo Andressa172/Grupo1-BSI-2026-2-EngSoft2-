@@ -1,7 +1,7 @@
 // DAO - Produto
 // - listarTodos: lista simples, usada pelas telas de cardápio (RF_F10) e eventos (RF_F9)
 // - demais métodos: CRUD do RF_B3 (Gerenciar produtos). Quem cria este DAO é o
-//   model Produto, que passa a conexão (recebida do ProdutoController) no construtor.
+//   model Produto, que passa a conexão (recebida do ProdutoController) em cada método.
 // - O DAO não abre conexão nem cria Model: recebe a conexão e os dados por parâmetro e devolve
 //   registros simples (ProdutoRegistro); quem monta o Produto é o Model.
 // - buscarPorIdParaAtualizar / atualizarEstoque: usados só pelo RF_F1 (Atualizar estoque), via model Produto.
@@ -64,10 +64,12 @@ function linhaParaRegistro(linha: ProdutoLinhaCompleta): ProdutoRegistro {
 }
 
 export class ProdutoDAO {
-  constructor(private readonly executor: ExecutorSQL) {}
-
-  async listarTodos(): Promise<ProdutoLinha[]> {
-    const resultado = await this.executor.query<ProdutoLinha>(
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async listarTodos(conexao: ExecutorSQL): Promise<ProdutoLinha[]> {
+    const resultado = await conexao.query<ProdutoLinha>(
       `SELECT id, nome, categoria, unidade_medida, quantidade_estoque, estoque_minimo,
               to_char(data_validade, 'YYYY-MM-DD') AS data_validade
          FROM produto ORDER BY nome`
@@ -78,7 +80,11 @@ export class ProdutoDAO {
   // ------------------------- RF_B3 - Gerenciar produtos -------------------------
 
   // consulta com os filtros da tela; filtro vazio traz todos os produtos
-  async consultar(filtro: FiltroProduto): Promise<ProdutoRegistro[]> {
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async consultar(conexao: ExecutorSQL, filtro: FiltroProduto): Promise<ProdutoRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];
 
@@ -103,37 +109,53 @@ export class ProdutoDAO {
     }
 
     const where = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
-    const resultado = await this.executor.query<ProdutoLinhaCompleta>(
+    const resultado = await conexao.query<ProdutoLinhaCompleta>(
       `SELECT ${COLUNAS} FROM produto ${where} ORDER BY nome`,
       parametros
     );
     return resultado.rows.map(linhaParaRegistro);
   }
 
-  async buscarPorId(id: number): Promise<ProdutoRegistro | null> {
-    const resultado = await this.executor.query<ProdutoLinhaCompleta>(`SELECT ${COLUNAS} FROM produto WHERE id = $1`, [id]);
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async buscarPorId(conexao: ExecutorSQL, id: number): Promise<ProdutoRegistro | null> {
+    const resultado = await conexao.query<ProdutoLinhaCompleta>(`SELECT ${COLUNAS} FROM produto WHERE id = $1`, [id]);
     return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
   // FOR UPDATE: trava a linha até o fim da transação (RF_F1)
-  async buscarPorIdParaAtualizar(id: number): Promise<ProdutoRegistro | null> {
-    const resultado = await this.executor.query<ProdutoLinhaCompleta>(
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async buscarPorIdParaAtualizar(conexao: ExecutorSQL, id: number): Promise<ProdutoRegistro | null> {
+    const resultado = await conexao.query<ProdutoLinhaCompleta>(
       `SELECT ${COLUNAS} FROM produto WHERE id = $1 FOR UPDATE`,
       [id]
     );
     return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
-  async atualizarEstoque(id: number, quantidadeEstoque: number, dataValidade: string | null): Promise<void> {
-    await this.executor.query('UPDATE produto SET quantidade_estoque = $1, data_validade = $2 WHERE id = $3', [
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async atualizarEstoque(conexao: ExecutorSQL, id: number, quantidadeEstoque: number, dataValidade: string | null): Promise<void> {
+    await conexao.query('UPDATE produto SET quantidade_estoque = $1, data_validade = $2 WHERE id = $3', [
       quantidadeEstoque,
       dataValidade,
       id,
     ]);
   }
 
-  async existeComNome(nome: string, idIgnorado?: number): Promise<boolean> {
-    const resultado = await this.executor.query<{ id: number }>(
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async existeComNome(conexao: ExecutorSQL, nome: string, idIgnorado?: number): Promise<boolean> {
+    const resultado = await conexao.query<{ id: number }>(
       'SELECT id FROM produto WHERE lower(nome) = lower($1) AND ($2::int IS NULL OR id <> $2)',
       [nome, idIgnorado ?? null]
     );
@@ -141,8 +163,12 @@ export class ProdutoDAO {
   }
 
   // a quantidade em estoque não entra: produto novo começa com 0 (valor padrão da tabela)
-  async inserir(dados: ProdutoDados): Promise<ProdutoRegistro> {
-    const resultado = await this.executor.query<ProdutoLinhaCompleta>(
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async inserir(conexao: ExecutorSQL, dados: ProdutoDados): Promise<ProdutoRegistro> {
+    const resultado = await conexao.query<ProdutoLinhaCompleta>(
       `INSERT INTO produto (nome, categoria, unidade_medida, estoque_minimo, data_validade, numero_lote)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${COLUNAS}`,
@@ -152,8 +178,12 @@ export class ProdutoDAO {
   }
 
   // também não altera a quantidade em estoque, que só muda por movimentação (RF_F1)
-  async atualizar(dados: ProdutoDados): Promise<ProdutoRegistro | null> {
-    const resultado = await this.executor.query<ProdutoLinhaCompleta>(
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async atualizar(conexao: ExecutorSQL, dados: ProdutoDados): Promise<ProdutoRegistro | null> {
+    const resultado = await conexao.query<ProdutoLinhaCompleta>(
       `UPDATE produto
           SET nome = $1, categoria = $2, unidade_medida = $3, estoque_minimo = $4, data_validade = $5, numero_lote = $6
         WHERE id = $7
@@ -163,9 +193,13 @@ export class ProdutoDAO {
     return resultado.rows[0] ? linhaParaRegistro(resultado.rows[0]) : null;
   }
 
-  async excluir(id: number): Promise<boolean> {
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async excluir(conexao: ExecutorSQL, id: number): Promise<boolean> {
     try {
-      const resultado = await this.executor.query('DELETE FROM produto WHERE id = $1', [id]);
+      const resultado = await conexao.query('DELETE FROM produto WHERE id = $1', [id]);
       return (resultado.rowCount ?? 0) > 0;
     } catch (erro) {
       // 23503 = violação de chave estrangeira: o produto já aparece em movimentação,

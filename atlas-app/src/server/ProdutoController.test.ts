@@ -9,7 +9,7 @@ import { ErroNaoEncontrado, ErroRegraDeNegocio, ErroValidacao } from './erros';
 // ------------------------------------------------------------------------------
 // Dublês: sem banco de verdade.
 // - Database.getInstancia devolve uma conexão falsa (só para conferir quem a usa).
-// - ProdutoDAO vira uma versão em memória; o Model continua dando `new ProdutoDAO(conexao)`; o DAO devolve registros simples e o Model monta o Produto.
+// - ProdutoDAO vira uma versão em memória; o Model dá `new ProdutoDAO()` e passa a conexão em cada método; o DAO devolve registros simples e o Model monta o Produto.
 // ------------------------------------------------------------------------------
 
 const banco = vi.hoisted(() => ({
@@ -27,7 +27,8 @@ vi.mock('./db/Database', () => ({
 
 vi.mock('./dao/ProdutoDAO', () => ({
   ProdutoDAO: class {
-    constructor(conexao: unknown) {
+    // a conexão chega como 1º parâmetro de cada método; o dublê só anota qual foi usada
+    private usar(conexao: unknown) {
       banco.conexoesUsadas.push(conexao);
     }
     private lista() {
@@ -45,7 +46,8 @@ vi.mock('./dao/ProdutoDAO', () => ({
         numeroLote: dados.numeroLote,
       };
     }
-    async consultar(filtro: FiltroProduto) {
+    async consultar(conexao: unknown, filtro: FiltroProduto) {
+      this.usar(conexao);
       return this.lista().filter(
         (p) =>
           (!filtro.getNome() || p.nome.toLowerCase().includes(filtro.getNome().toLowerCase())) &&
@@ -53,25 +55,30 @@ vi.mock('./dao/ProdutoDAO', () => ({
           (filtro.getValidade() !== 'SEM_VALIDADE' || p.dataValidade === null)
       );
     }
-    async buscarPorId(id: number) {
+    async buscarPorId(conexao: unknown, id: number) {
+      this.usar(conexao);
       return this.lista().find((p) => p.id === id) ?? null;
     }
-    async existeComNome(nome: string, idIgnorado?: number) {
+    async existeComNome(conexao: unknown, nome: string, idIgnorado?: number) {
+      this.usar(conexao);
       return this.lista().some((p) => p.id !== idIgnorado && p.nome.toLowerCase() === nome.toLowerCase());
     }
-    async inserir(dados: ProdutoDados) {
+    async inserir(conexao: unknown, dados: ProdutoDados) {
+      this.usar(conexao);
       const registro = this.paraRegistro(dados, banco.proximoId++);
       banco.produtos.push(registro);
       return registro;
     }
-    async atualizar(dados: ProdutoDados) {
+    async atualizar(conexao: unknown, dados: ProdutoDados) {
+      this.usar(conexao);
       const indice = this.lista().findIndex((p) => p.id === dados.id);
       if (indice === -1) return null;
       const registro = this.paraRegistro(dados, dados.id!, this.lista()[indice].quantidadeEstoque);
       banco.produtos[indice] = registro;
       return registro;
     }
-    async excluir(id: number) {
+    async excluir(conexao: unknown, id: number) {
+      this.usar(conexao);
       // imita o banco recusando a exclusão de produto que já tem movimentação
       if (banco.idsComMovimentacao.includes(id)) {
         throw new ErroRegraDeNegocio('Este produto já foi usado no sistema e não pode ser excluído.');
