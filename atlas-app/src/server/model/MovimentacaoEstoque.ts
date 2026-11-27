@@ -124,7 +124,8 @@ export class MovimentacaoEstoque {
 
   /** RF_F1, passo 5 (1.4 no diagrama de sequência): registra o histórico com data, quantidade e tipo. */
   async registrar(conexao: ExecutorSQL): Promise<void> {
-    this.id = await new MovimentacaoEstoqueDAO(conexao).inserir(
+    this.id = await new MovimentacaoEstoqueDAO().inserir(
+      conexao,
       this.produtoId,
       this.getTipo(),
       this.quantidade,
@@ -134,6 +135,6 @@ export class MovimentacaoEstoque {
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroMovimentacao): Promise<MovimentacaoEstoqueRegistro[]> {
-    return new MovimentacaoEstoqueDAO(conexao).consultar(filtro);
+    return new MovimentacaoEstoqueDAO().consultar(conexao, filtro);
   }
 }

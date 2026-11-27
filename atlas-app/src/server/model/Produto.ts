@@ -214,34 +214,34 @@ export class Produto {
   // O Model cria o DAO usando a conexão que o Controller abriu.
 
   async incluir(conexao: ExecutorSQL): Promise<void> {
-    const salvo = await new ProdutoDAO(conexao).inserir(this.dadosParaGravar());
+    const salvo = await new ProdutoDAO().inserir(conexao, this.dadosParaGravar());
     this.id = salvo.id;
     this.quantidadeEstoque = salvo.quantidadeEstoque;
   }
 
   async alterar(conexao: ExecutorSQL): Promise<boolean> {
-    const salvo = await new ProdutoDAO(conexao).atualizar(this.dadosParaGravar());
+    const salvo = await new ProdutoDAO().atualizar(conexao, this.dadosParaGravar());
     return salvo !== null;
   }
 
   async excluir(conexao: ExecutorSQL): Promise<boolean> {
     if (this.id === undefined) return false;
-    return new ProdutoDAO(conexao).excluir(this.id);
+    return new ProdutoDAO().excluir(conexao, this.id);
   }
 
   async existeOutroComMesmoNome(conexao: ExecutorSQL): Promise<boolean> {
-    return new ProdutoDAO(conexao).existeComNome(this.nome, this.id);
+    return new ProdutoDAO().existeComNome(conexao, this.nome, this.id);
   }
 
   static async buscarPorId(conexao: ExecutorSQL, id: number): Promise<Produto | null> {
-    const registro = await new ProdutoDAO(conexao).buscarPorId(id);
+    const registro = await new ProdutoDAO().buscarPorId(conexao, id);
     return registro ? Produto.doRegistro(registro) : null;
   }
 
   // RF_F1, passo 4: grava a quantidade (e a validade) calculadas em atualizQuantidade
   async salvarEstoque(conexao: ExecutorSQL): Promise<void> {
     if (this.id === undefined) return;
-    await new ProdutoDAO(conexao).atualizarEstoque(this.id, this.quantidadeEstoque, this.dataValidade);
+    await new ProdutoDAO().atualizarEstoque(conexao, this.id, this.quantidadeEstoque, this.dataValidade);
   }
 
   // RF_F1, passo 2: o Controller cria o Produto só com o id e o próprio Model se carrega do banco,
@@ -249,7 +249,7 @@ export class Produto {
   // não calcularem em cima do mesmo saldo. Devolve false se o produto não está cadastrado.
   async carregarParaAtualizarEstoque(conexao: ExecutorSQL): Promise<boolean> {
     if (this.id === undefined) return false;
-    const atual = await new ProdutoDAO(conexao).buscarPorIdParaAtualizar(this.id);
+    const atual = await new ProdutoDAO().buscarPorIdParaAtualizar(conexao, this.id);
     if (!atual) return false;
     this.nome = atual.nome;
     this.categoria = atual.categoria;
@@ -263,11 +263,11 @@ export class Produto {
 
   // lista simples para as telas de cardápio (RF_F10) e eventos (RF_F9)
   static async listarTodos(conexao: ExecutorSQL): Promise<ProdutoLinha[]> {
-    return new ProdutoDAO(conexao).listarTodos();
+    return new ProdutoDAO().listarTodos(conexao);
   }
 
   static async consultar(conexao: ExecutorSQL, filtro: FiltroProduto): Promise<Produto[]> {
-    const registros = await new ProdutoDAO(conexao).consultar(filtro);
+    const registros = await new ProdutoDAO().consultar(conexao, filtro);
     return registros.map((registro) => Produto.doRegistro(registro));
   }
 

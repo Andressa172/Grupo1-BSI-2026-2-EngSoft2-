@@ -1,7 +1,7 @@
 // DAO - MovimentacaoEstoque (RF_F1 - Atualizar estoque)
 // Grava e consulta o histórico (movimentacao_estoque). A quantidade do produto é gravada pelo
-// ProdutoDAO, via model Produto. Só executa SQL, sempre com parâmetros: recebe a conexão no
-// construtor (não abre conexão) e não cria Model.
+// ProdutoDAO, via model Produto. Só executa SQL, sempre com parâmetros: recebe a conexão
+// por parâmetro em cada método (não abre conexão) e não cria Model.
 import type { ExecutorSQL } from './tipos';
 import type { FiltroMovimentacao } from '../model/FiltroMovimentacao';
 
@@ -33,9 +33,12 @@ interface LinhaConsulta {
 const LIMITE_CONSULTA = 500;
 
 export class MovimentacaoEstoqueDAO {
-  constructor(private readonly executor: ExecutorSQL) {}
-
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
   async inserir(
+    conexao: ExecutorSQL,
     produtoId: number,
     tipo: 'ENTRADA' | 'SAIDA',
     quantidade: number,
@@ -44,7 +47,7 @@ export class MovimentacaoEstoqueDAO {
   ): Promise<number> {
     // data no horário de Brasília: com o servidor em UTC, uma movimentação depois das 21h
     // cairia no dia seguinte e sairia errada no histórico e nos filtros por período
-    const resultado = await this.executor.query<{ id: number }>(
+    const resultado = await conexao.query<{ id: number }>(
       `INSERT INTO movimentacao_estoque (produto_id, tipo, quantidade, origem, data_validade, data)
        VALUES ($1, $2, $3, $4, $5, now() AT TIME ZONE 'America/Sao_Paulo') RETURNING id`,
       [produtoId, tipo, quantidade, origem, dataValidadeIso]
@@ -53,7 +56,11 @@ export class MovimentacaoEstoqueDAO {
   }
 
   // filtros (produto, tipo e período) se combinam com AND; filtro vazio traz as mais recentes
-  async consultar(filtro: FiltroMovimentacao): Promise<MovimentacaoEstoqueRegistro[]> {
+  // "conexao: ExecutorSQL" - ExecutorSQL é só o NOME de um tipo (poderia se chamar Conexao; o nome é estético).
+  // Ele está definido em dao/tipos.ts e diz: "qualquer objeto que tenha o método query(sql, parametros)".
+  // Serve para o DAO não saber de onde vem a conexão: pode ser o pool normal ou o client de uma transação
+  // em aberto, e o DAO não cria nem guarda nada, só executa o SQL na conexão que o Controller abriu.
+  async consultar(conexao: ExecutorSQL, filtro: FiltroMovimentacao): Promise<MovimentacaoEstoqueRegistro[]> {
     const condicoes: string[] = [];
     const parametros: unknown[] = [];
 
@@ -79,7 +86,7 @@ export class MovimentacaoEstoqueDAO {
     }
     const where = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
 
-    const resultado = await this.executor.query<LinhaConsulta>(
+    const resultado = await conexao.query<LinhaConsulta>(
       `SELECT m.id, m.produto_id, p.nome AS produto, p.unidade_medida, m.tipo, m.quantidade,
               to_char(m.data, 'YYYY-MM-DD HH24:MI') AS data, m.origem,
               to_char(m.data_validade, 'YYYY-MM-DD') AS data_validade
